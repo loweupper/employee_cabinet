@@ -1,10 +1,15 @@
 from pydantic_settings import BaseSettings
 from datetime import timedelta
-from pydantic import Field
+from pydantic import Field, field_validator, ValidationInfo
 import os
 from typing import Optional
+import warnings
+import logging
+from urllib.parse import quote_plus
 
 from typing import List
+
+logger = logging.getLogger(__name__)
 
 
 class Settings(BaseSettings):
@@ -18,12 +23,12 @@ class Settings(BaseSettings):
     POSTGRES_DB: str
     POSTGRES_USER: str
     POSTGRES_PASSWORD: str
-    DATABASE_URL: str
+    DATABASE_URL: Optional[str] = None
 
     # Redis
     redis_host: str = "redis"
     redis_port: int = 6379
-    REDIS_URL: str
+    REDIS_URL: Optional[str] = None
 
     # Files
     FILES_PATH: str = "/files"
@@ -59,7 +64,7 @@ class Settings(BaseSettings):
 
 
     # ===== CORS =====
-    CORS_ORIGINS: list[str] = ["http://localhost:3000", "http://localhost:8000"]
+    CORS_ORIGINS: list[str] = Field(default=["http://localhost:3000", "http://localhost:8000"])
     CORS_CREDENTIALS: bool = True
     CORS_METHODS: list[str] = ["GET", "POST", "PUT", "DELETE"]
     CORS_HEADERS: list[str] = ["Content-Type", "Authorization"]
@@ -71,12 +76,93 @@ class Settings(BaseSettings):
     DOCS_REQUIRE_AUTH: bool = True  # ✅ Требовать авторизацию для доступа к /docs
     DOCS_ALLOWED_IPS: List[str] = []  # ✅ Белый список IP
     
+    # Swagger Basic Auth credentials (for staging/dev environments)
+    SWAGGER_USERNAME: str = Field(description="Username for Swagger basic auth")
+    SWAGGER_PASSWORD: str = Field(description="Password for Swagger basic auth")
+    
      # Environment
     ENVIRONMENT: str = "development"  # development, staging, production
      
     class Config:
         env_file = ".env"
         case_sensitive = True
+    
+    @field_validator('SECRET_KEY')
+    @classmethod
+    def validate_secret_key(cls, v: str, info: ValidationInfo) -> str:
+        """Validate that SECRET_KEY is strong enough"""
+        if len(v) < 32:
+            raise ValueError(
+                f"SECRET_KEY must be at least 32 characters long (current: {len(v)}). "
+                "Generate a strong key with: python generate_secrets.py --type secret_key"
+            )
+        
+        # Warn if using default/weak patterns
+        weak_patterns = ['change', 'secret', 'password', 'default', 'test', '123']
+        if any(pattern in v.lower() for pattern in weak_patterns):
+            warnings.warn(
+                f"SECRET_KEY appears to contain weak patterns. "
+                "Use a cryptographically random key in production.",
+                UserWarning
+            )
+        
+        return v
+    
+    @field_validator('DEBUG')
+    @classmethod
+    def validate_debug_mode(cls, v: bool, info: ValidationInfo) -> bool:
+        """Warn if DEBUG is enabled in production"""
+        # We need to check ENVIRONMENT from info.data if available
+        environment = info.data.get('ENVIRONMENT', 'development')
+        
+        if v is True and environment == 'production':
+            warnings.warn(
+                "DEBUG=True in production environment! This should be disabled in production.",
+                UserWarning
+            )
+        
+        return v
+    
+    @field_validator('DATABASE_URL')
+    @classmethod
+    def build_database_url(cls, v: Optional[str], info: ValidationInfo) -> str:
+        """Build DATABASE_URL from components if not provided"""
+        if v:
+            return v
+        
+        # Build from components
+        data = info.data
+        host = data.get('POSTGRES_HOST')
+        port = data.get('POSTGRES_PORT')
+        db = data.get('POSTGRES_DB')
+        user = data.get('POSTGRES_USER')
+        password = data.get('POSTGRES_PASSWORD')
+        
+        if not all([host, port, db, user, password]):
+            raise ValueError(
+                "Either DATABASE_URL must be provided, or all of "
+                "POSTGRES_HOST, POSTGRES_PORT, POSTGRES_DB, POSTGRES_USER, POSTGRES_PASSWORD"
+            )
+        
+        # URL-encode username and password to handle special characters
+        encoded_user = quote_plus(str(user))
+        encoded_password = quote_plus(str(password))
+        
+        return f"postgresql://{encoded_user}:{encoded_password}@{host}:{port}/{db}"
+    
+    @field_validator('REDIS_URL')
+    @classmethod
+    def build_redis_url(cls, v: Optional[str], info: ValidationInfo) -> str:
+        """Build REDIS_URL from components if not provided"""
+        if v:
+            return v
+        
+        # Build from components
+        data = info.data
+        host = data.get('redis_host', 'redis')
+        port = data.get('redis_port', 6379)
+        
+        return f"redis://{host}:{port}/0"
 
 settings = Settings()
 

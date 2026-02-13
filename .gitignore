@@ -7,8 +7,8 @@ __pycache__/
 env/
 venv/
 .env
-.env.local
-.env.production
+.env.*
+!.env.example
 .venv
 pip-log.txt
 pip-delete-this-directory.txt
@@ -20,6 +20,17 @@ htmlcov/
 .dmypy.json
 dmypy.json
 *.log
+
+# Security - Sensitive files
+*.key
+*.pem
+*.crt
+*.cer
+*.p12
+*.pfx
+secrets/
+.secrets/
+credentials/
 
 # VS Code
 .vscode/
