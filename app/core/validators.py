@@ -120,10 +120,13 @@ def get_safe_file_extension(filename: str) -> str:
         >>> get_safe_file_extension("archive.tar.gz")
         'gz'
     """
-    if not filename or '.' not in filename:
+    if not filename:
         return ''
     
-    return filename.split('.')[-1].lower()
+    import os
+    _, ext = os.path.splitext(filename)
+    # Remove leading dot and convert to lowercase
+    return ext.lstrip('.').lower()
 
 
 # Allowed file extensions for document uploads

@@ -90,6 +90,10 @@ async def upload_documents(
                 # ===== File Upload Security Validation =====
                 
                 # 1. Check file size - read content to validate actual size
+                # Note: Reading entire file into memory is a trade-off between:
+                # - Security: Prevents Content-Length header manipulation
+                # - Memory: For large files, could use streaming (future improvement)
+                # Current limit (10MB) is reasonable for in-memory processing
                 file_contents = await file.read()
                 actual_size = len(file_contents)
                 
@@ -127,8 +131,11 @@ async def upload_documents(
                 # Сохраняем файл (service also does sanitization)
                 file_path = await DocumentService.save_file(file, object_id)
 
-                # Название документа
-                doc_title = safe_filename.split('.')[0] if safe_filename else "Документ"
+                # Название документа - используем os.path.splitext для надежности
+                import os
+                doc_title, _ = os.path.splitext(safe_filename)
+                if not doc_title:
+                    doc_title = "Документ"
 
                 # Создаём документ
                 document = Document(
