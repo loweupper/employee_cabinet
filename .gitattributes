@@ -1,0 +1,25 @@
+# Автоматическое определение текстовых файлов
+* text=auto
+
+# Python файлы
+*.py text diff=python
+
+# JavaScript файлы
+*.js text
+*.jsx text
+
+# HTML/CSS
+*.html text
+*.css text
+
+# Изображения - бинарные файлы
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+
+# Архивы
+*.zip binary
+*.tar binary
+*.gz binary
