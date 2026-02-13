@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Профиль</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .fade-in {
+            animation: fadeIn 0.5s ease-out forwards;
+            opacity: 0;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+    </style>
+</head>
+
+<body class="bg-gray-50">
+
+<div class="flex min-h-screen">
+
+    <!-- ========== SIDEBAR ========== -->
+    {% include "components/sidebar.html" %}
+
+    <!-- ========== MAIN CONTENT ========== -->
+    <main class="flex-1">
+
+        <!-- Header -->
+        <header class="bg-white shadow-sm px-8 py-4 flex justify-between items-center">
+            <h2 class="text-2xl font-semibold text-gray-800">⚙️ Профиль</h2>
+            <div class="flex items-center gap-4">
+                <span class="text-sm text-gray-600">{{ user.email }}</span>
+                <div class="w-10 h-10 bg-indigo-600 text-white rounded-full flex items-center justify-center font-bold">
+                    {{ user.first_name[0] if user.first_name else user.email[0]|upper }}
+                </div>
+            </div>
+        </header>
+
+        <!-- Content -->
+        <div class="p-8">
+
+            <!-- Success/Error messages -->
+            {% if success %}
+            <div class="bg-green-50 border-l-4 border-green-500 text-green-700 p-4 mb-6 rounded-lg fade-in">
+                <p class="font-semibold">✓ {{ success }}</p>
+            </div>
+            {% endif %}
+
+            {% if error %}
+            <div class="bg-red-50 border-l-4 border-red-500 text-red-700 p-4 mb-6 rounded-lg fade-in">
+                <p class="font-semibold">✗ {{ error }}</p>
+            </div>
+            {% endif %}
+
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+                <!-- ========== ЛЕВАЯ КОЛОНКА: Аватар и основная инфо ========== -->
+                <div class="lg:col-span-1">
+                    
+                    <!-- Аватар -->
+                    <div class="bg-white rounded-xl shadow-md p-6 mb-6 fade-in">
+                        <div class="flex flex-col items-center">
+                            {% if user.avatar_url %}
+                            <img src="{{ user.avatar_url }}" alt="Аватар" class="w-32 h-32 rounded-full object-cover mb-4 border-4 border-indigo-600">
+                            {% else %}
+                            <div class="w-32 h-32 bg-indigo-600 text-white rounded-full flex items-center justify-center text-4xl font-bold mb-4">
+                                {{ user.first_name[0] if user.first_name else user.email[0]|upper }}
+                            </div>
+                            {% endif %}
+                            
+                            <h3 class="text-xl font-semibold text-gray-800 mb-1">
+                                {% if user.first_name or user.last_name %}
+                                {{ user.first_name }} {{ user.last_name }}
+                                {% else %}
+                                {{ user.email }}
+                                {% endif %}
+                            </h3>
+                            
+                            <p class="text-sm text-gray-500 mb-4">{{ user.position or "Должность не указана" }}</p>
+                            
+                            <!-- Форма загрузки аватара -->
+                            <form method="post" action="/profile/upload-avatar" enctype="multipart/form-data" class="w-full">
+                                <label class="block w-full">
+                                    <input type="file" name="avatar" accept="image/*" class="hidden" onchange="this.form.submit()">
+                                    <div class="w-full py-2 px-4 bg-indigo-600 text-white text-center rounded-lg cursor-pointer hover:bg-indigo-700 transition">
+                                        📷 Изменить фото
+                                    </div>
+                                </label>
+                            </form>
+                        </div>
+                    </div>
+
+                    <!-- Дополнительная информация -->
+                    <div class="bg-white rounded-xl shadow-md p-6 fade-in" style="animation-delay: 0.1s">
+                        <h4 class="text-lg font-semibold text-gray-800 mb-4">📋 Информация</h4>
+                        <div class="space-y-3 text-sm">
+                            <div>
+                                <span class="text-gray-500">Email:</span>
+                                <p class="font-medium text-gray-800">{{ user.email }}</p>
+                            </div>
+                            <div>
+                                <span class="text-gray-500">Отдел:</span>
+                                <p class="font-medium text-gray-800">{{ user.department or "Не указан" }}</p>
+                            </div>
+                            <div>
+                                <span class="text-gray-500">Локация:</span>
+                                <p class="font-medium text-gray-800">{{ user.location or "Не указана" }}</p>
+                            </div>
+                            <div>
+                                <span class="text-gray-500">Дата регистрации:</span>
+                                <p class="font-medium text-gray-800">{{ user.created_at.strftime('%d.%m.%Y') }}</p>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+
+                <!-- ========== ПРАВАЯ КОЛОНКА: Формы редактирования ========== -->
+                <div class="lg:col-span-2 space-y-6">
+
+                    <!-- Редактирование профиля -->
+                    <div class="bg-white rounded-xl shadow-md p-6 fade-in" style="animation-delay: 0.2s">
+                        <h4 class="text-lg font-semibold text-gray-800 mb-4">✏️ Редактировать профиль</h4>
+                        
+                        <form method="post" action="/profile/update" class="space-y-4">
+                            
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label class="block text-gray-700 mb-1">Имя</label>
+                                    <input type="text" name="first_name" value="{{ user.first_name or '' }}" 
+                                           class="w-full px-4 py-2 rounded-lg border border-gray-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200">
+                                </div>
+
+                                <div>
+                                    <label class="block text-gray-700 mb-1">Фамилия</label>
+                                    <input type="text" name="last_name" value="{{ user.last_name or '' }}" 
+                                           class="w-full px-4 py-2 rounded-lg border border-gray-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200">
+                                </div>
+                            </div>
+
+                            <div>
+                                <label class="block text-gray-700 mb-1">Отчество</label>
+                                <input type="text" name="middle_name" value="{{ user.middle_name or '' }}" 
+                                       class="w-full px-4 py-2 rounded-lg border border-gray-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200">
+                            </div>
+
+                            <div>
+                                <label class="block text-gray-700 mb-1">Телефон</label>
+                                <input type="tel" name="phone_number" value="{{ user.phone_number or '' }}" 
+                                       placeholder="+7 (999) 123-45-67"
+                                       class="w-full px-4 py-2 rounded-lg border border-gray-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200">
+                            </div>
+
+                            <button type="submit" class="w-full py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition font-medium">
+                                Сохранить изменения
+                            </button>
+                        </form>
+                    </div>
+
+                    <!-- Изменение пароля -->
+                    <div class="bg-white rounded-xl shadow-md p-6 fade-in" style="animation-delay: 0.3s">
+                        <h4 class="text-lg font-semibold text-gray-800 mb-4">🔒 Изменить пароль</h4>
+                        
+                        <form method="post" action="/profile/change-password" class="space-y-4">
+                            
+                            <div>
+                                <label class="block text-gray-700 mb-1">Текущий пароль</label>
+                                <input type="password" name="current_password" required
+                                       class="w-full px-4 py-2 rounded-lg border border-gray-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200">
+                            </div>
+
+                            <div>
+                                <label class="block text-gray-700 mb-1">Новый пароль</label>
+                                <input type="password" name="new_password" required
+                                       class="w-full px-4 py-2 rounded-lg border border-gray-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200">
+                                <p class="text-xs text-gray-500 mt-1">Минимум 8 символов: A-Z, a-z, 0-9, @$!%*?&</p>
+                            </div>
+
+                            <div>
+                                <label class="block text-gray-700 mb-1">Подтвердите новый пароль</label>
+                                <input type="password" name="confirm_password" required
+                                       class="w-full px-4 py-2 rounded-lg border border-gray-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200">
+                            </div>
+
+                            <button type="submit" class="w-full py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 transition font-medium">
+                                Изменить пароль
+                            </button>
+                        </form>
+                    </div>
+
+                </div>
+
+            </div>
+
+        </div>
+
+    </main>
+
+</div>
+
+</body>
+</html>

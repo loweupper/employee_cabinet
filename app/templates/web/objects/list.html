@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="ru">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Объекты</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .fade-in {
+            animation: fadeIn 0.5s ease-out forwards;
+            opacity: 0;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .object-card {
+            transition: all 0.3s ease;
+        }
+
+        .object-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+        }
+    </style>
+</head>
+
+<body class="bg-gray-50">
+
+    <div class="flex h-screen">
+
+        <!-- ========== SIDEBAR ========== -->
+        {% include "components/sidebar.html" %}
+
+        <!-- ========== MAIN CONTENT ========== -->
+        <main class="flex-1 overflow-y-auto">
+
+            <!-- Header -->
+            <header class="bg-white shadow-sm px-8 py-4 flex justify-between items-center">
+                <h2 class="text-2xl font-semibold text-gray-800">🏗️ Объекты</h2>
+                <div class="flex items-center gap-4">
+                    <a href="/objects/create"
+                        class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition">
+                        ➕ Создать объект
+                    </a>
+                    <span class="text-sm text-gray-600">{{ user.email }}</span>
+                    <div
+                        class="w-10 h-10 bg-indigo-600 text-white rounded-full flex items-center justify-center font-bold">
+                        {{ user.first_name[0] if user.first_name else user.email[0]|upper }}
+                    </div>
+                </div>
+            </header>
+
+            <!-- content -->
+            <div class="p-8">
+
+                <!-- ✅ ТАБЫ ДЛЯ ФИЛЬТРАЦИИ -->
+                <div class="bg-white rounded-xl shadow-md mb-6 fade-in">
+                    <div class="flex border-b">
+                        <a href="/objects?status=active"
+                            class="flex-1 px-6 py-4 text-center font-medium transition {% if status == 'active' %}bg-indigo-600 text-white{% else %}text-gray-600 hover:bg-gray-50{% endif %}">
+                            ✅ Активные
+                        </a>
+                        <a href="/objects?status=inactive"
+                            class="flex-1 px-6 py-4 text-center font-medium transition {% if status == 'inactive' %}bg-indigo-600 text-white{% else %}text-gray-600 hover:bg-gray-50{% endif %}">
+                            ⏸️ Неактивные
+                        </a>
+                        <a href="/objects?status=archived"
+                            class="flex-1 px-6 py-4 text-center font-medium transition {% if status == 'archived' %}bg-indigo-600 text-white{% else %}text-gray-600 hover:bg-gray-50{% endif %}">
+                            📦 В архиве
+                        </a>
+                    </div>
+                </div>
+
+                <!-- Content -->
+                <div class="p-8">
+
+                    <!-- Поиск и фильтры -->
+                    <div class="bg-white rounded-xl shadow-md p-6 mb-6 fade-in">
+                        <form method="get" action="/objects" class="flex gap-4">
+                            <input type="text" name="search" value="{{ search or '' }}"
+                                placeholder="🔍 Поиск по названию, адресу..."
+                                class="flex-1 px-4 py-2 rounded-lg border border-gray-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200">
+
+                            <select name="department"
+                                class="px-4 py-2 rounded-lg border border-gray-300 focus:border-indigo-500">
+                                <option value="">Все отделы</option>
+                                <option value="Технический отдел" {% if department=="Технический отдел" %}selected{%
+                                    endif %}>Технический отдел</option>
+                                <option value="Бухгалтерия" {% if department=="Бухгалтерия" %}selected{% endif %}>
+                                    Бухгалтерия</option>
+                                <option value="Отдел кадров" {% if department=="Отдел кадров" %}selected{% endif %}>
+                                    Отдел кадров</option>
+                            </select>
+
+                            <button type="submit"
+                                class="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition">
+                                Поиск
+                            </button>
+                        </form>
+                    </div>
+
+                    <!-- Статистика -->
+                    <div class="mb-6">
+                        <p class="text-gray-600">
+                            {% if status == 'archived' %}
+                            Архивных объектов: <span class="font-semibold">{{ total }}</span>
+                            {% elif status == 'inactive' %}
+                            Неактивных объектов: <span class="font-semibold">{{ total }}</span>
+                            {% else %}
+                            Активных объектов: <span class="font-semibold">{{ total }}</span>
+                            {% endif %}
+                        </p>
+                    </div>
+
+                    <!-- Список объектов (карточки) -->
+                    {% if objects %}
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+
+                        {% for obj in objects %}
+                        <div class="bg-white rounded-xl shadow-md overflow-hidden object-card fade-in"
+                            style="animation-delay: {{ loop.index0 * 0.1 }}s">
+
+                            <!-- Иконка объекта -->
+                            <div
+                                class="h-48 bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center">
+                                {% if obj.icon_url %}
+                                <img src="{{ obj.icon_url }}" alt="{{ obj.title }}" class="w-full h-full object-cover">
+                                {% else %}
+                                <span class="text-6xl text-white">🏗️</span>
+                                {% endif %}
+                            </div>
+
+                            <!-- Информация -->
+                            <div class="p-6">
+                                <h3 class="text-xl font-semibold text-gray-800 mb-2">{{ obj.title }}</h3>
+
+                                {% if obj.address %}
+                                <p class="text-sm text-gray-600 mb-2">📍 {{ obj.address }}</p>
+                                {% endif %}
+
+                                {% if obj.id %}
+                                <p class="text-sm text-gray-600 mb-2 text-right">🆔 ID: {{ obj.id }}</p>
+                                {% endif %}
+
+                                
+
+                                <div class="flex items-center gap-2 mb-4">
+                                    {% if obj.department %}
+                                    <span class="px-2 py-1 bg-indigo-100 text-indigo-700 text-xs rounded-full">{{
+                                        obj.department }}</span>
+                                    {% endif %}
+
+                                    {% if obj.location %}
+                                    <span class="px-2 py-1 bg-green-100 text-green-700 text-xs rounded-full">{{
+                                        obj.location }}</span>
+                                    {% endif %}
+                                </div>
+
+                                <div class="flex items-center justify-between pt-4 border-t">
+                                    <div class="flex items-center gap-2">
+                                        {% if obj.owner.avatar_url %}
+                                        <img src="{{ obj.owner.avatar_url }}" alt="{{ obj.owner.email }}"
+                                            class="w-8 h-8 rounded-full">
+                                        {% else %}
+                                        <div
+                                            class="w-8 h-8 bg-gray-300 rounded-full flex items-center justify-center text-xs font-bold">
+                                            {{ obj.owner.first_name[0] if obj.owner.first_name else
+                                            obj.owner.email[0]|upper }}
+                                        </div>
+                                        {% endif %}
+                                        <span class="text-sm text-gray-600">{{ obj.owner.first_name or obj.owner.email
+                                            }}</span>
+                                    </div>
+
+                                    <a href="/objects/{{ obj.id }}"
+                                        class="px-4 py-2 bg-indigo-600 text-white text-sm rounded-lg hover:bg-indigo-700 transition">
+                                        Открыть
+                                    </a>
+                                </div>
+                            </div>
+
+                        </div>
+                        {% endfor %}
+
+                    </div>
+                    {% else %}
+                    <div class="bg-white rounded-xl shadow-md p-12 text-center fade-in">
+                        <span class="text-6xl mb-4 block">
+                            {% if status == 'archived' %}📦
+                            {% elif status == 'inactive' %}⏸️
+                            {% else %}📦
+                            {% endif %}
+                        </span>
+
+                        <h3 class="text-xl font-semibold text-gray-800 mb-2">
+                            {% if status == 'archived' %}
+                            Архивных объектов пока нет
+                            {% elif status == 'inactive' %}
+                            Неактивных объектов пока нет
+                            {% else %}
+                            Объектов пока нет
+                            {% endif %}
+                        </h3>
+
+                        <p class="text-gray-600 mb-6">
+                            {% if status == 'archived' %}
+                            Объекты, отправленные в архив, будут отображаться здесь
+                            {% elif status == 'inactive' %}
+                            Деактивированные объекты будут отображаться здесь
+                            {% else %}
+                            Создайте первый объект, чтобы начать работу
+                            {% endif %}
+                        </p>
+
+                        {% if status == 'active' %}
+                        <a href="/objects/create"
+                            class="inline-block px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition">
+                            ➕ Создать объект
+                        </a>
+                        {% else %}
+                        <a href="/objects?status=active"
+                            class="inline-block px-6 py-3 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition">
+                            ← Вернуться к активным объектам
+                        </a>
+                        {% endif %}
+                    </div>
+                    {% endif %}
+
+                    <!-- Пагинация -->
+                    {% if pages > 1 %}
+                    <div class="mt-8 flex justify-center gap-2">
+                        {% if page > 1 %}
+                        <a href="/objects?page={{ page - 1 }}&status={{ status }}{% if search %}&search={{ search }}{% endif %}{% if department %}&department={{ department }}{% endif %}"
+                            class="px-4 py-2 bg-white border rounded-lg hover:bg-gray-50 transition">
+                            ← Назад
+                        </a>
+                        {% endif %}
+
+                        <span class="px-4 py-2 bg-indigo-600 text-white rounded-lg">
+                            {{ page }} / {{ pages }}
+                        </span>
+
+                        {% if page < pages %} <a
+                            href="/objects?page={{ page + 1 }}&status={{ status }}{% if search %}&search={{ search }}{% endif %}{% if department %}&department={{ department }}{% endif %}"
+                            class="px-4 py-2 bg-white border rounded-lg hover:bg-gray-50 transition">
+                            Вперед →
+                            </a>
+                            {% endif %}
+                    </div>
+                    {% endif %}
+
+                </div>
+
+        </main>
+
+    </div>
+
+</body>
+
+</html>

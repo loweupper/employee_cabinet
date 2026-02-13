@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="ru">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Личный кабинет</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .fade-in {
+            animation: fadeIn 0.5s ease-out forwards;
+            opacity: 0;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+    </style>
+</head>
+
+<body class="bg-gray-50">
+
+    <div class="flex min-h-screen">
+
+        <!-- ✅ SIDEBAR -->
+        {% include "components/sidebar.html" %}
+
+        <!-- MAIN CONTENT -->
+        <main class="flex-1 overflow-y-auto">
+
+            <!-- Header -->
+            <header class="bg-white shadow-sm px-8 py-4 flex justify-between items-center">
+                <h2 class="text-2xl font-semibold text-gray-800">Добро пожаловать, {{ user.first_name or user.email }}! 👋</h2>
+                <div class="flex items-center gap-4">
+                    <span class="text-sm text-gray-600">{{ user.email }}</span>
+                    <div class="w-10 h-10 bg-indigo-600 text-white rounded-full flex items-center justify-center font-bold">
+                        {{ user.first_name[0] if user.first_name else user.email[0]|upper }}
+                    </div>
+                </div>
+            </header>
+
+            <!-- Content -->
+            <div class="p-8">
+
+                <!-- ✅ СТАТИСТИКА -->
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+
+                    <!-- Активные -->
+                    <a href="/objects?status=active"
+                        class="bg-white rounded-xl shadow-md p-6 fade-in hover:shadow-lg transition">
+                        <div class="flex items-center justify-between mb-4">
+                            <h3 class="text-gray-600 text-sm font-medium">Активные</h3>
+                            <span class="text-3xl">✅</span>
+                        </div>
+                        <p class="text-3xl font-bold text-gray-800">{{ active_count }}</p>
+                        <p class="text-sm text-gray-500 mt-2">Активных объектов</p>
+                    </a>
+
+                    <!-- Неактивные -->
+                    <a href="/objects?status=inactive"
+                        class="bg-white rounded-xl shadow-md p-6 fade-in hover:shadow-lg transition"
+                        style="animation-delay: 0.1s">
+                        <div class="flex items-center justify-between mb-4">
+                            <h3 class="text-gray-600 text-sm font-medium">Неактивные</h3>
+                            <span class="text-3xl">⏸️</span>
+                        </div>
+                        <p class="text-3xl font-bold text-gray-800">{{ inactive_count }}</p>
+                        <p class="text-sm text-gray-500 mt-2">Неактивных объектов</p>
+                    </a>
+
+                    <!-- В архиве -->
+                    <a href="/objects?status=archived"
+                        class="bg-white rounded-xl shadow-md p-6 fade-in hover:shadow-lg transition"
+                        style="animation-delay: 0.2s">
+                        <div class="flex items-center justify-between mb-4">
+                            <h3 class="text-gray-600 text-sm font-medium">В архиве</h3>
+                            <span class="text-3xl">📦</span>
+                        </div>
+                        <p class="text-3xl font-bold text-gray-800">{{ archived_count }}</p>
+                        <p class="text-sm text-gray-500 mt-2">Архивных объектов</p>
+                    </a>
+
+                    <!-- Документы -->
+                    <div class="bg-white rounded-xl shadow-md p-6 fade-in" style="animation-delay: 0.3s">
+                        <div class="flex items-center justify-between mb-4">
+                            <h3 class="text-gray-600 text-sm font-medium">Документы</h3>
+                            <span class="text-3xl">📁</span>
+                        </div>
+                        <p class="text-3xl font-bold text-gray-800">0</p>
+                        <p class="text-sm text-gray-500 mt-2">Скоро</p>
+                    </div>
+
+                </div>
+
+                <!-- ✅ ПОСЛЕДНИЕ ОБЪЕКТЫ -->
+                <div class="bg-white rounded-xl shadow-md p-6 fade-in" style="animation-delay: 0.4s">
+                    <h3 class="text-xl font-semibold text-gray-800 mb-4">Последние объекты</h3>
+
+                    {% if recent_objects %}
+                    <div class="space-y-3">
+                        {% for obj in recent_objects %}
+                        <div class="flex items-center justify-between p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition">
+                            <div class="flex items-center gap-4">
+                                <div class="w-12 h-12 bg-indigo-600 rounded-lg flex items-center justify-center text-white text-xl overflow-hidden">
+                                    {% if obj.icon_url %}
+                                    <img src="{{ obj.icon_url }}" alt="{{ obj.title }}" class="w-full h-full object-cover">
+                                    {% else %}
+                                    🏗️
+                                    {% endif %}
+                                </div>
+                                <div>
+                                    <p class="font-medium text-gray-800">{{ obj.title }}</p>
+                                    <p class="text-sm text-gray-500">{{ obj.address }}</p>
+                                    <p class="text-sm text-gray-600 mb-2">🆔 ID: {{ obj.id }}</p>
+
+                                </div>
+                            </div>
+                            <a href="/objects/{{ obj.id }}"
+                                class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition">
+                                Открыть
+                            </a>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <p class="text-center text-gray-500 py-8">Нет доступных объектов</p>
+                    {% endif %}
+                </div>
+
+            </div>
+
+        </main>
+
+    </div>
+
+</body>
+
+</html>

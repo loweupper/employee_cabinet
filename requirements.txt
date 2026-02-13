@@ -1,0 +1,67 @@
+# Framework
+fastapi==0.128.0
+uvicorn==0.40.0
+gunicorn==25.0.1
+
+# Database
+sqlalchemy==2.0.46
+psycopg2-binary==2.9.11
+alembic==1.18.3
+
+# Auth
+python-jose==3.5.0
+passlib==1.7.4
+python-multipart==0.0.22
+pydantic==2.12.5
+
+# Async
+celery==5.6.2
+redis==5.0.1   # redis-py client
+
+# Notifications
+aiosmtplib==5.1.0
+python-telegram-bot==22.6
+slowapi==0.1.9
+
+# Files
+aiofiles==25.1.0
+pillow==12.1.0
+
+# Search
+elasticsearch==9.3.0
+
+# Logging
+python-json-logger==4.0.0
+
+# Security
+cryptography==46.0.4
+
+# Utils
+httpx==0.27.2  
+pydantic-settings==2.12.0
+
+# Testing
+pytest==9.0.2
+pytest-asyncio==1.3.0
+
+# Development
+black==26.1.0
+flake8==7.3.0
+mypy==1.19.1
+
+# Templating
+jinja2==3.1.6
+email-validator==2.1.0
+slugify==0.0.1
+pytz==2025.2
+
+
+
+
+
+
+
+
+
+
+

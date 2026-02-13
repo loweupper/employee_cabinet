@@ -1,0 +1,10 @@
+            <header class="bg-red-900 text-white shadow-md px-8 py-4 flex justify-between items-center">
+                <h2 class="text-2xl font-semibold">🛡️ Администрирование: Все объекты</h2>
+                <div class="flex items-center gap-4">
+                    <span class="text-sm">{{ user.email }}</span>
+                    <div
+                        class="w-10 h-10 bg-white text-red-900 rounded-full flex items-center justify-center font-bold">
+                        {{ user.first_name[0] if user.first_name else user.email[0]|upper }}
+                    </div>
+                </div>
+            </header>

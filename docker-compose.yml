@@ -1,0 +1,33 @@
+version: "3.9"
+
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: employees_redis
+    restart: always
+    ports:
+      - "6379:6379"
+
+  backend:
+    build: .
+    container_name: employees_app
+    restart: always
+    env_file: .env
+    environment:
+    - TZ=Europe/Moscow
+    - DATABASE_URL=${DATABASE_URL}
+    command: >
+      gunicorn main:app
+      --workers 4
+      --worker-class uvicorn.workers.UvicornWorker
+      --bind 0.0.0.0:8000
+      --preload
+    ports:
+      - "8001:8000"
+    depends_on:
+      - redis
+    volumes:
+      - ./app:/app
+      - ./files:/files
+      - ./logs:/app/logs
+

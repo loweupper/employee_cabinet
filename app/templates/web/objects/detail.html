@@ -1,0 +1,1178 @@
+<!DOCTYPE html>
+<html lang="ru">
+
+<head>
+    <meta charset="UTF-8">
+    <title>{{ object.title }}</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    <style>
+        .fade-in {
+            animation: fadeIn 0.5s ease-out forwards;
+            opacity: 0;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .word-break {
+            word-break: break-word;
+            word-wrap: break-word;
+            overflow-wrap: break-word;
+        }
+
+        /* Ограничиваем максимальную ширину модалки и делаем её адаптивной */
+        #uploadDocModal .bg-white {
+            max-width: 50vw;
+            max-height: 90vh;
+        }
+    </style>
+</head>
+
+<body class="bg-gray-50">
+
+    <div class="flex min-h-screen">
+
+        <!-- ========== SIDEBAR ========== -->
+        {% include "components/sidebar.html" %}
+        <!-- ========== MAIN CONTENT ========== -->
+        <main class="flex-1">
+
+            <!-- Header -->
+            <header class="bg-white shadow-sm px-8 py-4 flex justify-between items-center">
+                <div class="flex items-center gap-4">
+                    <a href="/objects" class="text-gray-600 hover:text-gray-800">← Назад к списку</a>
+                    <h2 class="text-2xl font-semibold text-gray-800">{{ object.title }}</h2>
+
+
+                    <!-- ✅ Бейдж статуса в заголовке -->
+                    {% if object.is_archived %}
+                    <span class="px-3 py-1 bg-gray-100 text-gray-700 text-sm rounded-full">📦 В архиве</span>
+                    {% elif not object.is_active %}
+                    <span class="px-3 py-1 bg-yellow-100 text-yellow-700 text-sm rounded-full">⏸️ Неактивен</span>
+                    {% endif %}
+                </div>
+                <div class="flex items-center gap-4">
+                    <!-- ✅ Кнопки управления (НЕ показываем для архивных, кроме владельца/админа) -->
+                    {% if (object.created_by == user.id or user.role == "admin") and not object.is_archived %}
+                    <a href="/objects/{{ object.id }}/edit"
+                        class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition">
+                        ✏️ Редактировать
+                    </a>
+
+                    <form method="post" action="/objects/{{ object.id }}/delete"
+                        onsubmit="return confirm('Вы уверены, что хотите удалить этот объект?');"
+                        style="display: inline;">
+                        <button type="submit"
+                            class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition">
+                            🗑️ Удалить
+                        </button>
+                    </form>
+                    {% endif %}
+
+                    {% if object.is_archived %}
+                    <span class="text-sm text-gray-500 italic">Режим просмотра</span>
+                    {% endif %}
+
+                    <span class="text-sm text-gray-600">{{ user.email }}</span>
+                    <div
+                        class="w-10 h-10 bg-indigo-600 text-white rounded-full flex items-center justify-center font-bold">
+                        {{ user.first_name[0] if user.first_name else user.email[0]|upper }}
+                    </div>
+                </div>
+            </header>
+
+            <!-- Content -->
+            <div class="p-8">
+
+                <!-- Success/Error messages -->
+                {% if success %}
+                <div class="bg-green-50 border-l-4 border-green-500 text-green-700 p-4 mb-6 rounded-lg fade-in">
+                    <p class="font-semibold">✓ {{ success }}</p>
+                </div>
+                {% endif %}
+
+                {% if error %}
+                <div class="bg-red-50 border-l-4 border-red-500 text-red-700 p-4 mb-6 rounded-lg fade-in">
+                    <p class="font-semibold">✗ {{ error }}</p>
+                </div>
+                {% endif %}
+
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+                    <!-- ========== ЛЕВАЯ КОЛОНКА: Информация об объекте ========== -->
+                    <div class="lg:col-span-2 space-y-6">
+
+                        <!-- Основная информация -->
+                        <div class="bg-white rounded-xl shadow-md overflow-hidden fade-in">
+
+                            <!-- Иконка -->
+                            <div
+                                class="h-64 bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center">
+                                {% if object.icon_url %}
+                                <img src="{{ object.icon_url }}" alt="{{ object.title }}"
+                                    class="w-full h-full object-cover">
+                                {% else %}
+                                <span class="text-8xl text-white">🏗️</span>
+                                {% endif %}
+                            </div>
+
+                            <!-- Детали -->
+                            <div class="p-6">
+                                <h3 class="text-2xl font-bold text-gray-800 mb-4">{{ object.title }}</h3>
+
+                                {% if object.address %}
+                                <div class="flex items-start gap-3 mb-3">
+                                    <span class="text-gray-500">📍</span>
+                                    <div>
+                                        <p class="text-sm text-gray-500">Адрес</p>
+                                        <p class="text-gray-800">{{ object.address }}</p>
+                                    </div>
+                                </div>
+                                {% endif %}
+
+                                {% if object.description %}
+                                <div class="flex items-start gap-3 mb-3">
+                                    <span class="text-gray-500">📝</span>
+                                    <div>
+                                        <p class="text-sm text-gray-500">Описание</p>
+                                        <p class="text-gray-800">{{ object.description }}</p>
+                                    </div>
+                                </div>
+                                {% endif %}
+
+                                <!-- Категории и статусы -->
+
+                                <div class="flex gap-2 mt-4">
+                                    {% if object.department %}
+                                    <span class="px-3 py-1 bg-indigo-100 text-indigo-700 text-sm rounded-full">{{
+                                        object.department }}</span>
+                                    {% endif %}
+
+                                    {% if object.location %}
+                                    <span class="px-3 py-1 bg-green-100 text-green-700 text-sm rounded-full">{{
+                                        object.location }}</span>
+                                    {% endif %}
+
+                                    <!-- Статусы -->
+                                    {% if object.deleted_at %}
+                                    <span class="px-3 py-1 bg-red-100 text-red-700 text-sm rounded-full">🗑️
+                                        Удален</span>
+                                    {% elif object.is_archived %}
+                                    <span class="px-3 py-1 bg-gray-100 text-gray-700 text-sm rounded-full">📦 В
+                                        архиве</span>
+                                    {% elif object.is_active %}
+                                    <span class="px-3 py-1 bg-green-100 text-green-700 text-sm rounded-full">✓
+                                        Активен</span>
+                                    {% else %}
+                                    <span class="px-3 py-1 bg-yellow-100 text-yellow-700 text-sm rounded-full">⏸️
+                                        Неактивен</span>
+                                    {% endif %}
+                                    {% if object.id %}
+                                    <p class="px-3 py-1 bg-green-100 text-red-700 text-sm rounded-full">🆔 ID: {{ object.id }}</p>
+                                    {% endif %}
+
+                                </div>
+
+                                <!-- ✅ Добавляем управление статусом (только для владельца/админа) -->
+                                {% if object.created_by == user.id or user.role == "admin" %}
+                                <div class="mt-6 pt-6 border-t">
+                                    <h5 class="text-sm font-semibold text-gray-800 mb-3">Управление статусом</h5>
+                                    <div class="flex gap-2 flex-wrap">
+
+                                        {% if not object.is_active %}
+                                        <form method="post" action="/objects/{{ object.id }}/activate"
+                                            style="display:inline;">
+                                            <button type="submit"
+                                                class="px-3 py-1 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 transition">
+                                                ▶️ Активировать
+                                            </button>
+                                        </form>
+                                        {% endif %}
+
+                                        {% if object.is_active %}
+                                        <form method="post" action="/objects/{{ object.id }}/deactivate"
+                                            style="display:inline;">
+                                            <button type="submit"
+                                                class="px-3 py-1 bg-yellow-600 text-white text-sm rounded-lg hover:bg-yellow-700 transition">
+                                                ⏸️ Деактивировать
+                                            </button>
+                                        </form>
+                                        {% endif %}
+
+                                        {% if not object.is_archived %}
+                                        <form method="post" action="/objects/{{ object.id }}/archive"
+                                            onsubmit="return confirm('Отправить объект в архив?');"
+                                            style="display:inline;">
+                                            <button type="submit"
+                                                class="px-3 py-1 bg-gray-600 text-white text-sm rounded-lg hover:bg-gray-700 transition">
+                                                📦 В архив
+                                            </button>
+                                        </form>
+                                        {% else %}
+                                        <form method="post" action="/objects/{{ object.id }}/unarchive"
+                                            style="display:inline;">
+                                            <button type="submit"
+                                                class="px-3 py-1 bg-indigo-600 text-white text-sm rounded-lg hover:bg-indigo-700 transition">
+                                                📤 Из архива
+                                            </button>
+                                        </form>
+                                        {% endif %}
+
+                                    </div>
+                                </div>
+                                {% endif %}
+                            </div>
+
+                        </div>
+
+                        <!-- ✅ МАКРОС ДЛЯ ОТОБРАЖЕНИЯ ДОКУМЕНТА -->
+                        {% macro render_document_item(doc, object, user) %}
+                        <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition document-item"
+                            data-category="{{ doc.category.value }}">
+                            <div class="flex items-center gap-3 flex-1 min-w-0">
+                                <!-- Иконка файла -->
+                                <div
+                                    class="w-10 h-10 bg-gray-50 rounded-lg flex items-center justify-center flex-shrink-0">
+                                    {% if doc.file_type and 'pdf' in doc.file_type %}
+                                    <i class="bi bi-file-earmark-pdf text-3xl text-red-600"></i>
+                                    {% elif doc.file_type and 'image' in doc.file_type %}
+                                    <i class="bi bi-file-earmark-image text-3xl text-blue-600"></i>
+                                    {% elif doc.file_type and 'excel' in doc.file_type or 'spreadsheet' in doc.file_type
+                                    %}
+                                    <i class="bi bi-file-earmark-excel text-3xl text-green-600"></i>
+                                    {% elif doc.file_type and 'word' in doc.file_type or 'document' in doc.file_type %}
+                                    <i class="bi bi-file-earmark-word text-3xl text-blue-700"></i>
+                                    {% else %}
+                                    <i class="bi bi-file-earmark text-3xl text-gray-600"></i>
+                                    {% endif %}
+                                </div>
+
+                                <div class="flex-1 min-w-0">
+                                    <p class="font-medium text-gray-800 break-words">{{ doc.title }}</p>
+                                    <div class="flex items-center gap-2 text-xs text-gray-500 flex-wrap">
+                                        <span>{{ doc.file_name }}</span>
+                                        <span>•</span>
+                                        <span>{{ (doc.file_size / 1024 / 1024)|round(2) }} МБ</span>
+                                        <span title="Дата загрузки">📅 {{ doc.created_at.strftime('%d.%m.%Y %H:%M')
+                                            }}</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Кнопки действий -->
+                            <div class="flex gap-2 ml-4 flex-shrink-0">
+                                <a href="/documents/{{ doc.id }}/download"
+                                    class="px-3 py-1 bg-indigo-600 text-white text-sm rounded-lg hover:bg-indigo-700 transition whitespace-nowrap">
+                                    ⬇
+                                </a>
+
+                                {% if object.created_by == user.id or user.role == "admin" %}
+                                <button
+                                    onclick="openEditDocumentModal({{ doc.id }}, '{{ doc.title }}', '{{ doc.category.value }}', {{ doc.subcategory_id or 'null' }})"
+                                    class="px-3 py-1 bg-yellow-600 text-white text-sm rounded-lg hover:bg-yellow-700 transition whitespace-nowrap">
+                                    ✏️
+                                </button>
+
+                                <button onclick="deleteDocument({{ object.id }}, {{ doc.id }}, '{{ doc.file_name }}')"
+                                    class="px-3 py-1 bg-red-600 text-white text-sm rounded-lg hover:bg-red-700 transition whitespace-nowrap">
+                                    🗑️
+                                </button>
+                                {% endif %}
+                            </div>
+                        </div>
+                        {% endmacro %}
+
+                        <!-- Документы -->
+                        <div class="bg-white rounded-xl shadow-md p-6 fade-in" style="animation-delay: 0.1s">
+                            <div class="flex justify-between items-center mb-4">
+                                <h4 class="text-lg font-semibold text-gray-800">📁 Документы объекта</h4>
+
+                                <!-- ✅ Кнопка загрузки -->
+                                {% if not object.is_archived %}
+                                <button onclick="openUploadModal()"
+                                    class="px-4 py-2 bg-indigo-600 text-white text-sm rounded-lg hover:bg-indigo-700 transition">
+                                    ➕ Загрузить документы
+                                </button>
+                                {% endif %}
+                            </div>
+
+                            <!-- ✅ ТАБЫ ПО КАТЕГОРИЯМ -->
+                            <div class="mb-4">
+                                <div class="flex gap-2 overflow-x-auto pb-2">
+                                    <button onclick="showCategory('all')"
+                                        class="category-tab px-4 py-2 bg-indigo-600 text-white text-sm rounded-lg hover:bg-indigo-700 transition whitespace-nowrap"
+                                        data-category="all">
+                                        📋 Все
+                                    </button>
+                                    <button onclick="showCategory('general')"
+                                        class="category-tab px-4 py-2 bg-gray-200 text-gray-700 text-sm rounded-lg hover:bg-gray-300 transition whitespace-nowrap"
+                                        data-category="general">
+                                        📋 Общие
+                                    </button>
+                                    <button onclick="showCategory('technical')"
+                                        class="category-tab px-4 py-2 bg-gray-200 text-gray-700 text-sm rounded-lg hover:bg-gray-300 transition whitespace-nowrap"
+                                        data-category="technical">
+                                        📐 Технические
+                                    </button>
+                                    <button onclick="showCategory('accounting')"
+                                        class="category-tab px-4 py-2 bg-gray-200 text-gray-700 text-sm rounded-lg hover:bg-gray-300 transition whitespace-nowrap"
+                                        data-category="accounting">
+                                        💰 Бухгалтерия
+                                    </button>
+                                    <button onclick="showCategory('safety')"
+                                        class="category-tab px-4 py-2 bg-gray-200 text-gray-700 text-sm rounded-lg hover:bg-gray-300 transition whitespace-nowrap"
+                                        data-category="safety">
+                                        👷 Охрана труда
+                                    </button>
+                                    <button onclick="showCategory('legal')"
+                                        class="category-tab px-4 py-2 bg-gray-200 text-gray-700 text-sm rounded-lg hover:bg-gray-300 transition whitespace-nowrap"
+                                        data-category="legal">
+                                        ⚖️ Юридические
+                                    </button>
+                                    <button onclick="showCategory('hr')"
+                                        class="category-tab px-4 py-2 bg-gray-200 text-gray-700 text-sm rounded-lg hover:bg-gray-300 transition whitespace-nowrap"
+                                        data-category="hr">
+                                        👔 Кадровые
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- ✅ СПИСОК ДОКУМЕНТОВ С ПОДКАТЕГОРИЯМИ -->
+                            {% if documents %}
+                            <div class="space-y-4" id="documentsContainer">
+                                {% for category, category_data in documents_by_category.items() %}
+                                <div class="category-section" data-category="{{ category.value }}">
+
+                                    <!-- ✅ ЗАГОЛОВОК КАТЕГОРИИ -->
+                                    <h5 class="text-md font-semibold text-gray-700 mb-2 flex items-center gap-2">
+                                        {% if category.value == 'general' %}📋 Общие
+                                        {% elif category.value == 'technical' %}📐 Технические
+                                        {% elif category.value == 'accounting' %}💰 Бухгалтерия
+                                        {% elif category.value == 'safety' %}👷 Охрана труда
+                                        {% elif category.value == 'legal' %}⚖️ Юридические
+                                        {% elif category.value == 'hr' %}👔 Кадровые
+                                        {% endif %}
+                                        <span class="text-xs text-gray-500">({{ category_data.docs|length }})</span>
+                                    </h5>
+
+                                    <!-- ✅ ПОДКАТЕГОРИИ -->
+                                    {% for subcategory_id, subcat_docs in category_data.by_subcat %}
+                                    {% if subcategory_id != 0 %}
+                                    {% set subcat = subcat_docs[0].subcategory_ref %}
+
+                                    <!-- АККОРДЕОН ПОДКАТЕГОРИИ -->
+                                    <div class="mb-3 border border-gray-200 rounded-lg overflow-hidden">
+                                        <!-- Заголовок подкатегории -->
+                                        <div class="bg-gray-50 p-3 flex justify-between items-center cursor-pointer hover:bg-gray-100 transition"
+                                            onclick="toggleSubcategoryAccordion({{ subcategory_id }})">
+                                            <div class="flex items-center gap-2">
+                                                <span id="subcategory-toggle-{{ subcategory_id }}"
+                                                    class="text-gray-600">▼</span>
+                                                <span class="font-medium text-gray-800">📁 {{ subcat.name }}</span>
+                                                <span class="text-xs text-gray-500">({{ subcat_docs|length }}
+                                                    файлов)</span>
+                                            </div>
+
+                                            <!-- Кнопки управления подкатегорией -->
+                                            {% if object.created_by == user.id or user.role == "admin" %}
+                                            <div class="flex gap-2" onclick="event.stopPropagation()">
+                                                <button
+                                                    onclick="openEditSubcategoryModal({{ object.id }}, {{ subcategory_id }}, '{{ subcat.name }}', '{{ subcat.description or '' }}')"
+                                                    class="text-xs px-2 py-1 bg-indigo-100 text-indigo-700 rounded hover:bg-indigo-200">
+                                                    ✏️
+                                                </button>
+                                                <button
+                                                    onclick="deleteSubcategory({{ object.id }}, {{ subcategory_id }}, '{{ subcat.name }}')"
+                                                    class="text-xs px-2 py-1 bg-red-100 text-red-700 rounded hover:bg-red-200">
+                                                    🗑️
+                                                </button>
+                                            </div>
+                                            {% endif %}
+                                        </div>
+
+                                        <!-- Содержимое подкатегории (файлы) -->
+                                        <div id="subcategory-content-{{ subcategory_id }}"
+                                            class="p-3 space-y-2 bg-white">
+                                            {% for doc in subcat_docs %}
+                                            {{ render_document_item(doc, object, user) }}
+                                            {% endfor %}
+                                        </div>
+                                    </div>
+                                    {% else %}
+                                    <!-- Документы БЕЗ подкатегории -->
+                                    <div class="space-y-2 mb-3">
+                                        {% for doc in subcat_docs %}
+                                        {{ render_document_item(doc, object, user) }}
+                                        {% endfor %}
+                                    </div>
+                                    {% endif %}
+                                    {% endfor %}
+
+                                </div>
+                                {% endfor %}
+                            </div>
+                            {% else %}
+                            <div class="text-center py-8 text-gray-500">
+                                <span class="text-4xl mb-2 block">📄</span>
+                                <p>Документов пока нет</p>
+                            </div>
+                            {% endif %}
+                        </div>
+                        <!-- ✅ МОДАЛЬНОЕ ОКНО: Редактирование документа -->
+                        <div id="editDocumentModal"
+                            class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                            <div class="bg-white rounded-xl shadow-2xl p-8 max-w-lg w-full mx-4">
+                                <div class="flex justify-between items-center mb-6">
+                                    <h3 class="text-xl font-bold text-gray-800">✏️ Редактировать документ</h3>
+                                    <button onclick="closeEditDocumentModal()"
+                                        class="text-gray-500 hover:text-gray-700 text-2xl">×</button>
+                                </div>
+
+                                <form id="editDocumentForm" method="post" class="space-y-4">
+                                    <div>
+                                        <label class="block text-gray-700 font-medium mb-2">Название *</label>
+                                        <input type="text" id="editDocTitle" name="title" required
+                                            class="w-full px-4 py-2 rounded-lg border border-gray-300 focus:border-indigo-500">
+                                    </div>
+
+                                    <div>
+                                        <label class="block text-gray-700 font-medium mb-2">Раздел *</label>
+                                        <select id="editDocCategory" name="category" required
+                                            onchange="updateEditSubcategories()"
+                                            class="w-full px-4 py-2 rounded-lg border border-gray-300 focus:border-indigo-500">
+                                            <option value="general">📋 Общие</option>
+                                            <option value="technical">📐 Технические</option>
+                                            <option value="accounting">💰 Бухгалтерия</option>
+                                            <option value="safety">👷 Охрана труда</option>
+                                            <option value="legal">⚖️ Юридические</option>
+                                            <option value="hr">👔 Кадровые</option>
+                                        </select>
+                                    </div>
+
+                                    <div>
+                                        <label class="block text-gray-700 font-medium mb-2">Подкатегория</label>
+                                        <select id="editDocSubcategory" name="subcategory_id"
+                                            class="w-full px-4 py-2 rounded-lg border border-gray-300 focus:border-indigo-500">
+                                            <option value="">Без подкатегории</option>
+                                        </select>
+                                    </div>
+
+                                    <div class="flex gap-4 pt-4">
+                                        <button type="submit"
+                                            class="flex-1 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition">
+                                            ✓ Сохранить
+                                        </button>
+                                        <button type="button" onclick="closeEditDocumentModal()"
+                                            class="flex-1 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition">
+                                            Отмена
+                                        </button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+
+                        <!-- ✅ МОДАЛЬНОЕ ОКНО: Загрузка документа (с множественной загрузкой) -->
+                        <div id="uploadDocModal"
+                            class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                            <div
+                                class="bg-white rounded-xl shadow-2xl p-8 max-w-lg w-full mx-4 max-h-[90vh] overflow-y-auto">
+                                <div class="flex justify-between items-center mb-6">
+                                    <h3 class="text-xl font-bold text-gray-800">📤 Загрузить документы</h3>
+                                    <button onclick="closeUploadModal()"
+                                        class="text-gray-500 hover:text-gray-700 text-2xl">
+                                        ×
+                                    </button>
+                                </div>
+
+                                <div class="space-y-4">
+                                    <!-- Раздел -->
+                                    <div>
+                                        <label class="block text-gray-700 font-medium mb-2">Раздел *</label>
+                                        <select id="uploadCategory" required onchange="updateSubcategories()"
+                                            class="w-full px-4 py-2 rounded-lg border border-gray-300 focus:border-indigo-500">
+                                            <option value="">Выберите раздел</option>
+                                            <option value="general">📋 Общие (доступно всем)</option>
+                                            <option value="technical">📐 Технические</option>
+                                            <option value="accounting">💰 Бухгалтерия</option>
+                                            <option value="safety">👷 Охрана труда</option>
+                                            <option value="legal">⚖️ Юридические</option>
+                                            <option value="hr">👔 Кадровые</option>
+                                        </select>
+                                    </div>
+
+                                    <!-- Подкатегория -->
+                                    <div>
+                                        <div class="flex justify-between items-center mb-2">
+                                            <label class="block text-gray-700 font-medium">Подкатегория</label>
+                                            <button type="button" onclick="openCreateSubcategoryModal()"
+                                                class="text-xs text-indigo-600 hover:text-indigo-700">
+                                                ➕ Новая
+                                            </button>
+                                        </div>
+                                        <select id="uploadSubcategory"
+                                            class="w-full px-4 py-2 rounded-lg border border-gray-300 focus:border-indigo-500">
+                                            <option value="">Без подкатегории</option>
+                                        </select>
+                                    </div>
+
+                                    <!-- Выбор файлов (скрытый input) -->
+                                    <input type="file" id="fileInput" multiple
+                                        accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg" class="hidden">
+
+                                    <!-- Зона загрузки -->
+                                    <div>
+                                        <label class="block text-gray-700 font-medium mb-2">Добавить файлы</label>
+                                        <div id="dropZone"
+                                            class="border-2 border-dashed border-indigo-300 rounded-lg p-6 text-center cursor-pointer hover:bg-indigo-50 transition">
+                                            <div class="text-4xl mb-2">📁</div>
+                                            <p class="text-gray-700 font-medium">Нажмите или перетащите файлы</p>
+                                            <p class="text-xs text-gray-500 mt-1">
+                                                PDF, DOCX, XLSX, PNG, JPG (макс. 50 МБ каждый)
+                                            </p>
+                                        </div>
+                                    </div>
+
+                                    <!-- ✅ СПИСОК ЗАГРУЖЕННЫХ ФАЙЛОВ -->
+                                    <div id="uploadedFilesList" class="hidden">
+                                        <label class="block text-gray-700 font-medium mb-2">📁 Загруженные
+                                            файлы</label>
+                                        <div id="uploadedFilesPreview"
+                                            class="space-y-2 bg-green-50 p-4 rounded-lg border border-green-200">
+                                        </div>
+                                    </div>
+
+                                    <!-- Прогресс загрузки -->
+                                    <div id="uploadProgress" class="hidden">
+                                        <div class="flex items-center gap-2">
+                                            <div class="animate-spin">⏳</div>
+                                            <p class="text-sm text-gray-700" id="progressText">Загрузка файлов...
+                                            </p>
+                                        </div>
+                                    </div>
+
+                                    <!-- Кнопки -->
+                                    <div class="flex gap-4 pt-4">
+                                        <button type="button" onclick="openFileDialog()"
+                                            class="flex-1 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition">
+                                            ➕ Добавить файлы
+                                        </button>
+                                        <button type="button" onclick="closeUploadModal()"
+                                            class="flex-1 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition">
+                                            ✓ Готово
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- ✅ МОДАЛЬНОЕ ОКНО: Создание подкатегории -->
+                        <div id="createSubcategoryModal"
+                            class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                            <div class="bg-white rounded-xl shadow-2xl p-8 max-w-lg w-full mx-4">
+                                <div class="flex justify-between items-center mb-6">
+                                    <h3 class="text-xl font-bold text-gray-800">➕ Создать подкатегорию</h3>
+                                    <button
+                                        onclick="document.getElementById('createSubcategoryModal').classList.add('hidden')"
+                                        class="text-gray-500 hover:text-gray-700 text-2xl">
+                                        ×
+                                    </button>
+                                </div>
+
+                                <form method="post" action="/objects/{{ object.id }}/subcategories/create"
+                                    class="space-y-4">
+
+                                    <div>
+                                        <label class="block text-gray-700 font-medium mb-2">Название подкатегории
+                                            *</label>
+                                        <input type="text" name="name" required
+                                            class="w-full px-4 py-2 rounded-lg border border-gray-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
+                                            placeholder="Например: УПД, Счета-фактуры, Чертежи">
+                                    </div>
+
+                                    <div>
+                                        <label class="block text-gray-700 font-medium mb-2">Описание</label>
+                                        <textarea name="description" rows="2"
+                                            class="w-full px-4 py-2 rounded-lg border border-gray-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
+                                            placeholder="Опциональное описание..."></textarea>
+                                    </div>
+
+                                    <div>
+                                        <label class="block text-gray-700 font-medium mb-2">Раздел *</label>
+                                        <input type="hidden" name="category" id="subcatCategory" value="">
+                                        <div id="subcatCategoryDisplay"
+                                            class="px-4 py-2 rounded-lg border border-gray-300 bg-gray-50 text-gray-700">
+                                            Выберите раздел в форме загрузки выше
+                                        </div>
+                                    </div>
+
+                                    <div class="flex gap-4 pt-4">
+                                        <button type="submit"
+                                            class="flex-1 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition">
+                                            ✓ Создать
+                                        </button>
+                                        <button type="button"
+                                            onclick="document.getElementById('createSubcategoryModal').classList.add('hidden')"
+                                            class="flex-1 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition">
+                                            Отмена
+                                        </button>
+                                    </div>
+
+                                </form>
+                            </div>
+                        </div>
+
+                        <!-- ✅ МОДАЛЬНОЕ ОКНО: Редактирование подкатегории -->
+                        <div id="editSubcategoryModal"
+                            class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                            <div class="bg-white rounded-xl shadow-2xl p-8 max-w-lg w-full mx-4">
+                                <div class="flex justify-between items-center mb-6">
+                                    <h3 class="text-xl font-bold text-gray-800">✏️ Редактировать подкатегорию</h3>
+                                    <button onclick="closeEditSubcategoryModal()"
+                                        class="text-gray-500 hover:text-gray-700 text-2xl">
+                                        ×
+                                    </button>
+                                </div>
+
+                                <form id="editSubcategoryForm" method="post" class="space-y-4">
+                                    <div>
+                                        <label class="block text-gray-700 font-medium mb-2">Название *</label>
+                                        <input type="text" id="editSubcatName" name="name" required
+                                            class="w-full px-4 py-2 rounded-lg border border-gray-300 focus:border-indigo-500">
+                                    </div>
+
+                                    <div>
+                                        <label class="block text-gray-700 font-medium mb-2">Описание</label>
+                                        <textarea id="editSubcatDesc" name="description" rows="2"
+                                            class="w-full px-4 py-2 rounded-lg border border-gray-300 focus:border-indigo-500"></textarea>
+                                    </div>
+
+                                    <div class="flex gap-4 pt-4">
+                                        <button type="submit"
+                                            class="flex-1 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition">
+                                            ✓ Сохранить
+                                        </button>
+                                        <button type="button" onclick="closeEditSubcategoryModal()"
+                                            class="flex-1 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition">
+                                            Отмена
+                                        </button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+
+
+
+                    </div>
+
+                    <!-- ========== ПРАВАЯ КОЛОНКА: Сотрудники и доступы ========== -->
+                    <div class="space-y-6">
+
+                        <!-- Владелец -->
+                        <div class="bg-white rounded-xl shadow-md p-6 fade-in" style="animation-delay: 0.2s">
+                            <h4 class="text-lg font-semibold text-gray-800 mb-4">👤 Владелец</h4>
+                            <div class="flex items-center gap-3">
+                                {% if object.owner.avatar_url %}
+                                <img src="{{ object.owner.avatar_url }}" alt="{{ object.owner.email }}"
+                                    class="w-12 h-12 rounded-full">
+                                {% else %}
+                                <div
+                                    class="w-12 h-12 bg-indigo-600 text-white rounded-full flex items-center justify-center font-bold">
+                                    {{ object.owner.first_name[0] if object.owner.first_name else
+                                    object.owner.email[0]|upper }}
+                                </div>
+                                {% endif %}
+                                <div>
+                                    <p class="font-medium text-gray-800">
+                                        {{ object.owner.first_name }} {{ object.owner.last_name if
+                                        object.owner.last_name else '' }}
+                                    </p>
+                                    <p class="text-sm text-gray-500">{{ object.owner.email }}</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Сотрудники с доступом -->
+                        <div class="bg-white rounded-xl shadow-md p-6 fade-in" style="animation-delay: 0.3s">
+                            <div class="flex justify-between items-center mb-4">
+                                <h4 class="text-lg font-semibold text-gray-800">👥 Сотрудники ({{ accesses|length
+                                    }})
+                                </h4>
+
+                                {% if object.created_by == user.id or user.role == "admin" %}
+                                <button onclick="document.getElementById('addUserModal').classList.remove('hidden')"
+                                    class="text-indigo-600 hover:text-indigo-700 text-sm font-medium">
+                                    ➕ Добавить
+                                </button>
+                                {% endif %}
+                            </div>
+
+                            {% if accesses %}
+                            <div class="space-y-3">
+                                {% for access in accesses %}
+                                <div
+                                    class="flex items-start justify-between p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition">
+                                    <div class="flex items-start gap-3 flex-1">
+                                        <!-- Аватар -->
+                                        {% if access.user.avatar_url %}
+                                        <img src="{{ access.user.avatar_url }}" alt="{{ access.user.email }}"
+                                            class="w-12 h-12 rounded-full">
+                                        {% else %}
+                                        <div
+                                            class="w-12 h-12 bg-indigo-100 rounded-full flex items-center justify-center text-sm font-bold text-indigo-600">
+                                            {{ access.user.first_name[0] if access.user.first_name else
+                                            access.user.email[0]|upper }}
+                                        </div>
+                                        {% endif %}
+
+                                        <!-- Информация о пользователе -->
+                                        <div class="flex-1">
+                                            <p class="text-sm font-medium text-gray-800">
+                                                {{ access.user.first_name or access.user.email }}
+                                                {% if access.user.last_name %}{{ access.user.last_name }}{% endif %}
+                                            </p>
+                                            <p class="text-xs text-gray-500">{{ access.user.email }}</p>
+
+                                            <!-- Роль -->
+                                            <div class="mt-2">
+                                                <span class="inline-block px-2 py-1 text-xs rounded-full
+                            {% if access.role.value == 'owner' %}bg-purple-100 text-purple-700
+                            {% elif access.role.value == 'admin' %}bg-red-100 text-red-700
+                            {% elif access.role.value == 'editor' %}bg-blue-100 text-blue-700
+                            {% else %}bg-gray-100 text-gray-700
+                            {% endif %}">
+                                                    {% if access.role.value == 'owner' %}👑 Владелец
+                                                    {% elif access.role.value == 'admin' %}🛡️ Администратор
+                                                    {% elif access.role.value == 'editor' %}✏️ Редактор
+                                                    {% else %}👁️ Просмотр
+                                                    {% endif %}
+                                                </span>
+                                            </div>
+
+                                            <!-- ✅ НОВОЕ: Разделы доступа -->
+                                            <div class="mt-2 flex flex-wrap gap-1">
+                                                <div class="text-xs text-gray-400 mr-1">Разделы доступа:</div>
+                                                {% if access.sections_access %}
+                                                {% for section in access.sections_access %}
+                                                <span class="inline-block px-2 py-0.5 text-xs rounded-full
+                                {% if section == 'general' %}bg-gray-100 text-gray-600
+                                {% elif section == 'technical' %}bg-blue-100 text-blue-600
+                                {% elif section == 'accounting' %}bg-green-100 text-green-600
+                                {% elif section == 'safety' %}bg-yellow-100 text-yellow-600
+                                {% elif section == 'legal' %}bg-purple-100 text-purple-600
+                                {% elif section == 'hr' %}bg-pink-100 text-pink-600
+                                {% endif %}">
+                                                    {% if section == 'general' %} <span title="Общие">📋</span>
+                                                    {% elif section == 'technical' %} <span
+                                                        title="Технические">📐</span>
+                                                    {% elif section == 'accounting' %} <span
+                                                        title="Бухгалтерия">💰</span>
+                                                    {% elif section == 'safety' %} <span title="Охрана труда">👷</span>
+                                                    {% elif section == 'legal' %} <span title="Юридический">⚖️</span>
+                                                    {% elif section == 'hr' %} <span title="Кадры">👔</span>
+                                                    {% endif %}
+                                                </span>
+                                                {% endfor %}
+                                                {% else %}
+                                                <span class="text-xs text-gray-400">Нет доступа к разделам</span>
+                                                {% endif %}
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Кнопки управления -->
+                                    {% if (object.created_by == user.id or user.role == "admin") and
+                                    access.role.value
+                                    != 'owner' %}
+                                    <div class="flex flex-col gap-2 ml-4">
+                                        <!-- Скрытые данные для модалки -->
+                                        <div id="access-data-{{ access.user.id }}" style="display:none;">
+                                            {{ access.sections_access|tojson }}
+                                        </div>
+
+                                        <button type="button" data-user-id="{{ access.user.id }}"
+                                            data-role="{{ access.role.value }}" onclick="openEditAccessModal(this)"
+                                            class="px-3 py-1 bg-indigo-600 text-white text-xs rounded-lg hover:bg-indigo-700 transition whitespace-nowrap">
+                                            ✏️ Изменить
+                                        </button>
+                                        <form method="post"
+                                            action="/objects/{{ object.id }}/access/{{ access.user.id }}/revoke"
+                                            onsubmit="return confirm('Отозвать доступ у {{ access.user.first_name or access.user.email }}?');"
+                                            style="display:inline;">
+                                            <button type="submit"
+                                                class="px-3 py-1 bg-red-600 text-white text-xs rounded-lg hover:bg-red-700 transition whitespace-nowrap">
+                                                ✗ Удалить
+                                            </button>
+                                        </form>
+                                    </div>
+                                    {% endif %}
+                                </div>
+                                {% endfor %}
+                            </div>
+                            {% else %}
+                            <p class="text-center text-gray-500 py-4 text-sm">Только владелец</p>
+                            {% endif %}
+                        </div>
+
+                        <!-- ✅ МОДАЛЬНОЕ ОКНО: Добавление сотрудника (улучшенное) -->
+                        <div id="addUserModal"
+                            class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                            <div
+                                class="bg-white rounded-xl shadow-2xl p-8 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+                                <div class="flex justify-between items-center mb-6">
+                                    <h3 class="text-xl font-bold text-gray-800">➕ Управление доступом</h3>
+                                    <button onclick="document.getElementById('addUserModal').classList.add('hidden')"
+                                        class="text-gray-500 hover:text-gray-700 text-2xl">
+                                        ×
+                                    </button>
+                                </div>
+
+
+                                <!-- ✅ ТАБЫ: Один пользователь / Весь отдел -->
+                                <div class="flex gap-2 mb-6 border-b">
+                                    <button onclick="showAccessTab('user')" id="tab-user"
+                                        class="px-4 py-2 font-medium border-b-2 border-indigo-600 text-indigo-600">
+                                        👤 Добавить пользователя
+                                    </button>
+                                    <button onclick="showAccessTab('department')" id="tab-department"
+                                        class="px-4 py-2 font-medium border-b-2 border-transparent text-gray-600 hover:text-gray-800">
+                                        🏢 Добавить отдел
+                                    </button>
+                                </div>
+
+                                <!-- ✅ ФОРМА: Добавить пользователя -->
+                                <div id="form-user" class="access-form">
+                                    <form method="post" action="/objects/{{ object.id }}/access/grant"
+                                        class="space-y-4">
+
+                                        <div>
+                                            <label class="block text-gray-700 font-medium mb-2">Email
+                                                сотрудника</label>
+                                            <input type="email" name="user_email" id="userEmailInput" required
+                                                list="userEmails"
+                                                class="w-full px-4 py-2 rounded-lg border border-gray-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
+                                                placeholder="Начните вводить email...">
+
+                                            <!-- ✅ DATALIST для автокомплита -->
+                                            <datalist id="userEmails">
+                                                {% for u in all_users %}
+                                                <option value="{{ u.email }}">{{ u.first_name }} {{ u.last_name }} -
+                                                    {{
+                                                    u.department or 'Без отдела' }}</option>
+                                                {% endfor %}
+                                            </datalist>
+
+                                            <p class="text-xs text-gray-500 mt-1">Начните вводить email — появятся
+                                                подсказки</p>
+                                        </div>
+
+                                        <div>
+                                            <label class="block text-gray-700 font-medium mb-2">Роль доступа</label>
+                                            <select name="role" required
+                                                class="w-full px-4 py-2 rounded-lg border border-gray-300 focus:border-indigo-500">
+                                                <option value="viewer">👁️ Просмотр (может видеть объект и
+                                                    документы)
+                                                </option>
+                                                <option value="editor">✏️ Редактор (может редактировать объект)
+                                                </option>
+                                                <option value="admin">🛡️ Администратор (полный доступ к объекту)
+                                                </option>
+                                            </select>
+                                        </div>
+
+
+                                        <!-- ✅ ГАЛОЧКИ: Доступ к разделам документов -->
+                                        <div>
+                                            <label class="block text-gray-700 font-medium mb-2">Доступ к разделам
+                                                документов</label>
+
+                                            <div class="space-y-2 bg-gray-50 p-4 rounded-lg">
+
+                                                <label class="flex items-center gap-2 cursor-pointer">
+                                                    <input type="checkbox" name="sections" value="general" checked
+                                                        disabled
+                                                        class="w-5 h-5 text-indigo-600 rounded focus:ring-2 focus:ring-indigo-200">
+                                                    <span class="text-gray-700">📋 Общие <span
+                                                            class="text-xs text-gray-500">(всегда
+                                                            доступно)</span></span>
+                                                </label>
+
+                                                <label class="flex items-center gap-2 cursor-pointer">
+                                                    <input type="checkbox" name="sections" value="technical"
+                                                        class="w-5 h-5 text-indigo-600 rounded focus:ring-2 focus:ring-indigo-200">
+                                                    <span class="text-gray-700">📐 Технические</span>
+                                                </label>
+
+                                                <label class="flex items-center gap-2 cursor-pointer">
+                                                    <input type="checkbox" name="sections" value="accounting"
+                                                        class="w-5 h-5 text-indigo-600 rounded focus:ring-2 focus:ring-indigo-200">
+                                                    <span class="text-gray-700">💰 Бухгалтерия</span>
+                                                </label>
+
+                                                <label class="flex items-center gap-2 cursor-pointer">
+                                                    <input type="checkbox" name="sections" value="safety"
+                                                        class="w-5 h-5 text-indigo-600 rounded focus:ring-2 focus:ring-indigo-200">
+                                                    <span class="text-gray-700">👷 Охрана труда</span>
+                                                </label>
+
+                                                <label class="flex items-center gap-2 cursor-pointer">
+                                                    <input type="checkbox" name="sections" value="legal"
+                                                        class="w-5 h-5 text-indigo-600 rounded focus:ring-2 focus:ring-indigo-200">
+                                                    <span class="text-gray-700">⚖️ Юридические</span>
+                                                </label>
+
+                                                <label class="flex items-center gap-2 cursor-pointer">
+                                                    <input type="checkbox" name="sections" value="hr"
+                                                        class="w-5 h-5 text-indigo-600 rounded focus:ring-2 focus:ring-indigo-200">
+                                                    <span class="text-gray-700">👔 Кадровые</span>
+                                                </label>
+
+                                            </div>
+
+                                            <p class="text-xs text-gray-500 mt-2">
+                                                💡 Если пользователь относится к отделу, раздел его отдела добавится
+                                                автоматически
+                                            </p>
+                                        </div>
+
+                                        <div class="flex gap-4 pt-4">
+                                            <button type="submit"
+                                                class="flex-1 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition">
+                                                ✓ Добавить пользователя
+                                            </button>
+                                            <button type="button"
+                                                onclick="document.getElementById('addUserModal').classList.add('hidden')"
+                                                class="flex-1 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition">
+                                                Отмена
+                                            </button>
+                                        </div>
+
+                                    </form>
+                                </div>
+
+
+                                <!-- ✅ ФОРМА: Добавить весь отдел -->
+                                <div id="form-department" class="access-form hidden">
+                                    <form method="post" action="/objects/{{ object.id }}/access/grant-department"
+                                        class="space-y-4">
+
+                                        <div>
+                                            <label class="block text-gray-700 font-medium mb-2">Выберите
+                                                отдел</label>
+                                            <select name="department" required
+                                                class="w-full px-4 py-2 rounded-lg border border-gray-300 focus:border-indigo-500">
+                                                <option value="">Выберите отдел</option>
+                                                <option value="Технический отдел">📐 Технический отдел</option>
+                                                <option value="Бухгалтерия">💰 Бухгалтерия</option>
+                                                <option value="Отдел кадров">👔 Отдел кадров</option>
+                                                <option value="Охрана труда">👷 Охрана труда</option>
+                                                <option value="Юридический">⚖️ Юридический</option>
+                                                <option value="Коммерческий">💼 Коммерческий</option>
+                                            </select>
+                                        </div>
+
+                                        <div>
+                                            <label class="block text-gray-700 font-medium mb-2">Роль доступа</label>
+                                            <select name="role" required
+                                                class="w-full px-4 py-2 rounded-lg border border-gray-300 focus:border-indigo-500">
+                                                <option value="viewer">👁️ Просмотр (может видеть объект и
+                                                    документы)</option>
+                                                <option value="editor">✏️ Редактор (может редактировать объект и
+                                                    документы)</option>
+                                                <option value="admin">🛡️ Администратор (полный доступ)</option>
+                                            </select>
+                                        </div>
+
+                                        <div class="bg-yellow-50 border-l-4 border-yellow-500 p-4 rounded">
+                                            <p class="text-sm text-yellow-800">
+                                                ⚠️ Все сотрудники выбранного отдела получат доступ к объекту.<br>
+                                                Раздел документов их отдела добавится автоматически.
+                                            </p>
+                                        </div>
+
+                                        <div class="flex gap-4 pt-4">
+                                            <button type="submit"
+                                                class="flex-1 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition">
+                                                ✓ Добавить отдел
+                                            </button>
+                                            <button type="button"
+                                                onclick="document.getElementById('addUserModal').classList.add('hidden')"
+                                                class="flex-1 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition">
+                                                Отмена
+                                            </button>
+                                        </div>
+
+                                    </form>
+                                </div>
+
+                            </div>
+                        </div>
+
+
+                        <!-- ✅ МОДАЛЬНОЕ ОКНО: Редактирование доступа -->
+                        <div id="editAccessModal"
+                            class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                            <div class="bg-white rounded-xl shadow-2xl p-8 max-w-lg w-full mx-4">
+                                <div class="flex justify-between items-center mb-6">
+                                    <h3 class="text-xl font-bold text-gray-800">✏️ Изменить доступ</h3>
+                                    <button onclick="document.getElementById('editAccessModal').classList.add('hidden')"
+                                        class="text-gray-500 hover:text-gray-700 text-2xl">
+                                        ×
+                                    </button>
+                                </div>
+
+                                <form id="editAccessForm" method="post" action="" class="space-y-4">
+
+                                    <div>
+                                        <label class="block text-gray-700 font-medium mb-2">Роль доступа</label>
+                                        <select name="role" id="editRole" required
+                                            class="w-full px-4 py-2 rounded-lg border border-gray-300 focus:border-indigo-500">
+                                            <option value="viewer">👁️ Просмотр (может видеть объект и
+                                                документы)</option>
+                                            <option value="editor">✏️ Редактор (может редактировать объект и
+                                                документы)</option>
+                                            <option value="admin">🛡️ Администратор (полный доступ)</option>
+                                        </select>
+                                    </div>
+
+                                    <!-- ✅ ГАЛОЧКИ: Доступ к разделам документов -->
+                                    <div>
+                                        <label class="block text-gray-700 font-medium mb-2">Доступ к разделам
+                                            документов</label>
+
+                                        <div class="space-y-2 bg-gray-50 p-4 rounded-lg">
+
+                                            <label class="flex items-center gap-2 cursor-pointer">
+                                                <input type="checkbox" name="sections" value="general" checked disabled
+                                                    class="w-5 h-5 text-indigo-600 rounded focus:ring-2 focus:ring-indigo-200">
+                                                <span class="text-gray-700">📋 Общие <span
+                                                        class="text-xs text-gray-500">(всегда)</span></span>
+                                            </label>
+
+                                            <label class="flex items-center gap-2 cursor-pointer">
+                                                <input type="checkbox" name="sections" value="technical"
+                                                    id="edit-section-technical"
+                                                    class="w-5 h-5 text-indigo-600 rounded focus:ring-2 focus:ring-indigo-200">
+                                                <span class="text-gray-700">📐 Технические</span>
+                                            </label>
+
+                                            <label class="flex items-center gap-2 cursor-pointer">
+                                                <input type="checkbox" name="sections" value="accounting"
+                                                    id="edit-section-accounting"
+                                                    class="w-5 h-5 text-indigo-600 rounded focus:ring-2 focus:ring-indigo-200">
+                                                <span class="text-gray-700">💰 Бухгалтерия</span>
+                                            </label>
+
+                                            <label class="flex items-center gap-2 cursor-pointer">
+                                                <input type="checkbox" name="sections" value="safety"
+                                                    id="edit-section-safety"
+                                                    class="w-5 h-5 text-indigo-600 rounded focus:ring-2 focus:ring-indigo-200">
+                                                <span class="text-gray-700">👷 Охрана труда</span>
+                                            </label>
+
+                                            <label class="flex items-center gap-2 cursor-pointer">
+                                                <input type="checkbox" name="sections" value="legal"
+                                                    id="edit-section-legal"
+                                                    class="w-5 h-5 text-indigo-600 rounded focus:ring-2 focus:ring-indigo-200">
+                                                <span class="text-gray-700">⚖️ Юридические</span>
+                                            </label>
+
+                                            <label class="flex items-center gap-2 cursor-pointer">
+                                                <input type="checkbox" name="sections" value="hr" id="edit-section-hr"
+                                                    class="w-5 h-5 text-indigo-600 rounded focus:ring-2 focus:ring-indigo-200">
+                                                <span class="text-gray-700">👔 Кадровые</span>
+                                            </label>
+
+                                        </div>
+                                    </div>
+
+                                    <div class="flex gap-4 pt-4">
+                                        <button type="submit"
+                                            class="flex-1 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition">
+                                            ✓ Сохранить
+                                        </button>
+                                        <button type="button"
+                                            onclick="document.getElementById('editAccessModal').classList.add('hidden')"
+                                            class="flex-1 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition">
+                                            Отмена
+                                        </button>
+                                    </div>
+
+                                </form>
+                            </div>
+                        </div>
+
+                        <!-- Информация -->
+                        <div class="bg-white rounded-xl shadow-md p-6 fade-in" style="animation-delay: 0.4s">
+                            <h4 class="text-lg font-semibold text-gray-800 mb-4">ℹ️ Информация</h4>
+                            <div class="space-y-2 text-sm">
+                                <div class="flex justify-between">
+                                    <span class="text-gray-500">Создан:</span>
+                                    <span class="text-gray-800">{{ object.created_at.strftime('%d.%m.%Y') }}</span>
+                                </div>
+                                <div class="flex justify-between">
+                                    <span class="text-gray-500">Обновлен:</span>
+                                    <span class="text-gray-800">{{ object.updated_at.strftime('%d.%m.%Y') }}</span>
+                                </div>
+                            </div>
+                        </div>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+        </main>
+
+    </div>
+
+    <!-- ✅ Инициализация подкатегорий -->
+    <script>
+        // Получаем данные подкатегорий безопасно
+        const subcategoriesDataGeneral = {{ (subcategories_general | tojson | safe) if subcategories_general else "[]" }};
+        const subcategoriesDataTechnical = {{ (subcategories_technical | tojson | safe) if subcategories_technical else "[]" }};
+        const subcategoriesDataAccounting = {{ (subcategories_accounting | tojson | safe) if subcategories_accounting else "[]" }};
+        const subcategoriesDataSafety = {{ (subcategories_safety | tojson | safe) if subcategories_safety else "[]" }};
+        const subcategoriesDataLegal = {{ (subcategories_legal | tojson | safe) if subcategories_legal else "[]" }};
+        const subcategoriesDataHr = {{ (subcategories_hr | tojson | safe) if subcategories_hr else "[]" }};
+
+        console.log('✅ subcategories_general:', subcategoriesDataGeneral);
+        console.log('✅ subcategories_technical:', subcategoriesDataTechnical);
+        console.log('✅ subcategories_accounting:', subcategoriesDataAccounting);
+        console.log('✅ subcategories_safety:', subcategoriesDataSafety);
+        console.log('✅ subcategories_legal:', subcategoriesDataLegal);
+        console.log('✅ subcategories_hr:', subcategoriesDataHr);
+
+        document.addEventListener('DOMContentLoaded', function () {
+            const subcategoriesData = {
+                general: subcategoriesDataGeneral,
+                technical: subcategoriesDataTechnical,
+                accounting: subcategoriesDataAccounting,
+                safety: subcategoriesDataSafety,
+                legal: subcategoriesDataLegal,
+                hr: subcategoriesDataHr,
+            };
+
+            console.log('✅ Инициализация подкатегорий:', subcategoriesData);
+            if (typeof initializeSubcategories === 'function') {
+                initializeSubcategories(subcategoriesData);
+            } else {
+                console.error('❌ Функция initializeSubcategories не найдена');
+            }
+        });
+    </script>
+
+
+</body>
+
+</html>

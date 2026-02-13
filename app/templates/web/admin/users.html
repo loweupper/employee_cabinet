@@ -1,0 +1,783 @@
+<!DOCTYPE html>
+<html lang="ru">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Управление пользователями</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    <style>
+        .fade-in {
+            animation: fadeIn 0.5s ease-out forwards;
+            opacity: 0;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+    </style>
+</head>
+
+<body class="bg-gray-50">
+
+    <div class="flex min-h-screen">
+
+        <!-- SIDEBAR -->
+        {% include "components/sidebar.html" %}
+
+        <!-- MAIN CONTENT -->
+        <main class="flex-1">
+
+            <!-- Header -->
+            <header class="bg-white shadow-sm px-8 py-4 flex justify-between items-center">
+                <h2 class="text-2xl font-semibold text-gray-800">👥 Управление пользователями</h2>
+                <div class="flex items-center gap-4">
+                    <span class="text-sm text-gray-600">{{ user.email }}</span>
+                    <div
+                        class="w-10 h-10 bg-indigo-600 text-white rounded-full flex items-center justify-center font-bold">
+                        {{ user.first_name[0] if user.first_name else user.email[0]|upper }}
+                    </div>
+                </div>
+            </header>
+
+            <!-- Content -->
+            <div class="p-8">
+
+                <!-- Статистика -->
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+
+                    <!-- Всего пользователей -->
+                    <div class="bg-white rounded-xl shadow-md p-6 fade-in">
+                        <div class="flex items-center justify-between mb-4">
+                            <h3 class="text-gray-600 text-sm font-medium">Всего пользователей</h3>
+                            <span class="text-3xl">👥</span>
+                        </div>
+                        <p class="text-3xl font-bold text-gray-800">{{ total_users }}</p>
+                    </div>
+
+                    <!-- Активные -->
+                    <div class="bg-white rounded-xl shadow-md p-6 fade-in" style="animation-delay: 0.1s">
+                        <div class="flex items-center justify-between mb-4">
+                            <h3 class="text-gray-600 text-sm font-medium">Активные</h3>
+                            <span class="text-3xl">✅</span>
+                        </div>
+                        <p class="text-3xl font-bold text-green-600">{{ active_users }}</p>
+                    </div>
+
+                    <!-- Ожидают активации -->
+                    <div class="bg-white rounded-xl shadow-md p-6 fade-in" style="animation-delay: 0.2s">
+                        <div class="flex items-center justify-between mb-4">
+                            <h3 class="text-gray-600 text-sm font-medium">Ожидают активации</h3>
+                            <span class="text-3xl">⏳</span>
+                        </div>
+                        <p class="text-3xl font-bold text-orange-600">{{ pending_users }}</p>
+                    </div>
+
+                    <!-- ✅ ДЕАКТИВИРОВАННЫЕ -->
+                    <div class="bg-white rounded-xl shadow-md p-6 fade-in" style="animation-delay: 0.3s">
+                        <div class="flex items-center justify-between mb-4">
+                            <h3 class="text-gray-600 text-sm font-medium">Деактивированные</h3>
+                            <span class="text-3xl">⏸️</span>
+                        </div>
+                        <p class="text-3xl font-bold text-gray-600">{{ deactivated_users }}</p>
+                    </div>
+
+                    <!-- ✅ УДАЛЁННЫЕ -->
+                    <div class="bg-white rounded-xl shadow-md p-6 fade-in" style="animation-delay: 0.3s">
+                        <div class="flex items-center justify-between mb-4">
+                            <h3 class="text-gray-600 text-sm font-medium">Удалённые</h3>
+                            <span class="text-3xl">🗑️</span>
+                        </div>
+                        <p class="text-3xl font-bold text-red-600">{{ deleted_users }}</p>
+                    </div>
+
+                </div>
+
+                <!-- Фильтры и поиск -->
+                <div class="bg-white rounded-xl shadow-md p-6 mb-6 fade-in" style="animation-delay: 0.3s">
+                    <div class="flex flex-col md:flex-row gap-4 items-center justify-between">
+
+                        <!-- Поиск -->
+                        <form method="get" class="flex-1 w-full md:w-auto">
+                            <input type="text" name="search" value="{{ search_query }}"
+                                placeholder="🔍 Поиск по имени или email..."
+                                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                        </form>
+
+                        <!-- Фильтры -->
+                        <div class="flex gap-2 flex-wrap">
+                            <a href="/admin/users?status=all"
+                                class="px-4 py-2 rounded-lg text-sm {{ 'bg-indigo-600 text-white' if current_status == 'all' else 'bg-gray-200 text-gray-700 hover:bg-gray-300' }}">
+                                📋 Все
+                            </a>
+                            <a href="/admin/users?status=active"
+                                class="px-4 py-2 rounded-lg text-sm {{ 'bg-indigo-600 text-white' if current_status == 'active' else 'bg-gray-200 text-gray-700 hover:bg-gray-300' }}">
+                                ✅ Активные
+                            </a>
+                            <a href="/admin/users?status=pending"
+                                class="px-4 py-2 rounded-lg text-sm {{ 'bg-indigo-600 text-white' if current_status == 'pending' else 'bg-gray-200 text-gray-700 hover:bg-gray-300' }}">
+                                ⏳ Ожидают
+                            </a>
+                            <a href="/admin/users?status=deactivated"
+                                class="px-4 py-2 rounded-lg text-sm {{ 'bg-indigo-600 text-white' if current_status == 'deactivated' else 'bg-gray-200 text-gray-700 hover:bg-gray-300' }}">
+                                ⏸️ Деактивированные
+                            </a>
+                            <a href="/admin/users?status=deleted"
+                                class="px-4 py-2 rounded-lg text-sm {{ 'bg-indigo-600 text-white' if current_status == 'deleted' else 'bg-gray-200 text-gray-700 hover:bg-gray-300' }}">
+                                🗑️ Удалённые
+                            </a>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Таблица пользователей -->
+                <div class="bg-white rounded-xl shadow-md overflow-hidden fade-in" style="animation-delay: 0.4s">
+
+                    {% if users %}
+                    <div class="overflow-x-auto">
+                        <table class="w-full">
+                            <thead class="bg-gray-50 border-b border-gray-200">
+                                <tr>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                                        Пользователь</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Роль
+                                    </th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Отдел
+                                    </th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Статус
+                                    </th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Дата
+                                        регистрации</th>
+                                    <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">
+                                        Действия</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-gray-200">
+                                {% for u in users %}
+                                <tr class="hover:bg-gray-50 transition" id="user-row-{{ u.id }}">
+                                    <!-- Пользователь -->
+                                    <td class="px-6 py-4">
+                                        <div class="flex items-center gap-3">
+                                            <div
+                                                class="w-10 h-10 bg-indigo-100 rounded-full flex items-center justify-center text-indigo-600 font-bold">
+                                                {{ u.first_name[0] if u.first_name else u.email[0]|upper }}
+                                            </div>
+                                            <div>
+                                                <p class="font-medium text-gray-800">
+                                                    {{ u.first_name or 'Без имени' }} {{ u.last_name or '' }}
+                                                </p>
+                                                <p class="text-sm text-gray-500">{{ u.email }}</p>
+                                            </div>
+                                        </div>
+                                    </td>
+
+                                    <!-- Роль -->
+                                    <td class="px-6 py-4">
+                                        <select onchange="changeRole({{ u.id }}, this.value)"
+                                            class="px-3 py-1 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                            {{ 'disabled' if u.id==user.id else '' }}>
+                                            <option value="employee" {{ 'selected' if u.role.value=='employee' else ''
+                                                }}>👤 Сотрудник</option>
+                                            <option value="admin" {{ 'selected' if u.role.value=='admin' else '' }}>👑
+                                                Администратор</option>
+                                            <option value="accountant" {{ 'selected' if u.role.value=='accountant'
+                                                else '' }}>💰 Бухгалтер</option>
+                                            <option value="hr" {{ 'selected' if u.role.value=='hr' else '' }}>👔 HR
+                                            </option>
+                                            <option value="engineer" {{ 'selected' if u.role.value=='engineer' else ''
+                                                }}>🔧 Инженер</option>
+                                            <option value="lawyer" {{ 'selected' if u.role.value=='lawyer' else '' }}>⚖️
+                                                Юрист</option>
+                                        </select>
+                                    </td>
+
+                                    <!-- Отдел -->
+                                    <td class="px-6 py-4">
+                                        <span class="text-sm text-gray-600">{{ u.department_rel.name if u.department_rel else '—' }}</span>
+                                    </td>
+
+                                    <!-- Статус -->
+                                    <td class="px-6 py-4">
+                                        {% if u.deleted_at %}
+                                        <span
+                                            class="px-3 py-1 bg-red-100 text-red-700 rounded-full text-xs font-medium">🗑️
+                                            Удалён</span>
+                                        {% elif u.is_active %}
+                                        <span
+                                            class="px-3 py-1 bg-green-100 text-green-700 rounded-full text-xs font-medium">✅
+                                            Активен</span>
+                                        {% elif u.activated_at is none %}
+                                        <span
+                                            class="px-3 py-1 bg-orange-100 text-orange-700 rounded-full text-xs font-medium">⏳
+                                            Ожидает активации</span>
+                                        {% else %}
+                                        <span
+                                            class="px-3 py-1 bg-gray-100 text-gray-700 rounded-full text-xs font-medium">⏸️
+                                            Деактивирован</span>
+                                        {% endif %}
+                                    </td>
+
+                                    <!-- Дата регистрации -->
+                                    <td class="px-6 py-4">
+                                        <span class="text-sm text-gray-600">{{ u.created_at.strftime('%d.%m.%Y')
+                                            }}</span>
+                                    </td>
+
+                                    <!-- Действия -->
+                                    <td class="px-6 py-4">
+                                        <div class="flex gap-2 justify-end">
+
+                                            {% if not u.deleted_at %}
+                                            <!-- ✅ КНОПКА РЕДАКТИРОВАТЬ -->
+                                            <button
+                                                onclick="openEditModal({{ u.id }}, '{{ u.first_name or '' }}', '{{ u.last_name or '' }}', '{{ u.middle_name or '' }}', '{{ u.email }}', '{{ u.phone_number or '' }}', '{{ u.department_id or '' }}', '{{ u.position or '' }}', '{{ u.location or '' }}')"
+                                                class="px-3 py-1 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition"
+                                                title="Редактировать">
+                                                <i class="bi bi-pencil"></i>
+                                            </button>
+
+                                            <!-- ✅ КНОПКА СБРОСИТЬ ПАРОЛЬ -->
+                                            {% if u.id != user.id %}
+                                            <button onclick="openPasswordResetModal({{ u.id }}, '{{ u.email }}')"
+                                                class="px-3 py-1 bg-purple-600 text-white text-sm rounded-lg hover:bg-purple-700 transition"
+                                                title="Сбросить пароль">
+                                                <i class="bi bi-key"></i>
+                                            </button>
+                                            {% endif %}
+
+                                            <!-- Активировать/Деактивировать -->
+                                            {% if u.id != user.id %}
+                                            {% if u.is_active %}
+                                            <button onclick="deactivateUser({{ u.id }})"
+                                                class="px-3 py-1 bg-orange-600 text-white text-sm rounded-lg hover:bg-orange-700 transition"
+                                                title="Деактивировать">
+                                                <i class="bi bi-pause-circle"></i>
+                                            </button>
+                                            {% else %}
+                                            <button onclick="activateUser({{ u.id }})"
+                                                class="px-3 py-1 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 transition"
+                                                title="Активировать">
+                                                <i class="bi bi-check-circle"></i>
+                                            </button>
+                                            {% endif %}
+
+                                            <!-- Удалить -->
+                                            <button onclick="deleteUser({{ u.id }}, '{{ u.email }}')"
+                                                class="px-3 py-1 bg-red-600 text-white text-sm rounded-lg hover:bg-red-700 transition"
+                                                title="Удалить">
+                                                <i class="bi bi-trash"></i>
+                                            </button>
+                                            {% else %}
+                                            <span class="text-xs text-gray-400">Это вы</span>
+                                            {% endif %}
+                                            {% else %}
+                                            <span class="text-xs text-gray-400">Удалён {{
+                                                u.deleted_at.strftime('%d.%m.%Y') }}</span>
+                                            {% endif %}
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="text-center py-12 text-gray-500">
+                        <span class="text-6xl mb-4 block">👥</span>
+                        <p class="text-xl">Пользователей не найдено</p>
+                    </div>
+                    {% endif %}
+
+                </div>
+
+            </div>
+
+        </main>
+
+    </div>
+
+    <!-- ✅ МОДАЛЬНОЕ ОКНО РЕДАКТИРОВАНИЯ -->
+    <div id="editModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <!-- Header -->
+            <div class="bg-indigo-600 text-white px-6 py-4 flex justify-between items-center rounded-t-xl">
+                <h3 class="text-xl font-semibold">✏️ Редактировать пользователя</h3>
+                <button onclick="closeEditModal()" class="text-white hover:text-gray-200 text-2xl">&times;</button>
+            </div>
+
+            <!-- Form -->
+            <form id="editUserForm" class="p-6 space-y-4">
+                <input type="hidden" id="edit_user_id">
+
+                <!-- ФИО -->
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Имя</label>
+                        <input type="text" id="edit_first_name"
+                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Фамилия</label>
+                        <input type="text" id="edit_last_name"
+                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Отчество</label>
+                        <input type="text" id="edit_middle_name"
+                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                    </div>
+                </div>
+
+                <!-- Email -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Email</label>
+                    <input type="email" id="edit_email" required
+                        class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                </div>
+
+                <!-- Телефон -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Телефон</label>
+                    <input type="tel" id="edit_phone_number" placeholder="+7 (999) 999-99-99"
+                        class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                </div>
+
+                <!-- Отдел и Должность -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Отдел</label>
+                        <select id="edit_department_id"
+                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                            <option value="">Не указан</option>
+                            {% for dept in departments %}
+                            <option value="{{ dept.id }}">{{ dept.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Должность</label>
+                        <input type="text" id="edit_position"
+                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                    </div>
+                </div>
+
+                <!-- Локация -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Местоположение</label>
+                    <input type="text" id="edit_location" placeholder="Москва, офис 1"
+                        class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                </div>
+
+                <!-- Кнопки -->
+                <div class="flex gap-3 pt-4">
+                    <button type="submit"
+                        class="flex-1 px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition font-medium">
+                        💾 Сохранить
+                    </button>
+                    <button type="button" onclick="closeEditModal()"
+                        class="px-6 py-3 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400 transition font-medium">
+                        Отмена
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- ✅ МОДАЛЬНОЕ ОКНО СБРОСА ПАРОЛЯ -->
+    <div id="passwordResetModal"
+        class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-md">
+            <!-- Header -->
+            <div class="bg-purple-600 text-white px-6 py-4 flex justify-between items-center rounded-t-xl">
+                <h3 class="text-xl font-semibold">🔑 Сбросить пароль</h3>
+                <button onclick="closePasswordResetModal()"
+                    class="text-white hover:text-gray-200 text-2xl">&times;</button>
+            </div>
+
+            <!-- Form -->
+            <form id="passwordResetForm" class="p-6 space-y-4">
+                <input type="hidden" id="reset_user_id">
+                <input type="hidden" id="reset_user_email">
+
+                <!-- Информация о пользователе -->
+                <div class="bg-gray-50 p-4 rounded-lg">
+                    <p class="text-sm text-gray-600">Вы собираетесь изменить пароль для:</p>
+                    <p class="text-lg font-semibold text-gray-800" id="reset_user_email_display"></p>
+                </div>
+
+                <!-- Новый пароль -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Новый пароль</label>
+                    <input type="password" id="reset_new_password" required minlength="6"
+                        placeholder="Минимум 6 символов"
+                        class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500">
+                </div>
+
+                <!-- Подтверждение пароля -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Подтвердите пароль</label>
+                    <input type="password" id="reset_confirm_password" required minlength="6"
+                        placeholder="Повторите пароль"
+                        class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500">
+                </div>
+
+                <!-- Предупреждение -->
+                <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+                    <p class="text-sm text-yellow-800">
+                        ⚠️ Все активные сессии пользователя будут завершены
+                    </p>
+                </div>
+
+                <!-- Кнопки -->
+                <div class="flex gap-3 pt-4">
+                    <button type="submit"
+                        class="flex-1 px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition font-medium">
+                        🔑 Сбросить пароль
+                    </button>
+                    <button type="button" onclick="closePasswordResetModal()"
+                        class="px-6 py-3 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400 transition font-medium">
+                        Отмена
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        console.log('✅ Admin users page JS loaded');
+
+        // ===================================
+        // АКТИВАЦИЯ/ДЕАКТИВАЦИЯ
+        // ===================================
+        async function activateUser(userId) {
+            console.log('🔵 activateUser called with userId:', userId);
+
+            if (!confirm('Активировать этого пользователя?')) {
+                console.log('❌ User cancelled activation');
+                return;
+            }
+
+            try {
+                console.log('📡 Sending POST to /admin/users/' + userId + '/activate');
+
+                const response = await fetch(`/admin/users/${userId}/activate`, {
+                    method: 'POST',
+                    credentials: 'include',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                console.log('📥 Response status:', response.status);
+
+                const data = await response.json();
+                console.log('📥 Response data:', data);
+
+                if (data.success) {
+                    alert(data.message);
+                    location.reload();
+                } else {
+                    alert('Ошибка: ' + data.message);
+                }
+            } catch (error) {
+                console.error('❌ Error:', error);
+                alert('Ошибка сети: ' + error);
+            }
+        }
+
+        async function deactivateUser(userId) {
+            console.log('🔴 deactivateUser called with userId:', userId);
+
+            if (!confirm('Деактивировать этого пользователя?')) {
+                console.log('❌ User cancelled deactivation');
+                return;
+            }
+
+            try {
+                console.log('📡 Sending POST to /admin/users/' + userId + '/deactivate');
+
+                const response = await fetch(`/admin/users/${userId}/deactivate`, {
+                    method: 'POST',
+                    credentials: 'include',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                console.log('📥 Response status:', response.status);
+
+                const data = await response.json();
+                console.log('📥 Response data:', data);
+
+                if (data.success) {
+                    alert(data.message);
+                    location.reload();
+                } else {
+                    alert('Ошибка: ' + data.message);
+                }
+            } catch (error) {
+                console.error('❌ Error:', error);
+                alert('Ошибка сети: ' + error);
+            }
+        }
+
+        // ===================================
+        // ИЗМЕНЕНИЕ РОЛИ
+        // ===================================
+        async function changeRole(userId, newRole) {
+            console.log('🟡 changeRole called with userId:', userId, 'newRole:', newRole);
+
+            if (!confirm(`Изменить роль пользователя на "${newRole}"?`)) {
+                console.log('❌ User cancelled role change');
+                location.reload();
+                return;
+            }
+
+            try {
+                console.log('📡 Sending POST to /admin/users/' + userId + '/role');
+
+                const formData = new FormData();
+                formData.append('role', newRole);
+
+                const response = await fetch(`/admin/users/${userId}/role`, {
+                    method: 'POST',
+                    credentials: 'include',
+                    body: formData
+                });
+
+                console.log('📥 Response status:', response.status);
+
+                const data = await response.json();
+                console.log('📥 Response data:', data);
+
+                if (data.success) {
+                    alert(data.message);
+                    location.reload();
+                } else {
+                    alert('Ошибка: ' + data.message);
+                    location.reload();
+                }
+            } catch (error) {
+                console.error('❌ Error:', error);
+                alert('Ошибка сети: ' + error);
+                location.reload();
+            }
+        }
+
+        // ===================================
+        // УДАЛЕНИЕ
+        // ===================================
+        async function deleteUser(userId, email) {
+            console.log('🔴 deleteUser called with userId:', userId, 'email:', email);
+
+            if (!confirm(`Удалить пользователя "${email}"?\n\nЭто действие нельзя отменить!`)) {
+                console.log('❌ User cancelled deletion');
+                return;
+            }
+
+            try {
+                console.log('📡 Sending DELETE to /admin/users/' + userId);
+
+                const response = await fetch(`/admin/users/${userId}`, {
+                    method: 'DELETE',
+                    credentials: 'include',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                console.log('📥 Response status:', response.status);
+
+                const data = await response.json();
+                console.log('📥 Response data:', data);
+
+                if (data.success) {
+                    alert(data.message);
+                    const row = document.getElementById(`user-row-${userId}`);
+                    if (row) row.remove();
+                } else {
+                    alert('Ошибка: ' + data.message);
+                }
+            } catch (error) {
+                console.error('❌ Error:', error);
+                alert('Ошибка сети: ' + error);
+            }
+        }
+
+        // ===================================
+        // РЕДАКТИРОВАНИЕ
+        // ===================================
+        function openEditModal(userId, firstName, lastName, middleName, email, phone, departmentId, position, location) {
+            console.log('🔵 openEditModal called', { userId, firstName, lastName, email });
+
+            document.getElementById('edit_user_id').value = userId;
+            document.getElementById('edit_first_name').value = firstName || '';
+            document.getElementById('edit_last_name').value = lastName || '';
+            document.getElementById('edit_middle_name').value = middleName || '';
+            document.getElementById('edit_email').value = email || '';
+            document.getElementById('edit_phone_number').value = phone || '';
+            document.getElementById('edit_department_id').value = departmentId || '';
+            document.getElementById('edit_position').value = position || '';
+            document.getElementById('edit_location').value = location || '';
+
+            document.getElementById('editModal').classList.remove('hidden');
+        }
+
+        function closeEditModal() {
+            document.getElementById('editModal').classList.add('hidden');
+            document.getElementById('editUserForm').reset();
+        }
+
+        // Обработка отправки формы
+        document.getElementById('editUserForm').addEventListener('submit', async function (e) {
+            e.preventDefault();
+
+            const userId = document.getElementById('edit_user_id').value;
+
+            console.log('📡 Sending edit request for user:', userId);
+
+            try {
+                const formData = new FormData();
+                formData.append('first_name', document.getElementById('edit_first_name').value);
+                formData.append('last_name', document.getElementById('edit_last_name').value);
+                formData.append('middle_name', document.getElementById('edit_middle_name').value);
+                formData.append('email', document.getElementById('edit_email').value);
+                formData.append('phone_number', document.getElementById('edit_phone_number').value);
+                formData.append('department_id', document.getElementById('edit_department_id').value);
+                formData.append('position', document.getElementById('edit_position').value);
+                formData.append('location', document.getElementById('edit_location').value);
+
+                const response = await fetch(`/admin/users/${userId}/edit`, {
+                    method: 'POST',
+                    credentials: 'include',
+                    body: formData
+                });
+
+                const data = await response.json();
+                console.log('📥 Response:', data);
+
+                if (data.success) {
+                    alert(data.message);
+                    closeEditModal();
+                    location.reload();
+                } else {
+                    alert('Ошибка: ' + data.message);
+                }
+            } catch (error) {
+                console.error('❌ Error:', error);
+                alert('Ошибка сети: ' + error);
+            }
+        });
+
+        // Закрытие по клику вне модального окна
+        document.getElementById('editModal').addEventListener('click', function (e) {
+            if (e.target === this) {
+                closeEditModal();
+            }
+        });
+
+        // ===================================
+        // АВТОПОИСК
+        // ===================================
+        const searchInput = document.querySelector('input[name="search"]');
+        if (searchInput) {
+            searchInput.addEventListener('input', function (e) {
+                clearTimeout(this.searchTimeout);
+                this.searchTimeout = setTimeout(() => {
+                    this.form.submit();
+                }, 500);
+            });
+        }
+
+        console.log('✅ All admin functions loaded');
+    </script>
+
+    <script>
+        // ===================================
+        // СБРОС ПАРОЛЯ
+        // ===================================
+        function openPasswordResetModal(userId, email) {
+            console.log('🔑 openPasswordResetModal called', { userId, email });
+
+            document.getElementById('reset_user_id').value = userId;
+            document.getElementById('reset_user_email').value = email;
+            document.getElementById('reset_user_email_display').textContent = email;
+            document.getElementById('reset_new_password').value = '';
+            document.getElementById('reset_confirm_password').value = '';
+
+            document.getElementById('passwordResetModal').classList.remove('hidden');
+        }
+
+        function closePasswordResetModal() {
+            document.getElementById('passwordResetModal').classList.add('hidden');
+            document.getElementById('passwordResetForm').reset();
+        }
+
+        // Обработка отправки формы сброса пароля
+        document.getElementById('passwordResetForm').addEventListener('submit', async function (e) {
+            e.preventDefault();
+
+            const userId = document.getElementById('reset_user_id').value;
+            const email = document.getElementById('reset_user_email').value;
+            const newPassword = document.getElementById('reset_new_password').value;
+            const confirmPassword = document.getElementById('reset_confirm_password').value;
+
+            // Валидация
+            if (newPassword !== confirmPassword) {
+                alert('Пароли не совпадают!');
+                return;
+            }
+
+            if (newPassword.length < 6) {
+                alert('Пароль должен содержать минимум 6 символов');
+                return;
+            }
+
+            console.log('📡 Sending password reset for user:', userId);
+
+            try {
+                const formData = new FormData();
+                formData.append('new_password', newPassword);
+
+                const response = await fetch(`/admin/users/${userId}/reset-password`, {
+                    method: 'POST',
+                    credentials: 'include',
+                    body: formData
+                });
+
+                const data = await response.json();
+                console.log('📥 Response:', data);
+
+                if (data.success) {
+                    alert(data.message);
+                    closePasswordResetModal();
+                } else {
+                    alert('Ошибка: ' + data.message);
+                }
+            } catch (error) {
+                console.error('❌ Error:', error);
+                alert('Ошибка сети: ' + error);
+            }
+        });
+
+        // Закрытие по клику вне модального окна
+        document.getElementById('passwordResetModal').addEventListener('click', function (e) {
+            if (e.target === this) {
+                closePasswordResetModal();
+            }
+        });
+
+        console.log('✅ Password reset functions loaded');
+    </script>
+
+</body>
+
+</html>
