@@ -4,6 +4,8 @@ from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 import logging
 from pydantic import ValidationError
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 
 
 from core.database import get_db
@@ -13,6 +15,9 @@ from modules.auth.models import User, Session as SessionModel
 from modules.auth.service import AuthService
 
 logger = logging.getLogger("app")
+
+# Initialize rate limiter
+limiter = Limiter(key_func=get_remote_address)
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -73,6 +78,7 @@ def get_user_agent(request: Request) -> str:
 # Регистрация и вход
 # ===================================
 @router.post("/register", summary="📝 Регистрация нового пользователя", description="Регистрация нового пользователя через веб-форму")
+@limiter.limit("3/minute")
 async def register(
     email: str = Form(...),
     password: str = Form(...),
@@ -194,6 +200,7 @@ async def register(
 
 
 @router.post("/login", summary="🔑 Логин пользователя", description="Логин пользователя через веб-форму с email и паролем")
+@limiter.limit("5/minute")
 async def login(
     email: str = Form(...),
     password: str = Form(...),

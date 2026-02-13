@@ -8,6 +8,8 @@ import logging
 import os
 import uuid
 from pathlib import Path
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 
 from core.database import get_db
 from core.config import settings
@@ -18,6 +20,9 @@ from modules.auth.service import AuthService
 from modules.auth.utils import verify_password, hash_password
 
 logger = logging.getLogger("app")
+
+# Initialize rate limiter
+limiter = Limiter(key_func=get_remote_address)
 
 router = APIRouter(tags=["profile"])
 
@@ -63,6 +68,7 @@ async def profile_page(
 # Обновление профиля
 # ===================================
 @router.post("/update")
+@limiter.limit("30/minute")
 async def update_profile(
     request: Request,
     first_name: str = Form(None),

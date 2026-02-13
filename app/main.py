@@ -12,6 +12,11 @@ from datetime import datetime
 import pytz
 import os
 
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
+from starlette_csrf import CSRFMiddleware
+
 from core.config import settings
 from core.database import Base, engine
 from core.logging import AccessLogMiddleware
@@ -233,6 +238,13 @@ def custom_openapi():
 app.openapi = custom_openapi
 
 # ===================================
+# Rate Limiting Setup
+# ===================================
+limiter = Limiter(key_func=get_remote_address)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+# ===================================
 # Templates & Static
 # ===================================
 templates = Jinja2Templates(directory="templates")
@@ -244,7 +256,7 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 
 # ✅ Добавляем в обратном порядке выполнения:
 
-# 4. CORS (выполнится первым)
+# 5. CORS (выполнится первым)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.CORS_ORIGINS,
@@ -253,7 +265,19 @@ app.add_middleware(
     allow_headers=settings.CORS_HEADERS,
 )
 
-# 3. Access Logging (выполнится вторым)
+# 4. CSRF Protection (выполнится вторым)
+app.add_middleware(
+    CSRFMiddleware,
+    secret=settings.SECRET_KEY,
+    cookie_name="csrftoken",
+    cookie_secure=settings.ENVIRONMENT == "production",
+    cookie_httponly=False,  # Need to be False for JavaScript access
+    cookie_samesite="lax",
+    header_name="X-CSRFToken",
+    safe_methods={"GET", "HEAD", "OPTIONS", "TRACE"},
+)
+
+# 3. Access Logging (выполнится третьим)
 app.add_middleware(AccessLogMiddleware)
 
 # 2. Swagger Security (выполнится третьим)
