@@ -1,5 +1,11 @@
 from sqlalchemy import func
 from core.template_helpers import get_sidebar_context
+from core.config import settings
+from core.validators import (
+    sanitize_filename,
+    validate_file_extension,
+    ALLOWED_DOCUMENT_EXTENSIONS
+)
 from modules.objects.models import Object, ObjectAccess
 from fastapi import APIRouter, Depends, Request, Form, HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse, FileResponse
@@ -7,6 +13,8 @@ from sqlalchemy.orm import Session
 import logging
 from typing import Optional
 from datetime import datetime
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 
 from core.database import get_db
 from modules.auth.dependencies import get_current_user_from_cookie
@@ -16,6 +24,9 @@ from modules.documents.service import DocumentService
 from modules.documents.models import Document, DocumentCategory, DocumentSubcategory
 
 logger = logging.getLogger("app")
+
+# Initialize rate limiter
+limiter = Limiter(key_func=get_remote_address)
 
 router = APIRouter(tags=["documents"])
 
@@ -27,6 +38,7 @@ templates = Jinja2Templates(directory="templates")
 # Загрузка документов к объекту (множественная загрузка)
 # ===================================
 @router.post("/objects/{object_id}/documents/upload")
+@limiter.limit("10/hour")
 async def upload_documents(
     object_id: int,
     request: Request,
@@ -75,11 +87,55 @@ async def upload_documents(
 
         for file in files:
             try:
-                # Сохраняем файл
+                # ===== File Upload Security Validation =====
+                
+                # 1. Check file size - read content to validate actual size
+                # Note: Reading entire file into memory is a trade-off between:
+                # - Security: Prevents Content-Length header manipulation
+                # - Memory: For large files, could use streaming (future improvement)
+                # Current limit (10MB) is reasonable for in-memory processing
+                file_contents = await file.read()
+                actual_size = len(file_contents)
+                
+                if actual_size > settings.MAX_FILE_SIZE:
+                    logger.warning({
+                        "event": "file_upload_rejected_size",
+                        "filename": file.filename,
+                        "size": actual_size,
+                        "max_size": settings.MAX_FILE_SIZE,
+                        "object_id": object_id,
+                        "user_id": user.id
+                    })
+                    errors.append(f"{file.filename} (слишком большой файл)")
+                    continue
+                
+                # Reset file pointer after reading
+                await file.seek(0)
+                
+                # 2. Validate file extension
+                if not validate_file_extension(file.filename, ALLOWED_DOCUMENT_EXTENSIONS):
+                    logger.warning({
+                        "event": "file_upload_rejected_extension",
+                        "filename": file.filename,
+                        "object_id": object_id,
+                        "user_id": user.id
+                    })
+                    errors.append(f"{file.filename} (недопустимый тип файла)")
+                    continue
+                
+                # 3. Sanitize filename to prevent directory traversal
+                safe_filename = sanitize_filename(file.filename) if file.filename else "unnamed_file"
+                
+                # ===== End Security Validation =====
+                
+                # Сохраняем файл (service also does sanitization)
                 file_path = await DocumentService.save_file(file, object_id)
 
-                # Название документа
-                doc_title = file.filename.split('.')[0] if file.filename else "Документ"
+                # Название документа - используем os.path.splitext для надежности
+                import os
+                doc_title, _ = os.path.splitext(safe_filename)
+                if not doc_title:
+                    doc_title = "Документ"
 
                 # Создаём документ
                 document = Document(
@@ -88,8 +144,8 @@ async def upload_documents(
                     category=DocumentCategory(category),
                     subcategory_id=subcategory_id,
                     file_path=file_path,
-                    file_name=file.filename,
-                    file_size=file.size,
+                    file_name=safe_filename,  # Use sanitized filename
+                    file_size=actual_size,  # Use actual validated size
                     file_type=file.content_type,
                     object_id=object_id,
                     created_by=user.id

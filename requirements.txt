@@ -35,6 +35,8 @@ python-json-logger==4.0.0
 
 # Security
 cryptography==46.0.4
+starlette-csrf==3.0.0
+bleach==6.2.0
 
 # Utils
 httpx==0.27.2  

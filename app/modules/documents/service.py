@@ -9,6 +9,7 @@ from modules.documents.models import Document, DocumentCategory, CATEGORY_DEPART
 from modules.documents.schemas import DocumentCreate
 from modules.auth.models import User
 from modules.objects.models import ObjectAccess
+from core.validators import sanitize_filename
 import uuid
 import shutil
 
@@ -28,8 +29,11 @@ class DocumentService:
         upload_dir = Path(f"files/objects/{object_id}")
         upload_dir.mkdir(parents=True, exist_ok=True)
         
-        # Генерируем уникальное имя файла
-        file_extension = Path(file.filename).suffix
+        # Sanitize the filename
+        safe_name = sanitize_filename(file.filename) if file.filename else "unnamed_file"
+        
+        # Генерируем уникальное имя файла с оригинальным расширением
+        file_extension = Path(safe_name).suffix
         unique_filename = f"{uuid.uuid4()}{file_extension}"
         file_path = upload_dir / unique_filename
         

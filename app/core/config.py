@@ -32,6 +32,7 @@ class Settings(BaseSettings):
 
     # Files
     FILES_PATH: str = "/files"
+    MAX_FILE_SIZE: int = 10485760  # 10MB in bytes (10 * 1024 * 1024)
 
     # ===== JWT Configuration =====
     JWT_ALGORITHM: str = "HS256"
@@ -65,8 +66,8 @@ class Settings(BaseSettings):
     # ===== CORS =====
     CORS_ORIGINS: list[str] = Field(default=["http://localhost:3000", "http://localhost:8000"])
     CORS_CREDENTIALS: bool = True
-    CORS_METHODS: list[str] = ["*"]
-    CORS_HEADERS: list[str] = ["*"]
+    CORS_METHODS: list[str] = ["GET", "POST", "PUT", "DELETE"]
+    CORS_HEADERS: list[str] = ["Content-Type", "Authorization"]
 
     # ===================================
     # Swagger UI Security
