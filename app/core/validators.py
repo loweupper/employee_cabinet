@@ -18,16 +18,23 @@ def sanitize_filename(filename: str) -> str:
         
     Examples:
         >>> sanitize_filename("../../etc/passwd")
-        '......etcpasswd'
+        'etcpasswd'
         >>> sanitize_filename("file<script>.txt")
-        'filescript.txt'
+        'file_script_.txt'
     """
     if not filename:
         return "unnamed_file"
     
+    # First, use os.path.basename to remove any directory path
+    import os
+    filename = os.path.basename(filename)
+    
     # Remove path separators and dangerous characters
     # Replace: / \ : * ? " < > |
     sanitized = re.sub(r'[/\\:*?"<>|]', '_', filename)
+    
+    # Remove any sequences of dots to prevent traversal
+    sanitized = re.sub(r'\.\.+', '_', sanitized)
     
     # Remove any leading dots to prevent hidden files
     sanitized = sanitized.lstrip('.')
@@ -38,35 +45,37 @@ def sanitize_filename(filename: str) -> str:
     
     # Limit filename length to 255 characters (filesystem limit)
     if len(sanitized) > 255:
-        # Keep the extension
-        name, ext = sanitized.rsplit('.', 1) if '.' in sanitized else (sanitized, '')
-        max_name_length = 255 - len(ext) - 1 if ext else 255
-        sanitized = name[:max_name_length] + ('.' + ext if ext else '')
+        # Keep the extension using os.path.splitext for reliability
+        import os
+        name, ext = os.path.splitext(sanitized)
+        max_name_length = 255 - len(ext)
+        sanitized = name[:max_name_length] + ext
     
     return sanitized
 
 
 def sanitize_html(text: str) -> str:
     """
-    Remove HTML/script tags to prevent XSS attacks
+    Remove/escape HTML tags to prevent XSS attacks
     
     Args:
         text: Input text that may contain HTML
         
     Returns:
-        Sanitized text with all HTML tags removed
+        Sanitized text with HTML tags escaped
         
     Examples:
         >>> sanitize_html("<script>alert('xss')</script>Hello")
-        'Hello'
+        '&lt;script&gt;alert('xss')&lt;/script&gt;Hello'
         >>> sanitize_html("Normal text")
         'Normal text'
     """
     if not text:
         return ""
     
-    # Remove all HTML tags and strip whitespace
-    return clean(text, tags=[], strip=True)
+    # Escape all HTML tags instead of stripping them
+    # This prevents XSS while preserving the text content
+    return clean(text, tags=[], strip=False)
 
 
 def validate_file_extension(filename: str, allowed_extensions: set) -> bool:

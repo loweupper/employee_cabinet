@@ -89,18 +89,24 @@ async def upload_documents(
             try:
                 # ===== File Upload Security Validation =====
                 
-                # 1. Check file size
-                if file.size and file.size > settings.MAX_FILE_SIZE:
+                # 1. Check file size - read content to validate actual size
+                file_contents = await file.read()
+                actual_size = len(file_contents)
+                
+                if actual_size > settings.MAX_FILE_SIZE:
                     logger.warning({
                         "event": "file_upload_rejected_size",
                         "filename": file.filename,
-                        "size": file.size,
+                        "size": actual_size,
                         "max_size": settings.MAX_FILE_SIZE,
                         "object_id": object_id,
                         "user_id": user.id
                     })
                     errors.append(f"{file.filename} (слишком большой файл)")
                     continue
+                
+                # Reset file pointer after reading
+                await file.seek(0)
                 
                 # 2. Validate file extension
                 if not validate_file_extension(file.filename, ALLOWED_DOCUMENT_EXTENSIONS):
@@ -118,7 +124,7 @@ async def upload_documents(
                 
                 # ===== End Security Validation =====
                 
-                # Сохраняем файл
+                # Сохраняем файл (service also does sanitization)
                 file_path = await DocumentService.save_file(file, object_id)
 
                 # Название документа
@@ -132,7 +138,7 @@ async def upload_documents(
                     subcategory_id=subcategory_id,
                     file_path=file_path,
                     file_name=safe_filename,  # Use sanitized filename
-                    file_size=file.size,
+                    file_size=actual_size,  # Use actual validated size
                     file_type=file.content_type,
                     object_id=object_id,
                     created_by=user.id
