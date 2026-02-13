@@ -16,15 +16,25 @@ security = HTTPBasic()
 
 def verify_swagger_auth(credentials: HTTPBasicCredentials = Depends(security)):
     """Basic Auth для Swagger (для staging)"""
-    correct_username = secrets.compare_digest(credentials.username, "admin")
-    correct_password = secrets.compare_digest(credentials.password, "888791Qazwsx")
+    correct_username = secrets.compare_digest(credentials.username, settings.SWAGGER_USERNAME)
+    correct_password = secrets.compare_digest(credentials.password, settings.SWAGGER_PASSWORD)
     
     if not (correct_username and correct_password):
+        logger.warning({
+            "event": "swagger_basic_auth_failed",
+            "username_attempted": credentials.username,
+            "ip": "unknown"  # IP will be available in middleware context
+        })
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Неверные учетные данные для доступа к документации",
             headers={"WWW-Authenticate": "Basic"},
         )
+    
+    logger.info({
+        "event": "swagger_basic_auth_success",
+        "username": credentials.username
+    })
     return credentials.username
 
 
