@@ -5,6 +5,7 @@ import os
 from typing import Optional
 import warnings
 import logging
+from urllib.parse import quote_plus
 
 from typing import List
 
@@ -75,8 +76,8 @@ class Settings(BaseSettings):
     DOCS_ALLOWED_IPS: List[str] = []  # ✅ Белый список IP
     
     # Swagger Basic Auth credentials (for staging/dev environments)
-    SWAGGER_USERNAME: str = Field(default="admin", description="Username for Swagger basic auth")
-    SWAGGER_PASSWORD: str = Field(default="changeme", description="Password for Swagger basic auth")
+    SWAGGER_USERNAME: str = Field(description="Username for Swagger basic auth")
+    SWAGGER_PASSWORD: str = Field(description="Password for Swagger basic auth")
     
      # Environment
     ENVIRONMENT: str = "development"  # development, staging, production
@@ -142,7 +143,11 @@ class Settings(BaseSettings):
                 "POSTGRES_HOST, POSTGRES_PORT, POSTGRES_DB, POSTGRES_USER, POSTGRES_PASSWORD"
             )
         
-        return f"postgresql://{user}:{password}@{host}:{port}/{db}"
+        # URL-encode username and password to handle special characters
+        encoded_user = quote_plus(str(user))
+        encoded_password = quote_plus(str(password))
+        
+        return f"postgresql://{encoded_user}:{encoded_password}@{host}:{port}/{db}"
     
     @field_validator('REDIS_URL')
     @classmethod

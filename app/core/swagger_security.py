@@ -22,7 +22,6 @@ def verify_swagger_auth(credentials: HTTPBasicCredentials = Depends(security)):
     if not (correct_username and correct_password):
         logger.warning({
             "event": "swagger_basic_auth_failed",
-            "username_attempted": credentials.username,
             "ip": "unknown"  # IP will be available in middleware context
         })
         raise HTTPException(

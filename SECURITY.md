@@ -372,11 +372,4 @@ Regularly check for:
 
 ---
 
-## Support
-
-For security concerns or questions:
-- Email: security@example.com
-- Internal Security Team: #security-team
-- Security Hotline: +1-XXX-XXX-XXXX
-
 **Remember: Security is everyone's responsibility!** 🔐
