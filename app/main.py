@@ -120,6 +120,42 @@ logger = logging.getLogger("app")
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info({"event": "app_startup", "debug_mode": settings.DEBUG, "environment": settings.ENVIRONMENT})
+    
+    # Initialize monitoring components
+    if settings.MONITORING_ENABLED:
+        try:
+            # Initialize login attempt tracker
+            from core.redis import get_redis
+            from core.monitoring.detector import init_login_tracker
+            redis_client = await get_redis()
+            await init_login_tracker(redis_client)
+            logger.info("Login attempt tracker initialized")
+            
+            # Initialize email notifier if configured
+            if settings.SMTP_HOST and settings.SMTP_USER and settings.ALERT_EMAIL_RECIPIENTS:
+                from core.notifications.email_notifier import init_email_notifier
+                await init_email_notifier(
+                    smtp_host=settings.SMTP_HOST,
+                    smtp_port=settings.SMTP_PORT,
+                    username=settings.SMTP_USER,
+                    password=settings.SMTP_PASSWORD,
+                    from_email=settings.SMTP_FROM_EMAIL,
+                    from_name=settings.SMTP_FROM_NAME
+                )
+                logger.info("Email notifier initialized")
+            
+            # Initialize Telegram notifier if configured
+            if settings.TELEGRAM_BOT_TOKEN and settings.TELEGRAM_CHAT_ID:
+                from core.notifications.telegram_notifier import init_telegram_notifier
+                await init_telegram_notifier(
+                    bot_token=settings.TELEGRAM_BOT_TOKEN,
+                    chat_id=settings.TELEGRAM_CHAT_ID
+                )
+                logger.info("Telegram notifier initialized")
+                
+        except Exception as e:
+            logger.error(f"Failed to initialize monitoring components: {e}")
+    
     yield
     logger.info({"event": "app_shutdown"})
 
@@ -309,6 +345,11 @@ app.include_router(object_router, prefix="/objects")
 app.include_router(documents_router, prefix="/documents")
 app.include_router(admin_router)
 
+# Monitoring routes (admin only)
+if settings.MONITORING_ENABLED:
+    from modules.monitoring.routes import router as monitoring_router
+    app.include_router(monitoring_router, prefix="/api/v1")
+
 
 # ===================================
 # Главная страница (редирект)
@@ -330,8 +371,15 @@ async def root(request: Request):
     summary="Health check",
     tags=["🔧 System / Система"]
 )
-def health():
-    """Проверка что сервис запущен и работает"""
+async def health(detailed: bool = False):
+    """
+    Проверка что сервис запущен и работает
+    Supports detailed health checks with ?detailed=true
+    """
+    if detailed and settings.MONITORING_ENABLED:
+        from core.monitoring.health import check_health
+        return await check_health(detailed=True)
+    
     return {"status": "ok", "app": settings.APP_NAME, "version": "1.0.0"}
 
 

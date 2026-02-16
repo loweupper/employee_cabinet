@@ -60,6 +60,17 @@ class Settings(BaseSettings):
     # ===== Security =====
     ACCOUNT_LOCKOUT_THRESHOLD: int = 5  # попыток перед блокировкой
     ACCOUNT_LOCKOUT_DURATION_MINUTES: int = 15  # на сколько заблокировать
+    
+    # ===== Monitoring =====
+    MONITORING_ENABLED: bool = True
+    METRICS_ENABLED: bool = True
+    ALERT_EMAIL_RECIPIENTS: List[str] = Field(default_factory=lambda: [])
+    TELEGRAM_BOT_TOKEN: Optional[str] = None
+    TELEGRAM_CHAT_ID: Optional[str] = None
+    LOG_RETENTION_DAYS: int = 30
+    ALERT_RETENTION_HOURS: int = 24
+    BRUTE_FORCE_THRESHOLD: int = 5
+    BRUTE_FORCE_WINDOW_MINUTES: int = 5
 
 
 
@@ -178,6 +189,19 @@ class Settings(BaseSettings):
                 logger.warning(f"Failed to parse DOCS_ALLOWED_IPS as JSON: {v}, using default")
                 return ["127.0.0.1"]
         return v if v else ["127.0.0.1"]
+    
+    @field_validator('ALERT_EMAIL_RECIPIENTS', mode='before')
+    @classmethod
+    def parse_alert_recipients(cls, v):
+        """Parse ALERT_EMAIL_RECIPIENTS from JSON string or list"""
+        if isinstance(v, str):
+            import json
+            try:
+                return json.loads(v)
+            except json.JSONDecodeError:
+                logger.warning(f"Failed to parse ALERT_EMAIL_RECIPIENTS as JSON: {v}, using empty list")
+                return []
+        return v if v else []
 
 settings = Settings()
 

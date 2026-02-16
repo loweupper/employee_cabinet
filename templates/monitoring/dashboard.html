@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Monitoring Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        .metric-card {
+            transition: all 0.3s ease;
+        }
+
+        .metric-card:hover {
+            transform: translateY(-2px);
+        }
+
+        .status-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 8px;
+        }
+
+        .status-healthy {
+            background-color: #10b981;
+        }
+
+        .status-degraded {
+            background-color: #f59e0b;
+        }
+
+        .status-unhealthy {
+            background-color: #ef4444;
+        }
+
+        .alert-badge {
+            animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% {
+                opacity: 1;
+            }
+            50% {
+                opacity: .5;
+            }
+        }
+    </style>
+</head>
+
+<body class="bg-gray-50">
+
+    <div class="flex min-h-screen">
+
+        <!-- Sidebar -->
+        {% include "components/sidebar.html" %}
+
+        <!-- Main Content -->
+        <main class="flex-1 overflow-y-auto">
+
+            <!-- Header -->
+            <header class="bg-white shadow-sm px-8 py-4 flex justify-between items-center">
+                <div>
+                    <h1 class="text-2xl font-bold text-gray-800">📊 Monitoring Dashboard</h1>
+                    <p class="text-sm text-gray-600 mt-1">Real-time system monitoring and security alerts</p>
+                </div>
+                <div class="flex items-center gap-4">
+                    <button onclick="refreshDashboard()" class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition">
+                        🔄 Refresh
+                    </button>
+                    <span class="text-sm text-gray-600">{{ user.email }}</span>
+                    <div class="w-10 h-10 bg-indigo-600 text-white rounded-full flex items-center justify-center font-bold">
+                        {{ user.first_name[0] if user.first_name else user.email[0]|upper }}
+                    </div>
+                </div>
+            </header>
+
+            <!-- Content -->
+            <div class="p-8">
+
+                <!-- System Status Overview -->
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+                    
+                    <!-- System Health -->
+                    <div class="bg-white rounded-xl shadow-md p-6 metric-card">
+                        <div class="flex items-center justify-between mb-4">
+                            <h3 class="text-gray-600 text-sm font-medium">System Status</h3>
+                            <span class="text-3xl">💚</span>
+                        </div>
+                        <div class="flex items-center">
+                            <span class="status-dot status-{{ stats.system_status }}"></span>
+                            <p class="text-xl font-bold text-gray-800 capitalize">{{ stats.system_status }}</p>
+                        </div>
+                        <p class="text-sm text-gray-500 mt-2">Overall system health</p>
+                    </div>
+
+                    <!-- Active Sessions -->
+                    <div class="bg-white rounded-xl shadow-md p-6 metric-card">
+                        <div class="flex items-center justify-between mb-4">
+                            <h3 class="text-gray-600 text-sm font-medium">Active Sessions</h3>
+                            <span class="text-3xl">👥</span>
+                        </div>
+                        <p class="text-3xl font-bold text-gray-800">{{ stats.active_sessions }}</p>
+                        <p class="text-sm text-gray-500 mt-2">Currently logged in users</p>
+                    </div>
+
+                    <!-- Failed Logins -->
+                    <div class="bg-white rounded-xl shadow-md p-6 metric-card">
+                        <div class="flex items-center justify-between mb-4">
+                            <h3 class="text-gray-600 text-sm font-medium">Failed Logins (1h)</h3>
+                            <span class="text-3xl">🔒</span>
+                        </div>
+                        <p class="text-3xl font-bold {% if stats.failed_logins_1h > 5 %}text-red-600{% else %}text-gray-800{% endif %}">{{ stats.failed_logins_1h }}</p>
+                        <p class="text-sm text-gray-500 mt-2">Last hour</p>
+                    </div>
+
+                    <!-- Unresolved Alerts -->
+                    <div class="bg-white rounded-xl shadow-md p-6 metric-card">
+                        <div class="flex items-center justify-between mb-4">
+                            <h3 class="text-gray-600 text-sm font-medium">Unresolved Alerts</h3>
+                            {% if stats.alerts_unresolved > 0 %}
+                            <span class="text-3xl alert-badge">🚨</span>
+                            {% else %}
+                            <span class="text-3xl">✅</span>
+                            {% endif %}
+                        </div>
+                        <p class="text-3xl font-bold {% if stats.alerts_unresolved > 0 %}text-red-600{% else %}text-gray-800{% endif %}">{{ stats.alerts_unresolved }}</p>
+                        <p class="text-sm text-gray-500 mt-2">
+                            <span class="text-red-600">{{ stats.alerts_critical }} Critical</span> / 
+                            <span class="text-orange-600">{{ stats.alerts_high }} High</span>
+                        </p>
+                    </div>
+
+                </div>
+
+                <!-- Health Checks -->
+                <div class="bg-white rounded-xl shadow-md p-6 mb-8">
+                    <h2 class="text-xl font-bold text-gray-800 mb-4">🏥 Health Checks</h2>
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                        
+                        {% if health.checks %}
+                        <!-- Database -->
+                        <div class="border border-gray-200 rounded-lg p-4">
+                            <div class="flex items-center justify-between mb-2">
+                                <h3 class="font-medium text-gray-700">Database</h3>
+                                <span class="status-dot status-{{ health.checks.database.status }}"></span>
+                            </div>
+                            <p class="text-sm text-gray-600">
+                                {% if health.checks.database.latency_ms %}
+                                Latency: {{ health.checks.database.latency_ms }}ms
+                                {% else %}
+                                {{ health.checks.database.message or 'Status unknown' }}
+                                {% endif %}
+                            </p>
+                        </div>
+
+                        <!-- Redis -->
+                        <div class="border border-gray-200 rounded-lg p-4">
+                            <div class="flex items-center justify-between mb-2">
+                                <h3 class="font-medium text-gray-700">Redis</h3>
+                                <span class="status-dot status-{{ health.checks.redis.status }}"></span>
+                            </div>
+                            <p class="text-sm text-gray-600">
+                                {% if health.checks.redis.latency_ms %}
+                                Latency: {{ health.checks.redis.latency_ms }}ms
+                                {% else %}
+                                {{ health.checks.redis.message or 'Status unknown' }}
+                                {% endif %}
+                            </p>
+                        </div>
+
+                        <!-- Disk -->
+                        <div class="border border-gray-200 rounded-lg p-4">
+                            <div class="flex items-center justify-between mb-2">
+                                <h3 class="font-medium text-gray-700">Disk Space</h3>
+                                <span class="status-dot status-{{ health.checks.disk.status }}"></span>
+                            </div>
+                            <p class="text-sm text-gray-600">
+                                {% if health.checks.disk.free_gb %}
+                                Free: {{ health.checks.disk.free_gb }}GB ({{ health.checks.disk.percent_free|round(1) }}%)
+                                {% else %}
+                                {{ health.checks.disk.message or 'Status unknown' }}
+                                {% endif %}
+                            </p>
+                        </div>
+
+                        <!-- Memory -->
+                        <div class="border border-gray-200 rounded-lg p-4">
+                            <div class="flex items-center justify-between mb-2">
+                                <h3 class="font-medium text-gray-700">Memory</h3>
+                                <span class="status-dot status-{{ health.checks.memory.status }}"></span>
+                            </div>
+                            <p class="text-sm text-gray-600">
+                                {% if health.checks.memory.available_mb %}
+                                Available: {{ health.checks.memory.available_mb|round }}MB ({{ health.checks.memory.percent_available|round(1) }}%)
+                                {% else %}
+                                {{ health.checks.memory.message or 'Status unknown' }}
+                                {% endif %}
+                            </p>
+                        </div>
+                        {% else %}
+                        <p class="text-gray-600">No health check data available</p>
+                        {% endif %}
+
+                    </div>
+                </div>
+
+                <!-- Recent Security Alerts -->
+                <div class="bg-white rounded-xl shadow-md p-6 mb-8">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-xl font-bold text-gray-800">🚨 Recent Security Alerts</h2>
+                        <a href="/api/v1/monitoring/alerts-page" class="text-indigo-600 hover:text-indigo-800 text-sm font-medium">View All →</a>
+                    </div>
+
+                    {% if alerts %}
+                    <div class="space-y-3">
+                        {% for alert in alerts[:10] %}
+                        <div class="border-l-4 
+                            {% if alert.severity.value == 'critical' %}border-red-500 bg-red-50
+                            {% elif alert.severity.value == 'high' %}border-orange-500 bg-orange-50
+                            {% elif alert.severity.value == 'medium' %}border-yellow-500 bg-yellow-50
+                            {% else %}border-green-500 bg-green-50{% endif %}
+                            p-4 rounded-r-lg">
+                            <div class="flex justify-between items-start">
+                                <div class="flex-1">
+                                    <div class="flex items-center gap-2 mb-1">
+                                        <span class="font-semibold text-gray-800">
+                                            {% if alert.severity.value == 'critical' %}🔴
+                                            {% elif alert.severity.value == 'high' %}🟠
+                                            {% elif alert.severity.value == 'medium' %}🟡
+                                            {% else %}🟢{% endif %}
+                                            {{ alert.type.value.replace('_', ' ').title() }}
+                                        </span>
+                                        <span class="text-xs text-gray-500">{{ alert.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}</span>
+                                        {% if alert.resolved %}
+                                        <span class="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">Resolved</span>
+                                        {% endif %}
+                                    </div>
+                                    <p class="text-sm text-gray-700">{{ alert.message }}</p>
+                                    <p class="text-xs text-gray-500 mt-1">
+                                        IP: {{ alert.ip_address }}
+                                        {% if alert.user_id %} | User ID: {{ alert.user_id }}{% endif %}
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <p class="text-gray-600 text-center py-8">✅ No recent security alerts</p>
+                    {% endif %}
+                </div>
+
+            </div>
+
+        </main>
+
+    </div>
+
+    <script>
+        // Auto-refresh every 30 seconds
+        setTimeout(function() {
+            location.reload();
+        }, 30000);
+
+        function refreshDashboard() {
+            location.reload();
+        }
+    </script>
+
+</body>
+
+</html>
