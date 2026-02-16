@@ -12,7 +12,7 @@ from core.database import get_db
 from core.monitoring.metrics import get_metrics, get_metrics_content_type
 from core.monitoring.alerts import AlertSeverity, AlertType
 from modules.auth.dependencies import get_current_user
-from modules.auth.models import User, Role
+from modules.auth.models import User
 from modules.monitoring.service import MonitoringService
 from modules.monitoring.schemas import (
     AlertResponse, AlertListResponse, AlertCountsResponse,
@@ -28,7 +28,7 @@ templates = Jinja2Templates(directory="app/templates/web")
 
 def require_admin(user: User = Depends(get_current_user)):
     """Require admin role for monitoring endpoints"""
-    if user.role != Role.admin:
+    if user.role != UserRole.admin:
         raise HTTPException(
             status_code=403,
             detail="Admin access required"
