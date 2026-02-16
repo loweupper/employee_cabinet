@@ -7,7 +7,7 @@ import warnings
 import logging
 from urllib.parse import quote_plus
 
-from typing import List
+from typing import List, Union
 
 logger = logging.getLogger(__name__)
 
@@ -86,6 +86,8 @@ class Settings(BaseSettings):
     class Config:
         env_file = ".env"
         case_sensitive = True
+        # Allow JSON parsing errors to be caught by validators
+        env_parse_none_str = 'empty'
     
     @field_validator('SECRET_KEY')
     @classmethod
