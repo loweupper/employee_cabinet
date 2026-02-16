@@ -62,6 +62,19 @@ class AccessLogMiddleware(BaseHTTPMiddleware):
                 "user_id": int(user_id) if user_id else None,
                 "email": user_email,
             })
+            
+            # Record metrics
+            try:
+                from core.monitoring.metrics import record_request
+                record_request(
+                    method=request.method,
+                    endpoint=request.url.path,
+                    status_code=response.status_code,
+                    duration=duration / 1000  # Convert ms to seconds
+                )
+            except Exception as metric_error:
+                # Don't let metrics errors break the request
+                logger.debug(f"Failed to record metrics: {metric_error}")
 
             # ✅ Добавляем request_id в headers для трейсинга
             if request_id:

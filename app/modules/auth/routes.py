@@ -229,6 +229,16 @@ async def login(
         # Логин через сервис (возвращает TokenResponse — Pydantic модель)
         token_response = AuthService.login(data, db, user_agent, client_ip)
         
+        # Record successful login attempt
+        try:
+            from core.monitoring.detector import get_login_tracker
+            tracker = get_login_tracker()
+            # Get user ID from token
+            user = db.query(User).filter(User.email == email).first()
+            await tracker.record_attempt(email, client_ip, True, user.id if user else None)
+        except Exception as tracker_error:
+            logger.debug(f"Failed to record login attempt: {tracker_error}")
+        
         logger.info({
             "event": "login_success",
             "email": email,
@@ -263,7 +273,14 @@ async def login(
         return redirect
         
     except HTTPException as e:
-        # Неверный логин/пароль
+        # Неверный логин/пароль - record failed attempt
+        try:
+            from core.monitoring.detector import get_login_tracker
+            tracker = get_login_tracker()
+            await tracker.record_attempt(email, client_ip, False, None)
+        except Exception as tracker_error:
+            logger.debug(f"Failed to record failed login attempt: {tracker_error}")
+        
         logger.warning({
             "event": "login_failed",
             "email": email,
