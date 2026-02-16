@@ -212,7 +212,7 @@ class LoginAttemptTracker:
             logger.error(f"Error checking IP history: {e}")
             return False
     
-    async def check_suspicious_activity(self, email: str, ip: str) -> Dict[str, any]:
+    async def check_suspicious_activity(self, email: str, ip: str) -> Dict[str, Any]:
         """
         Check for various suspicious activities
         

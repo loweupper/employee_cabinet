@@ -111,7 +111,7 @@ class MonitoringService:
             alert_id: Alert ID
             
         Returns:
-            Alert if found
+            Alert object if found, None if not found
         """
         return await alert_manager.get_alert_by_id(alert_id)
     
