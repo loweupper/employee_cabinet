@@ -23,7 +23,7 @@ from modules.monitoring.schemas import (
 logger = logging.getLogger("app")
 
 router = APIRouter(prefix="/monitoring", tags=["📊 Monitoring"])
-templates = Jinja2Templates(directory="templates")
+templates = Jinja2Templates(directory="app/templates/web")
 
 
 def require_admin(user: User = Depends(get_current_user)):
