@@ -11,6 +11,7 @@ import json
 from datetime import datetime
 import pytz
 import os
+import re
 
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
@@ -271,10 +272,19 @@ app.add_middleware(
     secret=settings.SECRET_KEY,
     cookie_name="csrftoken",
     cookie_secure=settings.ENVIRONMENT == "production",
-    cookie_httponly=False,  # Need to be False for JavaScript access
+    cookie_httponly=False,
     cookie_samesite="lax",
     header_name="X-CSRFToken",
     safe_methods={"GET", "HEAD", "OPTIONS", "TRACE"},
+    exempt_urls=[
+        re.compile(r"^/api/v1/auth/login$"),       # ✅ Regex pattern
+        re.compile(r"^/api/v1/auth/register$"),    # ✅ Regex pattern
+        re.compile(r"^/api/v1/auth/refresh$"),     # ✅ Regex pattern
+        re.compile(r"^/health$"),                  # ✅ Regex pattern
+        re.compile(r"^/docs.*"),                   # ✅ Regex pattern (все /docs/*)
+        re.compile(r"^/openapi\.json$"),           # ✅ Regex pattern
+        re.compile(r"^/redoc$"),                   # ✅ Regex pattern
+    ],
 )
 
 # 3. Access Logging (выполнится третьим)
