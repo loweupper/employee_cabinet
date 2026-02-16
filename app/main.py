@@ -20,7 +20,7 @@ from starlette_csrf import CSRFMiddleware
 
 from core.config import settings
 from core.database import Base, engine
-from core.logging import AccessLogMiddleware
+from core.logging.middleware import AccessLogMiddleware
 from modules.auth.routes import router as auth_router
 from modules.auth.dependencies import get_current_user_from_cookie
 from modules.auth.models import Session, User

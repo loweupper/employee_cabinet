@@ -11,25 +11,15 @@ logger = logging.getLogger("app")
 class AccessLogMiddleware(BaseHTTPMiddleware):
     """
     Middleware для логирования всех HTTP запросов в структурированном виде
-    Логи будут обогащены данными из запроса и сохранены в базу данных через DatabaseLogHandler
     """
     async def dispatch(self, request: Request, call_next):
         start = time.time()
-
-        # ✅ Получаем request_id из context (уже установлен в RequestIDMiddleware)
         request_id = getattr(request.state, "request_id", None)
-
-        # IP клиента
         client_ip = request.client.host if request.client else "unknown"
-
-        # User-Agent
         user_agent = request.headers.get("user-agent", "-")
-
-        # ✅ Попытка получить user_id (если авторизован)
+        
         user_id = None
         user_email = None
-
-        # Сначала пробуем из cookie, потом из Authorization header
         token = request.cookies.get("access_token")
         if not token:
             auth_header = request.headers.get("authorization")
@@ -45,11 +35,9 @@ class AccessLogMiddleware(BaseHTTPMiddleware):
                 pass
         
         try:
-            # Выполняем запрос
             response = await call_next(request)
             duration = round((time.time() - start) * 1000, 2)
 
-            # Логируем успешный запрос
             logger.info({
                 "event": "http_request",
                 "request_id": request_id,
@@ -70,13 +58,11 @@ class AccessLogMiddleware(BaseHTTPMiddleware):
                     method=request.method,
                     endpoint=request.url.path,
                     status_code=response.status_code,
-                    duration=duration / 1000  # Convert ms to seconds
+                    duration=duration / 1000
                 )
             except Exception as metric_error:
-                # Don't let metrics errors break the request
                 logger.debug(f"Failed to record metrics: {metric_error}")
 
-            # ✅ Добавляем request_id в headers для трейсинга
             if request_id:
                 response.headers["X-Request-ID"] = request_id
 
@@ -85,7 +71,6 @@ class AccessLogMiddleware(BaseHTTPMiddleware):
         except Exception as e:
             duration = round((time.time() - start) * 1000, 2)
             
-            # ✅ Логируем ошибку
             logger.error({
                 "event": "http_request_error",
                 "request_id": request_id,
@@ -100,5 +85,4 @@ class AccessLogMiddleware(BaseHTTPMiddleware):
                 "error_type": type(e).__name__,
             })
             
-            # Прокидываем исключение дальше
             raise
