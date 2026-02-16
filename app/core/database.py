@@ -13,7 +13,8 @@ engine = create_engine(
     pool_size=10,  # Постоянно 10 соединений
     max_overflow=20, # Дополнительно до 20 соединений при пиковых нагрузках
     future=True,  
-    pool_pre_ping=True # Проверка соединений перед использованием
+    pool_pre_ping=True, # Проверка соединений перед использованием
+    pool_recycle=3600  # Recycle connections every hour (security best practice)
 )
 
 SessionLocal = sessionmaker(

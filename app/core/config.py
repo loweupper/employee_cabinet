@@ -74,7 +74,7 @@ class Settings(BaseSettings):
     # ===================================
     ENABLE_DOCS: bool = True  # ✅ Включить/выключить документацию
     DOCS_REQUIRE_AUTH: bool = True  # ✅ Требовать авторизацию для доступа к /docs
-    DOCS_ALLOWED_IPS: List[str] = []  # ✅ Белый список IP
+    DOCS_ALLOWED_IPS: List[str] = Field(default_factory=lambda: ["127.0.0.1"])  # ✅ Белый список IP
     
     # Swagger Basic Auth credentials (for staging/dev environments)
     SWAGGER_USERNAME: str = Field(description="Username for Swagger basic auth")
@@ -163,6 +163,19 @@ class Settings(BaseSettings):
         port = data.get('redis_port', 6379)
         
         return f"redis://{host}:{port}/0"
+    
+    @field_validator('DOCS_ALLOWED_IPS', mode='before')
+    @classmethod
+    def parse_docs_ips(cls, v):
+        """Parse DOCS_ALLOWED_IPS from JSON string or list"""
+        if isinstance(v, str):
+            import json
+            try:
+                return json.loads(v)
+            except json.JSONDecodeError:
+                logger.warning(f"Failed to parse DOCS_ALLOWED_IPS as JSON: {v}, using default")
+                return ["127.0.0.1"]
+        return v if v else ["127.0.0.1"]
 
 settings = Settings()
 
