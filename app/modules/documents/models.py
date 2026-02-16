@@ -171,7 +171,7 @@ class Document(Base):
         
         # Документы отдела — только для пользователей этого отдела
         required_department = CATEGORY_DEPARTMENT_MAP.get(self.category)
-        if required_department and user.department == required_department:
+        if required_department and user.department_id == required_department:
             return True
         
         # Админы видят всё
