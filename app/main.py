@@ -10,8 +10,9 @@ import logging.config
 import json
 from datetime import datetime
 import pytz
-import os
 import re
+import asyncio
+from modules.auth.session_cleanup import cleanup_expired_sessions
 
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
@@ -119,7 +120,7 @@ logger = logging.getLogger("app")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    logger.info({"event": "app_startup", "debug_mode": settings.DEBUG, "environment": settings.ENVIRONMENT})
+    logger.debug({"event": "app_startup", "debug_mode": settings.DEBUG, "environment": settings.ENVIRONMENT})
     
     # Initialize monitoring components
     if settings.MONITORING_ENABLED:
@@ -129,7 +130,7 @@ async def lifespan(app: FastAPI):
             from core.monitoring.detector import init_login_tracker
             redis_client = await get_redis()
             await init_login_tracker(redis_client)
-            logger.info("Login attempt tracker initialized")
+            logger.debug("Login attempt tracker initialized")
             
             # Initialize email notifier if configured
             if settings.SMTP_HOST and settings.SMTP_USER and settings.ALERT_EMAIL_RECIPIENTS:
@@ -142,7 +143,7 @@ async def lifespan(app: FastAPI):
                     from_email=settings.SMTP_FROM_EMAIL,
                     from_name=settings.SMTP_FROM_NAME
                 )
-                logger.info("Email notifier initialized")
+                logger.debug("Email notifier initialized")
             
             # Initialize Telegram notifier if configured
             if settings.TELEGRAM_BOT_TOKEN and settings.TELEGRAM_CHAT_ID:
@@ -151,13 +152,13 @@ async def lifespan(app: FastAPI):
                     bot_token=settings.TELEGRAM_BOT_TOKEN,
                     chat_id=settings.TELEGRAM_CHAT_ID
                 )
-                logger.info("Telegram notifier initialized")
+                logger.debug("Telegram notifier initialized")
                 
         except Exception as e:
             logger.error(f"Failed to initialize monitoring components: {e}")
     
     yield
-    logger.info({"event": "app_shutdown"})
+    logger.debug({"event": "app_shutdown"})
 
 
 # ===================================
@@ -348,7 +349,7 @@ app.include_router(admin_router)
 # Monitoring routes (admin only)
 if settings.MONITORING_ENABLED:
     from modules.monitoring.routes import router as monitoring_router
-    app.include_router(monitoring_router, prefix="/api/v1")
+    app.include_router(monitoring_router, prefix="/admin")
 
 
 # ===================================
@@ -510,6 +511,26 @@ async def docs_access_denied(request: Request):
     </body>
     </html>
     """
+
+# HEALTH CHECKS
+@app.on_event("startup")
+async def init_monitoring():
+    from core.monitoring.metrics import init_metrics
+    from core.monitoring.alerts import alert_manager
+    await alert_manager.initialize()
+    init_metrics()
+
+# Периодическая очистка сессий (раз в час)
+async def periodic_session_cleanup(): 
+    while True: 
+        cleanup_expired_sessions() 
+        await asyncio.sleep(3600) # раз в час
+
+@app.on_event("startup") 
+async def startup_event(): 
+    asyncio.create_task(periodic_session_cleanup())
+
+
 
 if __name__ == "__main__":
     import uvicorn

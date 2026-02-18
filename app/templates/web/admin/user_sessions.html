@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="ru">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Админ: Сессии пользователя</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+
+<body class="bg-gray-50">
+
+<div class="flex h-screen">
+
+    <!-- SIDEBAR -->
+    {% include "components/sidebar.html" %}
+
+    <!-- MAIN CONTENT -->
+    <main class="flex-1 overflow-y-auto">
+
+        <!-- HEADER -->
+        <header class="bg-red-900 text-white shadow-md px-8 py-4 flex justify-between items-center">
+            <h2 class="text-2xl font-semibold">🛡️ Сессии пользователя: {{ user.email }}</h2>
+
+            <div class="flex items-center gap-4">
+                <span class="text-sm">{{ admin.email }}</span>
+                <div class="w-10 h-10 bg-white text-red-900 rounded-full flex items-center justify-center font-bold">
+                    {{ admin.first_name[0] if admin.first_name else admin.email[0]|upper }}
+                </div>
+            </div>
+        </header>
+
+        <div class="p-8">
+
+            <!-- Кнопка назад -->
+            <a href="/admin/users"
+               class="inline-block mb-6 px-4 py-2 bg-gray-200 hover:bg-gray-300 rounded-lg text-gray-700 text-sm">
+                ← Назад к пользователям
+            </a>
+
+            <!-- Таблица -->
+            <div class="bg-white rounded-xl shadow-md overflow-hidden">
+                <table class="w-full">
+                    <thead class="bg-gray-50 border-b">
+                    <tr>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">ID</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">IP</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">User-Agent</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Вход</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Выход</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Статус</th>
+                        <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Действие</th>
+                    </tr>
+                    </thead>
+
+                    <tbody class="divide-y divide-gray-200">
+                    {% for s in sessions %}
+                        <tr class="hover:bg-gray-50">
+
+                            <!-- ID -->
+                            <td class="px-6 py-4 text-sm text-gray-900">{{ s.id }}</td>
+
+                            <!-- IP + гео -->
+                            <td class="px-6 py-4 text-sm text-gray-700">
+                                <div>{{ s.ip_address or "—" }}</div>
+
+                                {% if s.geo.city or s.geo.country %}
+                                    <div class="text-xs text-gray-500">
+                                        {{ s.geo.city or "" }}{% if s.geo.city and s.geo.country %}, {% endif %}{{ s.geo.country or "" }}
+                                    </div>
+                                {% endif %}
+                            </td>
+
+                            <!-- User-Agent -->
+                            <td class="px-6 py-4 text-sm text-gray-600 max-w-xs truncate">
+                                {% if s.user_agent %}
+                                    <div class="font-medium">{{ s.ua.device }} — {{ s.ua.browser }}</div>
+                                    <div class="text-xs text-gray-500 truncate">{{ s.user_agent }}</div>
+                                {% else %}
+                                    —
+                                {% endif %}
+                            </td>
+
+                            <!-- Вход -->
+                            <td class="px-6 py-4 text-sm text-gray-700">
+                                {{ s.created_at.strftime("%Y-%m-%d %H:%M:%S") }}
+                            </td>
+
+                            <!-- Выход -->
+                            <td class="px-6 py-4 text-sm text-gray-700">
+                                {{ s.expires_at.strftime("%Y-%m-%d %H:%M:%S") }}
+                            </td>
+
+                            <!-- Статус -->
+                            <td class="px-6 py-4">
+                                {% if s.is_revoked %}
+                                    <span class="px-2 py-1 bg-red-100 text-red-700 text-xs rounded-full">Отозвана</span>
+                                {% elif s.expires_at < now %}
+                                    <span class="px-2 py-1 bg-gray-100 text-gray-700 text-xs rounded-full">Истекла</span>
+                                {% else %}
+                                    <span class="px-2 py-1 bg-green-100 text-green-700 text-xs rounded-full">Активна</span>
+                                {% endif %}
+                            </td>
+
+                            <!-- Действия -->
+                            <td class="px-6 py-4 text-right space-y-2">
+
+                                {% if not s.is_revoked and s.expires_at > now %}
+
+                                    <!-- Завершить одну -->
+                                    <form method="post" action="/admin/sessions/{{ s.id }}/revoke"
+                                          onsubmit="return confirm('Завершить эту сессию?');">
+                                        <button class="px-3 py-1 bg-red-600 hover:bg-red-700 text-white text-xs rounded w-full">
+                                            Завершить
+                                        </button>
+                                    </form>
+
+                                    <!-- Завершить все -->
+                                    <form method="post" action="/admin/users/{{ user.id }}/sessions/revoke-all"
+                                          onsubmit="return confirm('Завершить ВСЕ сессии пользователя?');">
+                                        <button class="px-3 py-1 bg-red-700 hover:bg-red-800 text-white text-xs rounded w-full">
+                                            Завершить все
+                                        </button>
+                                    </form>
+
+                                    <!-- Завершить остальные -->
+                                    <form method="post" action="/admin/users/{{ user.id }}/sessions/revoke-others"
+                                          onsubmit="return confirm('Завершить ВСЕ сессии, кроме текущей?');">
+                                        <button class="px-3 py-1 bg-orange-600 hover:bg-orange-700 text-white text-xs rounded w-full">
+                                            Завершить остальные
+                                        </button>
+                                    </form>
+
+                                {% else %}
+                                    <span class="text-gray-400 text-xs">—</span>
+                                {% endif %}
+
+                            </td>
+
+                        </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+        </div>
+
+    </main>
+
+</div>
+
+</body>
+</html>

@@ -1,3 +1,4 @@
+from datetime import timezone
 from fastapi import APIRouter, Depends, HTTPException, status, Query, Request, Form, Response
 from fastapi.responses import JSONResponse, RedirectResponse, HTMLResponse
 from sqlalchemy.orm import Session
@@ -6,6 +7,8 @@ import logging
 from pydantic import ValidationError
 from slowapi import Limiter
 from slowapi.util import get_remote_address
+from modules.auth.ip_geo import get_ip_geo
+
 
 
 from core.database import get_db
@@ -211,6 +214,13 @@ async def login(
     """
     Логин через веб-форму
     """
+
+    # Очистка истёкших сессий 
+    db.query(SessionModel).filter( 
+        SessionModel.expires_at < datetime.now(timezone.utc)
+    ).delete() 
+    db.commit()
+
     client_ip = get_client_ip(request)
     user_agent = get_user_agent(request)
     request_id = getattr(request.state, "request_id", "unknown")
@@ -238,9 +248,9 @@ async def login(
             await tracker.record_attempt(email, client_ip, True, user.id if user else None)
         except Exception as tracker_error:
             logger.debug(f"Failed to record login attempt: {tracker_error}")
-        
-        logger.info({
-            "event": "login_success",
+
+            logger.info({
+                "event": "login_success",
             "email": email,
             "client_ip": client_ip,
             "request_id": request_id,

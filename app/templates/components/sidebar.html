@@ -5,7 +5,7 @@
         <h1 class="text-2xl font-bold">🏢 Личный кабинет</h1>
     </div>
 
-    <!-- ✅ Убрали overflow-y-auto, теперь скроллится вся страница -->
+
     <nav class="flex-1 p-4 space-y-2">
         <a href="/dashboard" class="flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-indigo-800 transition">
             📊 Главная
@@ -43,7 +43,7 @@
         </a>
 
         <!-- АДМИН-ПАНЕЛЬ (только для админов) -->
-        {% if user.role.value == "admin" %}
+        {% if current.user.role.value == "admin" %}
         <div class="pt-4 pb-2 text-xs text-indigo-300 uppercase tracking-wide">
             Администрирование
         </div>
@@ -61,6 +61,22 @@
                 {{ pending_users_count }}
             </span>
             {% endif %}
+        </a>
+
+        <!-- ✅ МОНИТОРИНГ (НОВОЕ) -->
+        <a href="/admin/monitoring/dashboard"
+            class="flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-indigo-800 transition text-sm">
+            📊 Мониторинг
+        </a>
+
+        <a href="/admin/monitoring/alerts"
+            class="flex items-center justify-between gap-3 px-4 py-3 rounded-lg hover:bg-indigo-800 transition text-sm">
+            <span>🚨 Алерты</span>
+            <!-- Можно добавить счетчик активных алертов -->
+            <span class="px-2 py-1 bg-red-500 text-white text-xs rounded-full font-bold" id="alert-count"
+                style="display: none;">
+                0
+            </span>
         </a>
 
         <a href="/admin/logs"

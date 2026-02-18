@@ -2,7 +2,7 @@
 Security anomaly detection and login attempt tracking
 """
 from datetime import datetime, timedelta
-from typing import Optional, Dict, List
+from typing import Optional, Dict, List, Any
 import redis.asyncio as redis
 import logging
 import json
@@ -30,7 +30,7 @@ class LoginAttemptTracker:
         self.brute_force_window_minutes = 5  # Time window for counting
         self.new_ip_retention_days = 30  # Track IPs for 30 days
         
-        logger.info("LoginAttemptTracker initialized")
+        logger.debug("LoginAttemptTracker initialized")
     
     async def record_attempt(self, email: str, ip: str, success: bool, user_id: Optional[int] = None) -> None:
         """
@@ -318,4 +318,4 @@ async def init_login_tracker(redis_client: redis.Redis):
     """Initialize the global login tracker"""
     global login_tracker
     login_tracker = LoginAttemptTracker(redis_client)
-    logger.info("Global LoginAttemptTracker initialized")
+    logger.debug("Global LoginAttemptTracker initialized")

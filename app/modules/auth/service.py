@@ -27,7 +27,11 @@ from modules.auth.brute_force import (
     PasswordResetRateLimitException
 )
 
-logger = logging.getLogger(__name__)
+from core.database import SessionLocal
+from modules.auth.models import Session as SessionModel
+
+
+logger = logging.getLogger("app")
 
 # Инициализируем защиту от брутфорса
 brute_force = BruteForceProtection(redis_client)
@@ -559,3 +563,4 @@ class AuthService:
         logger.info(f"Сессия отозвана: user_id={user_id}, session_id={session_id}")
 
         return {"message": "Сессия успешно отозвана"}
+    

@@ -6,8 +6,11 @@ from fastapi.templating import Jinja2Templates # Для рендеринга HTM
 from sqlalchemy.orm import Session, joinedload # Зависимость для работы с сессией базы данных
 from sqlalchemy import or_ # Для сложных фильтров в запросах к базе данных
 import logging # Для логирования событий и ошибок
-from datetime import datetime # Для работы с датой и временем
+from datetime import datetime, timezone # Для работы с датой и временем
 import json # Для работы с JSON данными
+from modules.auth.ip_geo import get_ip_geo # Утилита для получения геолокации по IP адресу
+from modules.auth.user_agent_parser import parse_user_agent # Утилита для парсинга User-Agent строки и определения устройства и браузера
+
 
 from core.database import get_db, Base # Зависимости для получения сессии базы данных и базового класса для моделей
 from modules.auth.dependencies import get_current_user_from_cookie # Зависимости для получения текущего пользователя и проверки прав администратора
@@ -17,6 +20,7 @@ from modules.admin.models import AuditLog, LogLevel # Модель для лог
 from datetime import datetime, timedelta # Для работы с датой и временем
 from core.template_helpers import get_sidebar_context # Утилита для получения контекста сайдбара (например, количество ожидающих пользователей)
 from modules.auth import department_service # Service for department operations
+from modules.auth.models import Session as SessionModel # Модель для сессий пользователей (для управления активными сессиями при удалении или деактивации пользователя)
 
 logger = logging.getLogger("app")
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -131,6 +135,7 @@ async def users_list(
         "web/admin/users.html",
         {
             "request": request,
+            "current_user": user,
             "user": user,
             "users": users,
             "departments": departments,
@@ -629,6 +634,7 @@ async def logs_page(
         {
             "request": request,
             "user": user,
+            "current_user": user,
             "logs": logs,
             "total_logs": total_logs,
             "page": page,
@@ -1132,3 +1138,194 @@ async def delete_department(
     except Exception as e:
         logger.error(f"Error deleting department: {str(e)}", exc_info=True)
         return JSONResponse({"success": False, "message": str(e)}, status_code=500)
+    
+# ===================================
+# Просмотр сессий пользователя
+# ===================================
+@router.get("/users/{user_id}/sessions", response_class=HTMLResponse)
+async def user_sessions_page(
+    user_id: int,
+    request: Request,
+    admin: User = Depends(get_current_user_from_cookie),
+    db: Session = Depends(get_db)
+):
+    # Только админ
+    if admin.role != UserRole.ADMIN:
+        raise HTTPException(status_code=403, detail="Доступ запрещён")
+
+    # Проверяем, что пользователь существует
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Пользователь не найден")
+
+    # Получаем все сессии пользователя
+    sessions = (
+        db.query(SessionModel)
+        .filter(SessionModel.user_id == user_id)
+        .order_by(SessionModel.expires_at.desc())
+        .all()
+    )
+
+    for s in sessions:
+        s.geo = get_ip_geo(s.ip_address)  # Получаем гео-информацию по IP
+        if s.user_agent:
+            s.ua = parse_user_agent(s.user_agent)
+        else:
+            s.ua = {"device": "_", "browser": "_"}
+
+    return templates.TemplateResponse(
+        "web/admin/user_sessions.html",
+        {
+            "request": request,
+            "user": user,
+            "admin": admin,
+            "current_user": admin,
+            "sessions": sessions,
+            "now": datetime.now(timezone.utc),
+        }
+    )
+
+# ===================================
+# Отозвать сессию пользователя
+# ===================================
+@router.post("/sessions/{session_id}/revoke")
+async def revoke_session(
+    session_id: int,
+    request: Request,
+    admin: User = Depends(get_current_user_from_cookie),
+    db: Session = Depends(get_db)
+):
+    # Только админ
+    if admin.role != UserRole.ADMIN:
+        raise HTTPException(status_code=403, detail="Доступ запрещён")
+
+    # Ищем сессию
+    session = db.query(SessionModel).filter(SessionModel.id == session_id).first()
+    if not session:
+        raise HTTPException(status_code=404, detail="Сессия не найдена")
+
+    # Если уже отозвана — ничего не делаем
+    if session.is_revoked:
+        return JSONResponse({"success": True, "message": "Сессия уже завершена"})
+
+    # Отзываем
+    session.is_revoked = True
+    session.expires_at = datetime.now(timezone.utc)  # фиксируем момент завершения
+    db.commit()
+
+    # Логируем
+    logger.info({
+        "event": "session_revoked",
+        "admin_id": admin.id,
+        "session_id": session_id,
+        "user_id": session.user_id,
+        "ip": session.ip_address
+    })
+
+    # Возвращаемся обратно на страницу сессий
+    return JSONResponse({
+        "success": True,
+        "message": "Сессия успешно завершена"
+    })
+
+
+# ===================================
+# Завершить все сессии пользователя
+# ===================================
+@router.post("/users/{user_id}/sessions/revoke-all")
+async def revoke_all_sessions(
+    user_id: int,
+    request: Request,
+    admin: User = Depends(get_current_user_from_cookie),
+    db: Session = Depends(get_db)
+):
+    # Только админ
+    if admin.role != UserRole.ADMIN:
+        raise HTTPException(status_code=403, detail="Доступ запрещён")
+
+    # Проверяем, что пользователь существует
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Пользователь не найден")
+
+    # Отзываем все активные сессии
+    updated = db.query(SessionModel).filter(
+        SessionModel.user_id == user_id,
+        SessionModel.is_revoked == False
+    ).update({
+        SessionModel.is_revoked: True,
+        SessionModel.expires_at: datetime.now(timezone.utc)
+    }, synchronize_session=False)
+
+    db.commit()
+
+    # Логируем
+    logger.info({
+        "event": "all_sessions_revoked",
+        "admin_id": admin.id,
+        "user_id": user_id,
+        "revoked_count": updated
+    })
+
+    return JSONResponse({
+        "success": True,
+        "message": f"Все активные сессии пользователя ({updated}) завершены"
+    })
+
+# ===================================
+# Завершить все сессии пользователя, кроме текущей
+# ===================================
+@router.post("/users/{user_id}/sessions/revoke-others")
+async def revoke_other_sessions(
+    user_id: int,
+    request: Request,
+    admin: User = Depends(get_current_user_from_cookie),
+    db: Session = Depends(get_db)
+):
+    # Только админ
+    if admin.role != UserRole.ADMIN:
+        raise HTTPException(status_code=403, detail="Доступ запрещён")
+
+    # Проверяем, что пользователь существует
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Пользователь не найден")
+
+    # Получаем текущий refresh-токен из cookie
+    current_refresh = request.cookies.get("refresh_token")
+    if not current_refresh:
+        raise HTTPException(status_code=400, detail="Текущая сессия не найдена")
+
+    # Ищем текущую сессию
+    current_session = db.query(SessionModel).filter(
+        SessionModel.refresh_token == current_refresh
+    ).first()
+
+    if not current_session:
+        raise HTTPException(status_code=400, detail="Текущая сессия не найдена в базе")
+
+    # Завершаем все остальные сессии пользователя
+    updated = db.query(SessionModel).filter(
+        SessionModel.user_id == user_id,
+        SessionModel.id != current_session.id,
+        SessionModel.is_revoked == False
+    ).update({
+        SessionModel.is_revoked: True,
+        SessionModel.expires_at: datetime.now(timezone.utc)
+    }, synchronize_session=False)
+
+    db.commit()
+
+    # Логируем
+    logger.info({
+        "event": "other_sessions_revoked",
+        "admin_id": admin.id,
+        "user_id": user_id,
+        "revoked_count": updated,
+        "kept_session": current_session.id
+    })
+
+    return JSONResponse({
+        "success": True,
+        "message": f"Все сессии, кроме текущей, завершены ({updated})"
+    })

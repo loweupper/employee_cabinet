@@ -45,7 +45,7 @@ class MonitoringService:
             
             # Get active sessions count
             active_sessions = db.query(SessionModel).filter(
-                SessionModel.is_active == True,
+                SessionModel.is_revoked == False,
                 SessionModel.expires_at > datetime.utcnow()
             ).count()
             stats.active_sessions = active_sessions

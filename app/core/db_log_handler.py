@@ -99,15 +99,18 @@ class DatabaseLogHandler(logging.Handler):
                 
                 db.add(log_entry)
                 db.commit()
-                
             except Exception as e:
-                db.rollback()
-                print(f"Error writing log to database: {e}")
-            finally:
-                db.close()
+                import sys
+                print(f"Failed to write log to database: {e}", file=sys.stderr)
+                try:
+                    db.rollback()
+                except:
+                    pass
+                finally:
+                    db.close()
                 
         except Exception as e:
-            print(f"Error in DatabaseLogHandler: {e}")
+            print(f"Ошибка в DatabaseLogHandler: {e}")
     
     def _get_or_create_user_agent(self, db: Session, user_agent_str: str) -> int:
         """Получить или создать User-Agent в кеше"""
@@ -125,11 +128,9 @@ class DatabaseLogHandler(logging.Handler):
             # Увеличиваем счётчик
             ua.usage_count += 1
             ua.last_seen = datetime.utcnow()
-            db.commit()
             return ua.id
         else:
             # Создаём новый
             new_ua = UserAgentCache(user_agent=user_agent_str)
             db.add(new_ua)
-            db.commit()
             return new_ua.id

@@ -64,12 +64,12 @@
             <!-- Header -->
             <header class="bg-white shadow-sm px-8 py-4 flex justify-between items-center">
                 <div>
-                    <h1 class="text-2xl font-bold text-gray-800">📊 Monitoring Dashboard</h1>
-                    <p class="text-sm text-gray-600 mt-1">Real-time system monitoring and security alerts</p>
+                    <h1 class="text-2xl font-bold text-gray-800">📊 Мониторинг</h1>
+                    <p class="text-sm text-gray-600 mt-1">Мониторинг системы и уведомления безопасности</p>
                 </div>
                 <div class="flex items-center gap-4">
                     <button onclick="refreshDashboard()" class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition">
-                        🔄 Refresh
+                        🔄 Обновить
                     </button>
                     <span class="text-sm text-gray-600">{{ user.email }}</span>
                     <div class="w-10 h-10 bg-indigo-600 text-white rounded-full flex items-center justify-center font-bold">
@@ -87,30 +87,30 @@
                     <!-- System Health -->
                     <div class="bg-white rounded-xl shadow-md p-6 metric-card">
                         <div class="flex items-center justify-between mb-4">
-                            <h3 class="text-gray-600 text-sm font-medium">System Status</h3>
+                            <h3 class="text-gray-600 text-sm font-medium">Состояние системы</h3>
                             <span class="text-3xl">💚</span>
                         </div>
                         <div class="flex items-center">
                             <span class="status-dot status-{{ stats.system_status }}"></span>
                             <p class="text-xl font-bold text-gray-800 capitalize">{{ stats.system_status }}</p>
                         </div>
-                        <p class="text-sm text-gray-500 mt-2">Overall system health</p>
+                        <p class="text-sm text-gray-500 mt-2">Общее состояние системы</p>
                     </div>
 
                     <!-- Active Sessions -->
                     <div class="bg-white rounded-xl shadow-md p-6 metric-card">
                         <div class="flex items-center justify-between mb-4">
-                            <h3 class="text-gray-600 text-sm font-medium">Active Sessions</h3>
+                            <h3 class="text-gray-600 text-sm font-medium">Активные сессии</h3>
                             <span class="text-3xl">👥</span>
                         </div>
                         <p class="text-3xl font-bold text-gray-800">{{ stats.active_sessions }}</p>
-                        <p class="text-sm text-gray-500 mt-2">Currently logged in users</p>
+                        <p class="text-sm text-gray-500 mt-2">Пользователей в системе</p>
                     </div>
 
                     <!-- Failed Logins -->
                     <div class="bg-white rounded-xl shadow-md p-6 metric-card">
                         <div class="flex items-center justify-between mb-4">
-                            <h3 class="text-gray-600 text-sm font-medium">Failed Logins (1h)</h3>
+                            <h3 class="text-gray-600 text-sm font-medium">Неудачные входы (1ч)</h3>
                             <span class="text-3xl">🔒</span>
                         </div>
                         <p class="text-3xl font-bold {% if stats.failed_logins_1h > 5 %}text-red-600{% else %}text-gray-800{% endif %}">{{ stats.failed_logins_1h }}</p>
@@ -120,7 +120,7 @@
                     <!-- Unresolved Alerts -->
                     <div class="bg-white rounded-xl shadow-md p-6 metric-card">
                         <div class="flex items-center justify-between mb-4">
-                            <h3 class="text-gray-600 text-sm font-medium">Unresolved Alerts</h3>
+                            <h3 class="text-gray-600 text-sm font-medium">Нерешенные уведомления</h3>
                             {% if stats.alerts_unresolved > 0 %}
                             <span class="text-3xl alert-badge">🚨</span>
                             {% else %}
@@ -138,14 +138,14 @@
 
                 <!-- Health Checks -->
                 <div class="bg-white rounded-xl shadow-md p-6 mb-8">
-                    <h2 class="text-xl font-bold text-gray-800 mb-4">🏥 Health Checks</h2>
+                    <h2 class="text-xl font-bold text-gray-800 mb-4">🏥 Проверки состояния</h2>
                     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                         
                         {% if health.checks %}
                         <!-- Database -->
                         <div class="border border-gray-200 rounded-lg p-4">
                             <div class="flex items-center justify-between mb-2">
-                                <h3 class="font-medium text-gray-700">Database</h3>
+                                <h3 class="font-medium text-gray-700">База данных</h3>
                                 <span class="status-dot status-{{ health.checks.database.status }}"></span>
                             </div>
                             <p class="text-sm text-gray-600">
@@ -175,7 +175,7 @@
                         <!-- Disk -->
                         <div class="border border-gray-200 rounded-lg p-4">
                             <div class="flex items-center justify-between mb-2">
-                                <h3 class="font-medium text-gray-700">Disk Space</h3>
+                                <h3 class="font-medium text-gray-700">Дисковое пространство</h3>
                                 <span class="status-dot status-{{ health.checks.disk.status }}"></span>
                             </div>
                             <p class="text-sm text-gray-600">
@@ -190,19 +190,19 @@
                         <!-- Memory -->
                         <div class="border border-gray-200 rounded-lg p-4">
                             <div class="flex items-center justify-between mb-2">
-                                <h3 class="font-medium text-gray-700">Memory</h3>
+                                <h3 class="font-medium text-gray-700">Память</h3>
                                 <span class="status-dot status-{{ health.checks.memory.status }}"></span>
                             </div>
                             <p class="text-sm text-gray-600">
                                 {% if health.checks.memory.available_mb %}
-                                Available: {{ health.checks.memory.available_mb|round }}MB ({{ health.checks.memory.percent_available|round(1) }}%)
+                                Доступно: {{ health.checks.memory.available_mb|round }}MB ({{ health.checks.memory.percent_available|round(1) }}%)
                                 {% else %}
                                 {{ health.checks.memory.message or 'Status unknown' }}
                                 {% endif %}
                             </p>
                         </div>
                         {% else %}
-                        <p class="text-gray-600">No health check data available</p>
+                        <p class="text-gray-600">Данные о здоровье системы недоступны</p>
                         {% endif %}
 
                     </div>
@@ -211,8 +211,8 @@
                 <!-- Recent Security Alerts -->
                 <div class="bg-white rounded-xl shadow-md p-6 mb-8">
                     <div class="flex justify-between items-center mb-4">
-                        <h2 class="text-xl font-bold text-gray-800">🚨 Recent Security Alerts</h2>
-                        <a href="/api/v1/monitoring/alerts-page" class="text-indigo-600 hover:text-indigo-800 text-sm font-medium">View All →</a>
+                        <h2 class="text-xl font-bold text-gray-800">🚨 Недавние уведомления безопасности</h2>
+                        <a href="/admin/monitoring/alerts" class="text-indigo-600 hover:text-indigo-800 text-sm font-medium">Просмотреть все →</a>
                     </div>
 
                     {% if alerts %}
@@ -250,7 +250,7 @@
                         {% endfor %}
                     </div>
                     {% else %}
-                    <p class="text-gray-600 text-center py-8">✅ No recent security alerts</p>
+                    <p class="text-gray-600 text-center py-8">✅ Нет недавних уведомлений безопасности</p>
                     {% endif %}
                 </div>
 

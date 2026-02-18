@@ -11,8 +11,8 @@ import logging
 from core.database import get_db
 from core.monitoring.metrics import get_metrics, get_metrics_content_type
 from core.monitoring.alerts import AlertSeverity, AlertType
-from modules.auth.dependencies import get_current_user
-from modules.auth.models import User
+from modules.auth.dependencies import get_current_user_from_cookie
+from modules.auth.models import User, UserRole
 from modules.monitoring.service import MonitoringService
 from modules.monitoring.schemas import (
     AlertResponse, AlertListResponse, AlertCountsResponse,
@@ -21,17 +21,16 @@ from modules.monitoring.schemas import (
 )
 
 logger = logging.getLogger("app")
+router = APIRouter(prefix="/monitoring", tags=["Monitoring"])
+templates = Jinja2Templates(directory="templates")
 
-router = APIRouter(prefix="/monitoring", tags=["📊 Monitoring"])
-templates = Jinja2Templates(directory="app/templates/web")
 
-
-def require_admin(user: User = Depends(get_current_user)):
+async def require_admin(user: User = Depends(get_current_user_from_cookie)):
     """Require admin role for monitoring endpoints"""
-    if user.role != UserRole.admin:
+    if user.role != UserRole.ADMIN.value:
         raise HTTPException(
             status_code=403,
-            detail="Admin access required"
+            detail="Требуется доступ администратора"
         )
     return user
 
@@ -284,7 +283,7 @@ async def dashboard_page(
         health = await MonitoringService.get_system_health(detailed=True)
         
         return templates.TemplateResponse(
-            "monitoring/dashboard.html",
+            "web/monitoring/dashboard.html",
             {
                 "request": request,
                 "user": user,
@@ -333,7 +332,7 @@ async def alerts_page(
         counts = await MonitoringService.get_alert_counts()
         
         return templates.TemplateResponse(
-            "monitoring/alerts.html",
+            "web/monitoring/alerts.html",
             {
                 "request": request,
                 "user": user,
