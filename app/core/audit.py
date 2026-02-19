@@ -14,7 +14,7 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 
 # Audit log file location
-AUDIT_LOG_DIR = Path("/var/log/employee_cabinet")
+AUDIT_LOG_DIR = Path("/app/logs")
 AUDIT_LOG_FILE = AUDIT_LOG_DIR / "audit.log"
 
 

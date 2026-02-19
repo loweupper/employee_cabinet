@@ -2,106 +2,83 @@
 Enhanced JSON formatters for structured logging
 """
 import logging
+import socket
 import json
 from datetime import datetime
 import pytz
 from typing import Optional
+from core.config import settings
 import traceback
-
 
 class EnhancedJSONFormatter(logging.Formatter):
     """
-    Enhanced JSON formatter with additional context:
-    - request_id for request tracing
-    - user_id for user tracking
-    - session_id for session tracking
-    - trace_id for distributed tracing
-    - environment (dev/staging/prod)
+    Унифицированный JSON-форматтер для всех логов.
+    Добавляет:
+    - timestamp (ISO8601)
+    - event_type (имя логгера)
+    - service
+    - hostname
+    - request_id, session_id, user_id
+    - ip, user_agent
+    - extra (как вложенный объект)
     """
-    
+
     def __init__(self, environment: str = "development", include_trace: bool = True):
-        """
-        Initialize enhanced JSON formatter
-        
-        Args:
-            environment: Environment name (development, staging, production)
-            include_trace: Include traceback for exceptions
-        """
         super().__init__()
         self.environment = environment
         self.include_trace = include_trace
-    
+
     def format(self, record: logging.LogRecord) -> str:
-        """
-        Format log record as JSON with enhanced context
-        
-        Args:
-            record: Log record to format
-            
-        Returns:
-            JSON formatted log string
-        """
-        # Convert time to Moscow timezone
-        moscow_tz = pytz.timezone('Europe/Moscow')
-        dt = datetime.fromtimestamp(record.created, tz=pytz.utc)
-        moscow_time = dt.astimezone(moscow_tz)
-        
-        # Base log data
+        # Moscow time
+        moscow_tz = pytz.timezone("Europe/Moscow")
+        dt = datetime.fromtimestamp(record.created, tz=pytz.utc).astimezone(moscow_tz)
+
         log_data = {
-            "timestamp": moscow_time.isoformat(),
-            "time": moscow_time.strftime("%Y-%m-%d %H:%M:%S"),
+            "timestamp": dt.isoformat(),
             "level": record.levelname,
             "logger": record.name,
+            "event_type": record.name,  # app / audit / system / security
             "environment": self.environment,
+            "service": settings.APP_NAME,
+            "hostname": socket.gethostname(),
         }
-        
-        # Add request_id if present
-        if hasattr(record, 'request_id'):
-            log_data["request_id"] = record.request_id
-        
-        # Add user_id if present
-        if hasattr(record, 'user_id'):
-            log_data["user_id"] = record.user_id
-        
-        # Add session_id if present
-        if hasattr(record, 'session_id'):
-            log_data["session_id"] = record.session_id
-        
-        # Add trace_id if present (for distributed tracing)
-        if hasattr(record, 'trace_id'):
-            log_data["trace_id"] = record.trace_id
-        
-        # Add module and function info
+
+        # Основные поля
+        for field in ["event", "request_id", "session_id", "user_id", "ip", "user_agent"]:
+            value = getattr(record, field, None)
+            if value is not None:
+                log_data[field] = value
+
+        # Техническая информация
         log_data["module"] = record.module
         log_data["function"] = record.funcName
         log_data["line"] = record.lineno
-        
-        # Add security event flag if present
-        if hasattr(record, 'security_event') and record.security_event:
-            log_data["security_event"] = True
-        
-        # Handle message
+
+        # Сообщение
         if isinstance(record.msg, dict):
-            # Merge dict message into log_data
-            log_data.update(record.msg)
+            log_data["extra"] = record.msg
         else:
             log_data["message"] = record.getMessage()
-        
-        # Add exception info if present
+
+        # Исключения
         if record.exc_info:
+            exc_type = record.exc_info[0].__name__ if record.exc_info[0] else None
+            exc_msg = str(record.exc_info[1]) if record.exc_info[1] else None
+
             log_data["exception"] = {
-                "type": record.exc_info[0].__name__ if record.exc_info[0] else None,
-                "message": str(record.exc_info[1]) if record.exc_info[1] else None,
+                "type": exc_type,
+                "message": exc_msg,
             }
-            
+
             if self.include_trace:
                 log_data["exception"]["traceback"] = self.formatException(record.exc_info)
-        
-        # Add stack info if present
+
+        # Stack info
         if record.stack_info and self.include_trace:
             log_data["stack_info"] = record.stack_info
-        
+
         return json.dumps(log_data, ensure_ascii=False, default=str)
+
 
 
 class CompactJSONFormatter(logging.Formatter):

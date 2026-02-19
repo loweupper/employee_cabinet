@@ -36,6 +36,9 @@ class DatabaseLogHandler(logging.Handler):
                     event = record.msg.get("event", "unknown")
                     message = record.msg.get("message", None)
                     user_id = record.msg.get("user_id", None)
+                    # Защита от ORM-атрибутов
+                    if hasattr(user_id, "expression") or hasattr(user_id, "property"):
+                        user_id = None
                     user_email = record.msg.get("email", None)
                     ip_address = record.msg.get("ip", None)
                     user_agent_str = record.msg.get("user_agent", None)
@@ -67,7 +70,7 @@ class DatabaseLogHandler(logging.Handler):
                     http_status = None
                     duration_ms = None
                     trace_id = None
-                    extra_data = {}
+                    extra_data = extra_data or None
                 
                 # ✅ Получаем или создаём User-Agent
                 user_agent_id = None
@@ -85,7 +88,7 @@ class DatabaseLogHandler(logging.Handler):
                     level=LogLevel[record.levelname],
                     event=event,
                     message=message,
-                    extra_data=json.dumps(extra_data, ensure_ascii=False) if extra_data else None,
+                    extra_data=extra_data,
                     user_id=user_id,
                     user_email=user_email,
                     ip_address=ip_address,

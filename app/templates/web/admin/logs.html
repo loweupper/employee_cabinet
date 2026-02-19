@@ -380,7 +380,7 @@
                     document.getElementById('logDetailContent').innerHTML = `
                         <div class="space-y-4">
                             <div><strong>ID:</strong> ${data.id}</div>
-                            <div><strong>Время:</strong> ${data.created_at}</div>
+                            <div><strong>Время:</strong> ${data.created_at_local}</div>
                             <div><strong>Уровень:</strong> <span class="px-2 py-1 rounded bg-blue-100">${data.level}</span></div>
                             <div><strong>Событие:</strong> ${data.event}</div>
                             <div><strong>Request ID:</strong> <code class="bg-gray-100 px-2 py-1 rounded">${data.request_id || '-'}</code></div>

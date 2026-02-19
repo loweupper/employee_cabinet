@@ -21,10 +21,13 @@ from datetime import datetime, timedelta # Для работы с датой и 
 from core.template_helpers import get_sidebar_context # Утилита для получения контекста сайдбара (например, количество ожидающих пользователей)
 from modules.auth import department_service # Service for department operations
 from modules.auth.models import Session as SessionModel # Модель для сессий пользователей (для управления активными сессиями при удалении или деактивации пользователя)
+from core.logging.actions import log_admin_action # Унифицированное логирование действий администратора
 
 logger = logging.getLogger("app")
 router = APIRouter(prefix="/admin", tags=["admin"])
 templates = Jinja2Templates(directory="templates")
+
+MSK = timezone(timedelta(hours=3)) # Московское время (UTC+3) для корректного отображения времени в админке
 
 # ===================================
 # Список пользователей
@@ -175,7 +178,6 @@ async def activate_user(
 
     # Если пользователь активируется впервые, ставим дату активации
     if target_user.activated_at is None:
-        from datetime import datetime, timezone
         target_user.activated_at = datetime.now(timezone.utc)
     db.commit()
     db.refresh(target_user)
@@ -297,7 +299,6 @@ async def delete_user(
     
     try:
         from modules.auth.models import Session as SessionModel
-        from datetime import datetime, timezone
         
         # ✅ Деактивируем пользователя и ставим дату удаления
         target_user.deleted_at = datetime.now(timezone.utc)
@@ -628,6 +629,11 @@ async def logs_page(
     })
     
     sidebar_context = get_sidebar_context(user, db)
+
+        # Конвертируем даты в локальное время (по Москве)
+    for s in logs:
+        s.created_at_local = s.created_at.astimezone(MSK)
+        s.expires_at_local = s.expires_at.astimezone(MSK)
     
     return templates.TemplateResponse(
         "web/admin/logs.html",
@@ -649,6 +655,7 @@ async def logs_page(
             "search_query": search or "",
             "unique_events": unique_events,
             "unique_methods": unique_methods,
+            "now": datetime.now(MSK),
             "log_levels": [l.value for l in LogLevel],
             **sidebar_context
         }
@@ -815,12 +822,13 @@ async def logs_export_csv(
         ])
     
     # Логируем экспорт
-    logger.info({
-        "event": "logs_exported",
-        "user_id": user.id,
-        "email": user.email,
-        "total_records": len(logs)
-    })
+    log_admin_action(
+        event="logs_exported_csv",
+        admin=user,
+        extra={
+            "total_records": len(logs)
+        }
+    )
     
     output.seek(0)
     
@@ -851,7 +859,7 @@ async def logs_export_json(
     """Экспорт логов в JSON"""
     
     if user.role != UserRole.ADMIN:
-        raise HTTPException(status_code=403, detail="Access denied")
+        raise HTTPException(status_code=403, detail="Доступ запрещён")
     
     # Применяем те же фильтры
     query = db.query(AuditLog).filter(AuditLog.is_archived == False)
@@ -927,12 +935,13 @@ async def logs_export_json(
         })
     
     # Логируем экспорт
-    logger.info({
-        "event": "logs_exported_json",
-        "user_id": user.id,
-        "email": user.email,
-        "total_records": len(result)
-    })
+    log_admin_action(
+        event="logs_exported_json",
+        admin=user,
+        extra={
+            "total_records": len(result)
+        }
+    )
     
     return StreamingResponse(
         iter([json.dumps(result, ensure_ascii=False, indent=2)]),
@@ -954,7 +963,7 @@ async def logs_stats(
     """Получить статистику логов за последние 24 часа"""
     
     if user.role != UserRole.ADMIN:
-        raise HTTPException(status_code=403, detail="Access denied")
+        raise HTTPException(status_code=403, detail="Доступ запрещён")
     
     # За последние 24 часа
     since = datetime.utcnow() - timedelta(hours=24)
@@ -1013,12 +1022,14 @@ async def get_departments_list(
 ):
     """Get list of all departments"""
     if admin.role != UserRole.ADMIN:
-        raise HTTPException(status_code=403, detail="Access denied")
+        raise HTTPException(status_code=403, detail="Доступ запрещён")
     
     departments = department_service.get_departments(db)
     return {"departments": [{"id": d.id, "name": d.name, "description": d.description} for d in departments]}
 
-
+# ===================================
+# Создание нового отдела
+# ===================================
 @router.post("/departments")
 async def create_department(
     request: Request,
@@ -1041,16 +1052,20 @@ async def create_department(
         dept_data = DepartmentCreate(name=name, description=description or None)
         department = department_service.create_department(db, dept_data)
         
-        logger.info({
-            "event": "department_created",
-            "admin_id": admin.id,
-            "department_id": department.id,
-            "department_name": department.name
-        })
+        log_admin_action(
+            event="department_created",
+            admin=admin,
+            target_user=None,
+            request=request,
+            extra={
+                "department_id": department.id,
+                "department_name": department.name
+            }
+        )
         
         return JSONResponse({
             "success": True,
-            "message": "Department created successfully",
+            "message": "Отдел успешно создан",
             "department": {
                 "id": department.id,
                 "name": department.name,
@@ -1063,7 +1078,9 @@ async def create_department(
         logger.error(f"Error creating department: {str(e)}", exc_info=True)
         return JSONResponse({"success": False, "message": str(e)}, status_code=500)
 
-
+# ===================================
+# Обновление отдела
+# ===================================
 @router.put("/departments/{department_id}")
 async def update_department(
     department_id: int,
@@ -1073,7 +1090,7 @@ async def update_department(
 ):
     """Update a department"""
     if admin.role != UserRole.ADMIN:
-        return JSONResponse({"success": False, "message": "Access denied"}, status_code=403)
+        return JSONResponse({"success": False, "message": "Доступ запрещён"}, status_code=403)
     
     try:
         form = await request.form()
@@ -1085,18 +1102,22 @@ async def update_department(
         department = department_service.update_department(db, department_id, dept_data)
         
         if not department:
-            return JSONResponse({"success": False, "message": "Department not found"}, status_code=404)
+            return JSONResponse({"success": False, "message": "Отдел не найден"}, status_code=404)
         
-        logger.info({
-            "event": "department_updated",
-            "admin_id": admin.id,
-            "department_id": department.id,
-            "department_name": department.name
-        })
+        log_admin_action(
+            event="department_updated",
+            admin=admin,
+            target_user=None,
+            request=request,
+            extra={
+                "department_id": department.id,
+                "department_name": department.name
+            }
+        )
         
         return JSONResponse({
             "success": True,
-            "message": "Department updated successfully",
+            "message": "Отдел успешно обновлён",
             "department": {
                 "id": department.id,
                 "name": department.name,
@@ -1118,21 +1139,21 @@ async def delete_department(
 ):
     """Delete a department"""
     if admin.role != UserRole.ADMIN:
-        return JSONResponse({"success": False, "message": "Access denied"}, status_code=403)
+        return JSONResponse({"success": False, "message": "Доступ запрещён"}, status_code=403)
     
     try:
         success = department_service.delete_department(db, department_id)
         
         if not success:
-            return JSONResponse({"success": False, "message": "Department not found"}, status_code=404)
+            return JSONResponse({"success": False, "message": "Отдел не найден"}, status_code=404)
         
-        logger.info({
-            "event": "department_deleted",
-            "admin_id": admin.id,
-            "department_id": department_id
-        })
+        log_admin_action(
+            event="department_deleted",
+            admin=admin,
+            extra={"department_id": department_id}
+        )
         
-        return JSONResponse({"success": True, "message": "Department deleted successfully"})
+        return JSONResponse({"success": True, "message": "Отдел успешно удалён"})
     except HTTPException as e:
         return JSONResponse({"success": False, "message": e.detail}, status_code=e.status_code)
     except Exception as e:
@@ -1154,8 +1175,8 @@ async def user_sessions_page(
         raise HTTPException(status_code=403, detail="Доступ запрещён")
 
     # Проверяем, что пользователь существует
-    user = db.query(User).filter(User.id == user_id).first()
-    if not user:
+    target_user = db.query(User).filter(User.id == user_id).first()
+    if not target_user:
         raise HTTPException(status_code=404, detail="Пользователь не найден")
 
     # Получаем все сессии пользователя
@@ -1173,15 +1194,22 @@ async def user_sessions_page(
         else:
             s.ua = {"device": "_", "browser": "_"}
 
+        # Конвертируем даты в локальное время (по Москве)
+        s.created_at_local = s.created_at.astimezone(MSK)
+        s.expires_at_local = s.expires_at.astimezone(MSK)
+
+    sidebar_context = get_sidebar_context(admin, db)
+
     return templates.TemplateResponse(
         "web/admin/user_sessions.html",
         {
             "request": request,
-            "user": user,
+            "user": target_user,
             "admin": admin,
             "current_user": admin,
             "sessions": sessions,
-            "now": datetime.now(timezone.utc),
+            "now": datetime.now(MSK),
+            **sidebar_context 
         }
     )
 
@@ -1210,17 +1238,20 @@ async def revoke_session(
 
     # Отзываем
     session.is_revoked = True
-    session.expires_at = datetime.now(timezone.utc)  # фиксируем момент завершения
+    session.expires_at = datetime.now(MSK)  # фиксируем момент завершения
     db.commit()
 
     # Логируем
-    logger.info({
-        "event": "session_revoked",
-        "admin_id": admin.id,
-        "session_id": session_id,
-        "user_id": session.user_id,
-        "ip": session.ip_address
-    })
+    log_admin_action(
+        event="revoke_session",
+        admin=admin,
+        target_user=db.query(User).filter(User.id == session.user_id).first(),
+        request=request,
+        extra={
+            "session_id": session.id,
+            "ip": session.ip_address
+        }
+    )
 
     # Возвращаемся обратно на страницу сессий
     return JSONResponse({
@@ -1254,18 +1285,21 @@ async def revoke_all_sessions(
         SessionModel.is_revoked == False
     ).update({
         SessionModel.is_revoked: True,
-        SessionModel.expires_at: datetime.now(timezone.utc)
+        SessionModel.expires_at: datetime.now(MSK)
     }, synchronize_session=False)
 
     db.commit()
 
     # Логируем
-    logger.info({
-        "event": "all_sessions_revoked",
-        "admin_id": admin.id,
-        "user_id": user_id,
-        "revoked_count": updated
-    })
+    log_admin_action(
+        event="revoke_all_sessions",
+        admin=admin,
+        target_user=user,
+        request=request,
+        extra={
+            "revoked_count": updated
+        }
+    )
 
     return JSONResponse({
         "success": True,
@@ -1282,50 +1316,66 @@ async def revoke_other_sessions(
     admin: User = Depends(get_current_user_from_cookie),
     db: Session = Depends(get_db)
 ):
-    # Только админ
     if admin.role != UserRole.ADMIN:
         raise HTTPException(status_code=403, detail="Доступ запрещён")
+    
+    target_user = db.query(User).filter(User.id == user_id).first()
 
-    # Проверяем, что пользователь существует
-    user = db.query(User).filter(User.id == user_id).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="Пользователь не найден")
+    # refresh-токен текущей сессии
+    refresh_token = request.cookies.get("refresh_token")
+    if not refresh_token:
+        raise HTTPException(status_code=400, detail="Нет refresh-токена")
+    
+    from modules.auth.utils import hash_refresh_token
+    # Хэшируем его так же, как при создании 
+    current_hash = hash_refresh_token(refresh_token)
 
-    # Получаем текущий refresh-токен из cookie
-    current_refresh = request.cookies.get("refresh_token")
-    if not current_refresh:
-        raise HTTPException(status_code=400, detail="Текущая сессия не найдена")
-
-    # Ищем текущую сессию
-    current_session = db.query(SessionModel).filter(
-        SessionModel.refresh_token == current_refresh
-    ).first()
-
-    if not current_session:
-        raise HTTPException(status_code=400, detail="Текущая сессия не найдена в базе")
-
-    # Завершаем все остальные сессии пользователя
-    updated = db.query(SessionModel).filter(
-        SessionModel.user_id == user_id,
-        SessionModel.id != current_session.id,
-        SessionModel.is_revoked == False
-    ).update({
-        SessionModel.is_revoked: True,
-        SessionModel.expires_at: datetime.now(timezone.utc)
-    }, synchronize_session=False)
+    # Завершаем все сессии, кроме текущей
+    updated = (
+        db.query(SessionModel)
+        .filter(
+            SessionModel.user_id == user_id,
+            SessionModel.token_hash != current_hash,
+            SessionModel.is_revoked == False
+        )
+        .update({"is_revoked": True}, synchronize_session=False)
+    )
 
     db.commit()
 
     # Логируем
-    logger.info({
-        "event": "other_sessions_revoked",
-        "admin_id": admin.id,
-        "user_id": user_id,
-        "revoked_count": updated,
-        "kept_session": current_session.id
-    })
+    log_admin_action(
+        event="revoke_other_sessions",
+        admin=admin,
+        target_user=target_user,
+        request=request,
+        extra={
+            "revoked_count": updated
+        }
+    )
 
-    return JSONResponse({
+    return {
         "success": True,
-        "message": f"Все сессии, кроме текущей, завершены ({updated})"
-    })
+        "message": f"Завершено сессий: {updated}"
+    }
+
+
+
+from core.logging.actions import (
+    log_admin_action,
+    log_user_action,
+    log_system_event,
+    log_security_event
+)
+
+@router.get("/test-logs")
+async def test_logs(request: Request):
+    user = None
+
+    log_admin_action("admin_test_event", admin=user, request=request)
+    log_user_action("user_test_event", user=user, request=request)
+    log_system_event("system_test_event", {"info": "system ok"})
+    await log_security_event("security_test_event", request=request)
+
+    return {"status": "ok"}
+

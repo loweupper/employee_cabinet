@@ -72,6 +72,7 @@ async def objects_list(
         {
             "request": request,
             "user": user,
+            "current_user": user,
             "objects": objects,
             "total": total,
             "page": page,

@@ -43,7 +43,7 @@
         </a>
 
         <!-- АДМИН-ПАНЕЛЬ (только для админов) -->
-        {% if current.user.role.value == "admin" %}
+        {% if current_user.role.value == "admin" %}
         <div class="pt-4 pb-2 text-xs text-indigo-300 uppercase tracking-wide">
             Администрирование
         </div>

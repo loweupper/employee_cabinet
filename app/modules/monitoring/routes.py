@@ -1,6 +1,7 @@
 """
 Monitoring API routes and dashboard pages
 """
+from core.template_helpers import get_sidebar_context
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import Response, HTMLResponse
 from fastapi.templating import Jinja2Templates
@@ -281,15 +282,19 @@ async def dashboard_page(
         
         # Get health status
         health = await MonitoringService.get_system_health(detailed=True)
+
+        sidebar_context = get_sidebar_context(user, db)
         
         return templates.TemplateResponse(
             "web/monitoring/dashboard.html",
             {
                 "request": request,
                 "user": user,
+                "current_user": user,
                 "stats": stats,
                 "alerts": recent_alerts,
-                "health": health
+                "health": health,
+                **sidebar_context
             }
         )
     except Exception as e:

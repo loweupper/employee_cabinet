@@ -9,6 +9,8 @@ from pathlib import Path
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 
+from core.database import SessionLocal
+from modules.monitoring.service_alerts import AlertService
 from core.monitoring.alerts import alert_manager, Alert, AlertSeverity, AlertType
 from core.monitoring.health import check_health
 from modules.auth.models import Session as SessionModel
@@ -80,28 +82,22 @@ class MonitoringService:
         alert_type: Optional[AlertType] = None,
         resolved: Optional[bool] = None,
         hours: Optional[int] = None
-    ) -> List[Alert]:
-        """
-        Get alerts with filtering
+    ):
         
-        Args:
-            limit: Maximum number of alerts
-            severity: Filter by severity
-            alert_type: Filter by type
-            resolved: Filter by resolution status
-            hours: Only alerts from last N hours
-            
-        Returns:
-            List of alerts
-        """
-        return await alert_manager.get_recent_alerts(
-            limit=limit,
-            severity=severity,
-            alert_type=alert_type,
-            resolved=resolved,
-            hours=hours
-        )
-    
+        db = SessionLocal()
+        try:
+            return AlertService.get_alerts(
+                db=db, 
+                limit=limit, 
+                severity=severity, 
+                alert_type=alert_type, 
+                resolved=resolved, 
+                hours=hours
+            )
+        finally:
+            db.close()
+       
+
     @staticmethod
     async def get_alert_by_id(alert_id: str) -> Optional[Alert]:
         """

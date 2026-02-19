@@ -13,6 +13,8 @@ import pytz
 import re
 import asyncio
 from modules.auth.session_cleanup import cleanup_expired_sessions
+from modules.monitoring.models import Alert
+
 
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
@@ -34,6 +36,7 @@ from core.template_helpers import get_sidebar_context
 from core.swagger_security import SwaggerSecurityMiddleware
 from core.request_id_middleware import RequestIDMiddleware
 from core.db_log_handler import DatabaseLogHandler
+from core.logging.handlers import setup_log_handlers
 
 # ===================================
 # JSON Logging for Production
@@ -60,7 +63,7 @@ class JsonFormatter(logging.Formatter):
         else:
             log_data["message"] = record.getMessage()
         
-        # Доба��ляем exception, если есть
+        # Добабляем exception, если есть
         if record.exc_info:
             log_data["exception"] = self.formatException(record.exc_info)
         
@@ -109,13 +112,39 @@ LOGGING_CONFIG = {
         "app": {
             "handlers": ["default", "database"],
             "level": "DEBUG" if settings.DEBUG else "INFO",
-            "propagate": False,
+            "propagate": True,
+        },
+        "audit": {
+            "handlers": ["default", "database"],
+            "level": "INFO",
+            "propagate": True,
+        },
+        "system": {
+            "handlers": ["default", "database"],
+            "level": "INFO",
+            "propagate": True,
+        },
+        "security": {
+            "handlers": ["default", "database"],
+            "level": "WARNING",
+            "propagate": True,
         },
     },
 }
 
 logging.config.dictConfig(LOGGING_CONFIG)
 logger = logging.getLogger("app")
+
+# ===================================
+# Подключаем кастомные файловые хендлеры
+# ===================================
+file_handlers = setup_log_handlers(base_dir="/app/logs")
+
+root_logger = logging.getLogger()
+
+# Добавляем наши хендлеры
+for h in file_handlers.values():
+    root_logger.addHandler(h)
 
 
 @asynccontextmanager
@@ -289,7 +318,7 @@ templates = Jinja2Templates(directory="templates")
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 # ===================================
-# Middleware (порядок ВАЖЕН!)
+# Middleware 
 # ===================================
 
 # ✅ Добавляем в обратном порядке выполнения:
@@ -321,6 +350,7 @@ app.add_middleware(
         re.compile(r"^/docs.*"),                   # ✅ Regex pattern (все /docs/*)
         re.compile(r"^/openapi\.json$"),           # ✅ Regex pattern
         re.compile(r"^/redoc$"),                   # ✅ Regex pattern
+        re.compile(r"^/admin/.*"),
     ],
 )
 
@@ -452,6 +482,7 @@ async def dashboard(
         {
             "request": request,
             "user": user,
+            "current_user": user,
             "active_count": active_count,
             "inactive_count": inactive_count,
             "archived_count": archived_count,
