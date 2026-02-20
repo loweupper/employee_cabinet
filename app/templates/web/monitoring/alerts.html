@@ -53,7 +53,7 @@
                     </a>
                     <span class="text-sm text-gray-600">{{ user.email }}</span>
                     <div class="w-10 h-10 bg-indigo-600 text-white rounded-full flex items-center justify-center font-bold">
-                        {{ user.first_name[0] if user.first_name else user.email[0]|upper }}
+                        {{ (user.first_name[0] if user.first_name else user.email[0]) | upper }}
                     </div>
                 </div>
             </header>
@@ -97,24 +97,24 @@
                         <div>
                             <label class="block text-sm font-medium text-gray-700 mb-2">Severity</label>
                             <div class="flex gap-2">
-                                <a href="?severity=critical{% if resolved_filter is not none %}&resolved={{ resolved_filter }}{% endif %}" 
+                                <a href="?severity=critical{% if resolved_filter is not None %}&resolved={{ resolved_filter }}{% endif %}" 
                                    class="filter-badge px-3 py-2 rounded-lg {% if severity_filter == 'critical' %}bg-red-100 text-red-800 border-2 border-red-500{% else %}bg-gray-100 text-gray-700{% endif %}">
                                     🔴 Critical
                                 </a>
-                                <a href="?severity=high{% if resolved_filter is not none %}&resolved={{ resolved_filter }}{% endif %}" 
+                                <a href="?severity=high{% if resolved_filter is not None %}&resolved={{ resolved_filter }}{% endif %}" 
                                    class="filter-badge px-3 py-2 rounded-lg {% if severity_filter == 'high' %}bg-orange-100 text-orange-800 border-2 border-orange-500{% else %}bg-gray-100 text-gray-700{% endif %}">
                                     🟠 High
                                 </a>
-                                <a href="?severity=medium{% if resolved_filter is not none %}&resolved={{ resolved_filter }}{% endif %}" 
+                                <a href="?severity=medium{% if resolved_filter is not None %}&resolved={{ resolved_filter }}{% endif %}" 
                                    class="filter-badge px-3 py-2 rounded-lg {% if severity_filter == 'medium' %}bg-yellow-100 text-yellow-800 border-2 border-yellow-500{% else %}bg-gray-100 text-gray-700{% endif %}">
                                     🟡 Medium
                                 </a>
-                                <a href="?severity=low{% if resolved_filter is not none %}&resolved={{ resolved_filter }}{% endif %}" 
+                                <a href="?severity=low{% if resolved_filter is not None %}&resolved={{ resolved_filter }}{% endif %}" 
                                    class="filter-badge px-3 py-2 rounded-lg {% if severity_filter == 'low' %}bg-green-100 text-green-800 border-2 border-green-500{% else %}bg-gray-100 text-gray-700{% endif %}">
                                     🟢 Low
                                 </a>
                                 {% if severity_filter %}
-                                <a href="?{% if resolved_filter is not none %}resolved={{ resolved_filter }}{% endif %}" 
+                                <a href="?{% if resolved_filter is not None %}resolved={{ resolved_filter }}{% endif %}" 
                                    class="filter-badge px-3 py-2 rounded-lg bg-gray-200 text-gray-800 hover:bg-gray-300">
                                     ✕ Clear
                                 </a>
@@ -127,14 +127,15 @@
                             <label class="block text-sm font-medium text-gray-700 mb-2">Status</label>
                             <div class="flex gap-2">
                                 <a href="?resolved=false{% if severity_filter %}&severity={{ severity_filter }}{% endif %}" 
-                                   class="filter-badge px-3 py-2 rounded-lg {% if resolved_filter == false %}bg-yellow-100 text-yellow-800 border-2 border-yellow-500{% else %}bg-gray-100 text-gray-700{% endif %}">
+
+                                   class="filter-badge px-3 py-2 rounded-lg {% if resolved_filter == 'false' %}bg-yellow-100 text-yellow-800 border-2 border-yellow-500{% else %}bg-gray-100 text-gray-700{% endif %}">
                                     ⏳ Unresolved
                                 </a>
                                 <a href="?resolved=true{% if severity_filter %}&severity={{ severity_filter }}{% endif %}" 
-                                   class="filter-badge px-3 py-2 rounded-lg {% if resolved_filter == true %}bg-green-100 text-green-800 border-2 border-green-500{% else %}bg-gray-100 text-gray-700{% endif %}">
+                                   class="filter-badge px-3 py-2 rounded-lg {% if resolved_filter == 'true' %}bg-green-100 text-green-800 border-2 border-green-500{% else %}bg-gray-100 text-gray-700{% endif %}">
                                     ✅ Resolved
                                 </a>
-                                {% if resolved_filter is not none %}
+                                {% if resolved_filter is not None %}
                                 <a href="?{% if severity_filter %}severity={{ severity_filter }}{% endif %}" 
                                    class="filter-badge px-3 py-2 rounded-lg bg-gray-200 text-gray-800 hover:bg-gray-300">
                                     ✕ Clear

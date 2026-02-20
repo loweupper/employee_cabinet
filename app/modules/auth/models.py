@@ -177,3 +177,22 @@ class OTP(Base):
 
     def __repr__(self):
         return f"<OTP id={self.id} user_id={self.user_id} purpose={self.purpose}>"
+
+
+# ---------------------------------------------------------
+# Попытки логина (для защиты от брутфорса)
+# ---------------------------------------------------------
+class LoginAttempt(Base):
+    __tablename__ = "login_attempts"
+
+    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    timestamp = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    email = Column(String(255), index=True, nullable=False)
+    ip_address = Column(String(45), index=True, nullable=True)
+
+    user_id = Column(BigInteger, nullable=True)
+    success = Column(Boolean, default=False, nullable=False)
+
+    def __repr__(self):
+        return f"<LoginAttempt id={self.id} email={self.email} ip={self.ip_address} success={self.success}>"

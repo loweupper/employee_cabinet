@@ -5,35 +5,19 @@ from pydantic import BaseModel, Field
 from typing import Optional, Dict, List, Any
 from datetime import datetime
 from enum import Enum
+from modules.monitoring.models import AlertType, AlertSeverity
 
 
-class AlertSeveritySchema(str, Enum):
-    """Alert severity levels"""
-    LOW = "low"
-    MEDIUM = "medium"
-    HIGH = "high"
-    CRITICAL = "critical"
 
 
-class AlertTypeSchema(str, Enum):
-    """Types of security alerts"""
-    MULTIPLE_FAILED_LOGINS = "multiple_failed_logins"
-    NEW_IP_LOGIN = "new_ip_login"
-    SUSPICIOUS_FILE_UPLOAD = "suspicious_file_upload"
-    SQL_INJECTION_ATTEMPT = "sql_injection_attempt"
-    XSS_ATTEMPT = "xss_attempt"
-    BRUTE_FORCE_ATTEMPT = "brute_force_attempt"
-    PRIVILEGE_ESCALATION = "privilege_escalation"
-    UNUSUAL_ACTIVITY = "unusual_activity"
-    ACCOUNT_LOCKOUT = "account_lockout"
 
 
 class AlertResponse(BaseModel):
     """Alert data for API responses"""
-    id: str
+    id: int
     timestamp: datetime
-    severity: AlertSeveritySchema
-    type: AlertTypeSchema
+    severity: AlertSeverity
+    type: AlertType
     message: str
     user_id: Optional[int] = None
     ip_address: str
@@ -153,8 +137,8 @@ class ResolveAlertRequest(BaseModel):
 
 class AlertFilterParams(BaseModel):
     """Parameters for filtering alerts"""
-    severity: Optional[AlertSeveritySchema] = None
-    alert_type: Optional[AlertTypeSchema] = None
+    severity: Optional[AlertSeverity] = None
+    alert_type: Optional[AlertType] = None
     resolved: Optional[bool] = None
     hours: Optional[int] = None
     limit: int = Field(default=100, le=1000)

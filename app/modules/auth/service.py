@@ -1,8 +1,11 @@
-from datetime import datetime, timezone
-from sqlalchemy.orm import Session
-from fastapi import HTTPException, status
 import logging
 
+from modules.auth.models import LoginAttempt
+from datetime import datetime, timezone, timedelta
+from sqlalchemy.orm import Session
+from fastapi import HTTPException, status
+from modules.monitoring.service_alerts import AlertService 
+from modules.monitoring.models import AlertSeverity, AlertType
 from core.config import settings, OTP_EXPIRATION_DELTA
 from core.redis import redis_client
 from modules.auth.models import User, Session as SessionModel, OTP, UserRole, OTPPurpose
@@ -14,7 +17,7 @@ from modules.auth.schemas import (
 from modules.auth.utils import (
     hash_password, verify_password,
     create_access_token, create_refresh_token,
-    hash_refresh_token, verify_refresh_token,
+    hash_refresh_token,
     hash_otp, verify_otp, generate_otp,
     get_error_id
 )
@@ -27,7 +30,6 @@ from modules.auth.brute_force import (
     PasswordResetRateLimitException
 )
 
-from core.database import SessionLocal
 from modules.auth.models import Session as SessionModel
 
 
@@ -124,19 +126,56 @@ class AuthService:
         # ===== Проверяем блокировку =====
         if brute_force.check_login_attempts(email, ip_address):
             remaining_time = brute_force.get_login_block_time(email, ip_address)
-            logger.warning(f"Login attempt blocked for {email} from {ip_address} (blocked for {remaining_time}s)")
+            logger.warning(f"Пользователь {email} заблокирован на {remaining_time} секунд с IP {ip_address}")
             raise LoginBruteForcedException(remaining_time)
 
         # ===== Проверяем учётные данные =====
         user = db.query(User).filter(User.email == email).first()
 
+        # ===== Неуспешный логин =====
         if not user or not verify_password(data.password, user.hashed_password):
+
+            # Записываем неудачный логин в защиту от брутфорса
             brute_force.record_failed_login(email, ip_address)
+
+            # Записываем попытку
+            attempt = LoginAttempt(
+                email=email,
+                ip_address=ip_address,
+                user_id=user.id if user else None,
+                success=False
+            )
+            db.add(attempt)
+            db.commit()
+
+            # 1. Считаем количество неудачных попыток за последние 10 минут
+            failed_attempts = db.execute("""
+                SELECT COUNT(*)
+                FROM login_attempts
+                WHERE email = :email
+                  AND success = false
+                  AND timestamp > :since
+            """, {"email": email, "since": datetime.utcnow() - timedelta(minutes=10)}).scalar()
+
+            # Если >= 5 → создаём алерт
+            if failed_attempts >= 5:
+                AlertService.create_alert(
+                    db=db,
+                    severity=AlertSeverity.HIGH,
+                    type=AlertType.MULTIPLE_FAILED_LOGINS,
+                    message=f"Множественные неудачные попытки входа для {email} с IP {ip_address}",
+                    ip_address=ip_address,
+                    user_id=user.id if user else None,
+                    details={"failed_attempts": failed_attempts}
+                )
+                db.commit()
+
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Пользователь не найден или пароль неверный",
                 headers={"X-Error-ID": get_error_id()}
-            )
+            ) 
+
 
         if not user.is_active:
             raise HTTPException(
@@ -148,6 +187,16 @@ class AuthService:
         # ===== Успешный логин — сбрасываем счётчик =====
         brute_force.clear_login_attempts(email, ip_address)
         logger.info(f"User logged in: {user.email} from IP {ip_address}")
+
+        # Записываем успешную попытку
+        attempt = LoginAttempt(
+            email=email,
+            ip_address=ip_address,
+            user_id=user.id,
+            success=True
+        )
+        db.add(attempt)
+        db.commit()
 
         # Создаём access token
         access_token, _ = create_access_token(user.id, user.role.value)
@@ -564,3 +613,4 @@ class AuthService:
 
         return {"message": "Сессия успешно отозвана"}
     
+

@@ -1,6 +1,7 @@
 """
 Monitoring API routes and dashboard pages
 """
+from modules.monitoring.service_alerts import AlertService
 from core.template_helpers import get_sidebar_context
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import Response, HTMLResponse
@@ -166,9 +167,9 @@ async def resolve_alert(
     summary="Get Alert Counts",
     description="Get counts of alerts by severity"
 )
-async def get_alert_counts(user: User = Depends(require_admin)):
+async def get_alert_counts(db: Session = Depends(get_db), user: User = Depends(require_admin)):
     """Get alert counts by severity"""
-    return await MonitoringService.get_alert_counts()
+    return AlertService.get_alert_counts(db)
 
 
 # ===================================
@@ -314,6 +315,7 @@ async def alerts_page(
     page: int = Query(default=1, ge=1),
     severity: Optional[str] = None,
     resolved: Optional[bool] = None,
+    db: Session = Depends(get_db),
     user: User = Depends(require_admin)
 ):
     """Alerts management page"""
@@ -334,18 +336,22 @@ async def alerts_page(
         )
         
         # Get counts
-        counts = await MonitoringService.get_alert_counts()
+        counts = await MonitoringService.get_alert_counts(db)
         
+        sidebar_context = get_sidebar_context(user, db)
+
         return templates.TemplateResponse(
             "web/monitoring/alerts.html",
             {
                 "request": request,
                 "user": user,
+                "current_user": user,
                 "alerts": alerts,
                 "counts": counts,
                 "current_page": page,
                 "severity_filter": severity,
-                "resolved_filter": resolved
+                "resolved_filter": resolved,
+                **sidebar_context
             }
         )
     except Exception as e:

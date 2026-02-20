@@ -17,6 +17,8 @@ from modules.auth.models import User, Session, OTP, UserRole, OTPPurpose, Depart
 from modules.admin.models import AuditLog, LogLevel, UserAgentCache
 from modules.documents.models import DocumentCategory, Document, DocumentSubcategory
 from modules.objects.models import Object, ObjectAccess, ObjectAccessRole
+from modules.monitoring.models import Alert
+
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
