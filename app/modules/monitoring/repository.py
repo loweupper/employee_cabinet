@@ -44,7 +44,7 @@ class AlertRepository:
         return q.order_by(desc(Alert.timestamp)).limit(limit).all()
 
     @staticmethod
-    def resolve(db: Session, alert_id: int, resolved_by: int | None):
+    def resolve(db: Session, alert_id: str, resolved_by: int | None):
         alert = db.query(Alert).filter(Alert.id == alert_id).first()
         if not alert or alert.resolved:
             return False

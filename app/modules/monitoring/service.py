@@ -49,7 +49,7 @@ class MonitoringService:
             stats.active_sessions = active_sessions
 
             # 3. Failed logins in last hour (SQL)
-            failed_alerts = AlertService.get_alerts(
+            failed_alerts, _ = AlertService.get_alerts(
                 db=db,
                 hours=1,
                 alert_type=AlertType.MULTIPLE_FAILED_LOGINS
@@ -71,6 +71,7 @@ class MonitoringService:
     @staticmethod
     async def get_alerts(
         limit: int = 100,
+        page: int = 1,
         severity: Optional[AlertSeverity] = None,
         alert_type: Optional[AlertType] = None,
         resolved: Optional[bool] = None,
@@ -78,23 +79,24 @@ class MonitoringService:
     ):
         db = SessionLocal()
         try:
-            return AlertService.get_alerts(
+            alerts, total = AlertService.get_alerts(
                 db=db,
                 limit=limit,
+                page=page,
                 severity=severity,
                 alert_type=alert_type,
                 resolved=resolved,
                 hours=hours
             )
-        finally:
-            db.close()
+            return alerts, total
+        finally: db.close()
 
     @staticmethod
     async def get_alert_by_id(alert_id: int, db: Session) -> Optional[Alert]:
         return db.query(Alert).filter(Alert.id == alert_id).first()
 
     @staticmethod
-    async def resolve_alert(alert_id: int, resolved_by: Optional[int], db: Session) -> bool:
+    async def resolve_alert(alert_id: str, resolved_by: int, db: Session) -> bool:
         return AlertService.resolve_alert(db, alert_id, resolved_by)
 
     @staticmethod

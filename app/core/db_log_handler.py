@@ -1,5 +1,5 @@
+from asyncio.log import logger
 import logging
-import json
 from datetime import datetime, timedelta
 from sqlalchemy.orm import Session
 from core.database import SessionLocal
@@ -23,7 +23,7 @@ class DatabaseLogHandler(logging.Handler):
     def emit(self, record):
         """Записываем лог в БД"""
         try:
-            from modules.admin.models import AuditLog, LogLevel, UserAgentCache
+            from modules.admin.models import AuditLog, LogLevel
             
             db: Session = SessionLocal()
             
@@ -31,7 +31,7 @@ class DatabaseLogHandler(logging.Handler):
                 # ✅ Получаем request_id из context
                 request_id = get_request_id()
                 
-                # Парсим сообщение
+                # Парсим сообщение и извлекаем данные
                 if isinstance(record.msg, dict):
                     event = record.msg.get("event", "unknown")
                     message = record.msg.get("message", None)
@@ -53,11 +53,17 @@ class DatabaseLogHandler(logging.Handler):
                     trace_id = record.msg.get("trace_id", None)
                     
                     # Остальные данные в extra_data
-                    extra_data = {k: v for k, v in record.msg.items() 
-                               if k not in ["event", "message", "user_id", "email", "ip", 
-                                          "user_agent", "method", "path", "status", "duration_ms", 
-                                          "request_id", "trace_id"]
-                               and not (k == "status" and isinstance(v, int))}
+                    extra_data = {}
+                    logger.debug(f"Parsed log record: event={event}, user_id={user_id}, ip={ip_address}, user_agent={user_agent_str}, http_method={http_method}, http_path={http_path}, http_status={http_status}, duration_ms={duration_ms}, trace_id={trace_id}")
+                    # Parse message
+                    if isinstance(record.msg, dict):
+                        extra_data = {k: v for k, v in record.msg.items() 
+                                      if k not in ["event", "message", "user_id", "email", "ip", 
+                                                 "user_agent", "method", "path", "status", "duration_ms", 
+                                                 "request_id", "trace_id"]
+                                      and not (k == "status" and isinstance(v, int))}
+                        logger.debug(f"Extracted extra_data for log: {extra_data}")
+
                 else:
                     event = "log_message"
                     message = str(record.msg)

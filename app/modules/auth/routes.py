@@ -1,4 +1,5 @@
 from datetime import timezone
+from core.logging.actions import log_security_event
 from fastapi import APIRouter, Depends, HTTPException, status, Query, Request, Form, Response
 from fastapi.responses import JSONResponse, RedirectResponse, HTMLResponse
 from sqlalchemy.orm import Session
@@ -201,7 +202,9 @@ async def register(
         )
     
 
-
+# ===================================
+# Логин
+# ===================================
 @router.post("/login", summary="🔑 Логин пользователя", description="Логин пользователя через веб-форму с email и паролем")
 @limiter.limit("5/minute")
 async def login(
@@ -225,13 +228,18 @@ async def login(
     user_agent = get_user_agent(request)
     request_id = getattr(request.state, "request_id", "unknown")
     
-    logger.info({
-        "event": "login_attempt",
-        "email": email,
-        "client_ip": client_ip,
-        "request_id": request_id,
-    })
-    
+    await log_security_event(
+        event="login_attempt",
+        request=request,
+        user=None,
+        extra={
+            "email": email,
+            "client_ip": client_ip,
+            "user_agent": user_agent,
+            "request_id": request_id,
+        }
+    )
+
     try:
         # Преобразуем в Pydantic схему
         data = UserLogin(email=email, password=password)
@@ -247,14 +255,19 @@ async def login(
             user = db.query(User).filter(User.email == email).first()
             await tracker.record_attempt(email, client_ip, True, user.id if user else None)
         except Exception as tracker_error:
-            logger.debug(f"Failed to record login attempt: {tracker_error}")
+            logger.debug(f"Не удалось записать успешную попытку входа: {tracker_error}")
 
-            logger.info({
-                "event": "login_success",
-            "email": email,
-            "client_ip": client_ip,
-            "request_id": request_id,
-        })
+            await log_security_event(
+                event="login_failed_tracker",
+                request=request,
+                user=None,
+                extra={
+                    "error": str(tracker_error),
+                    "email": email,
+                    "client_ip": client_ip,
+                    "request_id": request_id,
+                }
+            )
         
         # ✅ ИСПРАВЛЕНО: используем атрибуты объекта, а не ["ключ"]
         redirect = RedirectResponse(
@@ -289,15 +302,19 @@ async def login(
             tracker = get_login_tracker()
             await tracker.record_attempt(email, client_ip, False, None)
         except Exception as tracker_error:
-            logger.debug(f"Failed to record failed login attempt: {tracker_error}")
+            logger.debug(f"Не удалось записать неудачную попытку входа: {tracker_error}")
         
-        logger.warning({
-            "event": "login_failed",
-            "email": email,
-            "error": e.detail,
-            "client_ip": client_ip,
-            "request_id": request_id,
-        })
+        await log_security_event(
+            event="login_failed",
+            request=request,
+            user=None,
+            extra={
+                "email": email,
+                "client_ip": client_ip,
+                "request_id": request_id,
+                "error": str(e)
+            }
+        )
         
         return templates.TemplateResponse(
             "web/auth/login.html",
@@ -310,14 +327,18 @@ async def login(
         )
         
     except Exception as e:
-        logger.error({
-            "event": "login_error",
-            "error": str(e),
-            "error_type": type(e).__name__,
-            "email": email,
-            "client_ip": client_ip,
-            "request_id": request_id,
-        }, exc_info=True)
+        await log_security_event(
+            event="login_error",
+            request=request,
+            user=None,
+            extra={
+                "error": str(e),
+                "error_type": type(e).__name__,
+                "email": email,
+                "client_ip": client_ip,
+                "request_id": request_id,
+            }
+        )
         
         return templates.TemplateResponse(
             "web/auth/login.html",
@@ -360,10 +381,14 @@ async def logout_web(request: Request):
     response.delete_cookie("access_token")
     response.delete_cookie("refresh_token")
     
-    logger.info({
-        "event": "user_logout",
-        "client_ip": request.client.host if request.client else "unknown"
-    })
+    await log_security_event(
+        event="user_logout",
+        request=request,
+        user=None,
+        extra={
+            "client_ip": request.client.host if request.client else "unknown"
+        }
+    )
     
     return response
 

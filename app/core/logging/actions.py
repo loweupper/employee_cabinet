@@ -74,16 +74,19 @@ def _build_log_data(
     request: Optional[Request],
     extra: Optional[Dict]
 ):
+    # Безопасный request_id
+    request_id = None
+    if request and hasattr(request, "state") and hasattr(request.state, "request_id"):
+        request_id = request.state.request_id
+
     data = {
-    "event": event,
-    "user_id": actor.id if actor else None,
-    "ip": request.client.host if request.client else None,
-    "user_agent": request.headers.get("user-agent"),
-    "request_id": getattr(request.state, "request_id", None),
-}
+        "event": event,
+        "user_id": actor.id if actor else None,
+        "ip": request.client.host if request and request.client else None,
+        "user_agent": request.headers.get("user-agent") if request else None,
+        "request_id": request_id,
+    }
 
-
-    # Кто выполняет действие
     if actor:
         data.update({
             "actor_id": actor.id,
@@ -91,7 +94,6 @@ def _build_log_data(
             "actor_email": actor.email,
         })
 
-    # Над кем выполняется действие
     if target_user:
         data.update({
             "target_user_id": target_user.id,
@@ -100,15 +102,13 @@ def _build_log_data(
             "target_user_email": target_user.email,
         })
 
-    # Данные запроса
     if request:
         data.update({
             "ip": request.client.host if request.client else None,
             "user_agent": request.headers.get("User-Agent"),
-            "request_id": getattr(request.state, "request_id", None),
+            "request_id": request_id,
         })
 
-    # Дополнительные поля
     if extra:
         data.update(extra)
 
@@ -126,6 +126,7 @@ def log_admin_action(event: str, admin: User | None, request: Request, extra: di
         "actor_id": admin.id if admin else None,
         "actor_role": admin.role.value if admin else None,
         "ip": request.client.host if request.client else None,
+        "target_user": extra.get("target_user") if extra else None,
         "user_agent": request.headers.get("user-agent"),
     }
     if extra:

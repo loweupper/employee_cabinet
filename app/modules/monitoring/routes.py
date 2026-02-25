@@ -1,6 +1,8 @@
 """
 Monitoring API routes and dashboard pages
 """
+from datetime import datetime
+from core.logging.actions import log_system_event
 from modules.monitoring.service_alerts import AlertService
 from core.template_helpers import get_sidebar_context
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
@@ -12,7 +14,7 @@ import logging
 
 from core.database import get_db
 from core.monitoring.metrics import get_metrics, get_metrics_content_type
-from core.monitoring.alerts import AlertSeverity, AlertType
+from core.monitoring.alerts import Alert, AlertSeverity, AlertType
 from modules.auth.dependencies import get_current_user_from_cookie
 from modules.auth.models import User, UserRole
 from modules.monitoring.service import MonitoringService
@@ -143,22 +145,41 @@ async def get_alert(
 @router.post(
     "/alerts/{alert_id}/resolve",
     summary="Resolve Alert",
-    description="Mark an alert as resolved"
+    description="Mark an alert as resolved",
+    response_model=None
 )
 async def resolve_alert(
     alert_id: str,
     request: ResolveAlertRequest,
-    user: User = Depends(require_admin)
+    user: User = Depends(require_admin),
+    db: Session = Depends(get_db)
 ):
-    """Mark alert as resolved"""
     resolved_by = request.resolved_by or user.id
-    
-    success = await MonitoringService.resolve_alert(alert_id, resolved_by)
-    
+    log_system_event(
+        event="resolve_alert_attempt",
+        extra={
+            "alert_id": alert_id,
+            "resolved_by": resolved_by,
+            "user_id": user.id,
+            "ip": request.client.host if request.client else None
+        }
+    )
+
+    success = await MonitoringService.resolve_alert(alert_id, resolved_by, db)
+    log_system_event(
+        event="resolve_alert_success" if success else "resolve_alert_failed",
+        extra={
+            "alert_id": alert_id,
+            "resolved_by": resolved_by,
+            "success": success
+        }
+    )
+
     if not success:
-        raise HTTPException(status_code=404, detail="Alert not found or already resolved")
-    
-    return {"status": "success", "message": "Alert resolved"}
+        raise HTTPException(status_code=404, detail="Предупреждение не найден или уже разрешено")
+
+    return {"status": "success", "message": "Предупреждение успешно разрешено"}
+
 
 
 @router.get(
@@ -302,7 +323,9 @@ async def dashboard_page(
         logger.error(f"Error loading dashboard: {e}")
         raise HTTPException(status_code=500, detail="Error loading dashboard")
 
-
+# ===================================
+# Alerts Management Page
+# ===================================
 @router.get(
     "/alerts-page",
     response_class=HTMLResponse,
@@ -328,16 +351,20 @@ async def alerts_page(
             except ValueError:
                 pass
         
-        # Get alerts
-        alerts = await MonitoringService.get_alerts(
+        # Get alerts WITH PAGINATION
+        alerts, total = await MonitoringService.get_alerts(
             limit=50,
+            page=page,
             severity=severity_enum,
             resolved=resolved
         )
-        
+
+        # Total pages
+        total_pages = (total + 50 - 1) // 50
+
         # Get counts
         counts = await MonitoringService.get_alert_counts(db)
-        
+
         sidebar_context = get_sidebar_context(user, db)
 
         return templates.TemplateResponse(
@@ -349,6 +376,7 @@ async def alerts_page(
                 "alerts": alerts,
                 "counts": counts,
                 "current_page": page,
+                "total_pages": total_pages,
                 "severity_filter": severity,
                 "resolved_filter": resolved,
                 **sidebar_context
@@ -356,4 +384,24 @@ async def alerts_page(
         )
     except Exception as e:
         logger.error(f"Error loading alerts page: {e}")
-        raise HTTPException(status_code=500, detail="Error loading alerts page")
+        raise HTTPException(status_code=500, detail="Ошибка загрузки страницы предупреждений")
+
+# ============================
+#  Массовое разрешение алертов
+# ============================
+@router.post("/alerts/resolve-bulk")
+async def resolve_alerts_bulk(
+    alert_ids: list[int],
+    db: Session = Depends(get_db),
+    user: User = Depends(require_admin)
+):
+    try:
+        for alert_id in alert_ids:
+            AlertService.resolve_alert(db, alert_id, user.id)
+
+        db.commit()
+        return {"status": "ok", "resolved": len(alert_ids)}
+
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))

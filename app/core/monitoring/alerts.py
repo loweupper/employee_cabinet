@@ -14,7 +14,7 @@ logger = logging.getLogger("app")
 
 
 class AlertSeverity(str, Enum):
-    """Alert severity levels"""
+    """Уровни критичности для оповещений безопасности"""
     LOW = "low"
     MEDIUM = "medium"
     HIGH = "high"
@@ -273,7 +273,7 @@ async def get_recent_alerts(
     )
 
 
-async def resolve_alert(alert_id: str, resolved_by: Optional[int] = None) -> bool:
+async def resolve_alert(alert_id: str, resolved_by: int = None) -> bool:
     """Resolve an alert"""
     return await alert_manager.resolve_alert(alert_id, resolved_by)
 

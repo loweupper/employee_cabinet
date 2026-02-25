@@ -72,12 +72,14 @@
         <a href="/admin/monitoring/alerts-page"
             class="flex items-center justify-between gap-3 px-4 py-3 rounded-lg hover:bg-indigo-800 transition text-sm">
             <span>🚨 Алерты</span>
-            <!-- Можно добавить счетчик активных алертов -->
-            <span class="px-2 py-1 bg-red-500 text-white text-xs rounded-full font-bold" id="alert-count"
-                style="display: none;">
-                0
+
+            {% if active_alerts_count is defined and active_alerts_count > 0 %}
+            <span class="px-2 py-1 bg-red-500 text-white text-xs rounded-full font-bold">
+                {{ active_alerts_count }}
             </span>
+            {% endif %}
         </a>
+
 
         <a href="/admin/logs"
             class="flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-indigo-800 transition text-sm">

@@ -131,7 +131,7 @@
                                         onclick="postAction('/admin/users/{{ user.id }}/sessions/revoke-others', 'Завершить ВСЕ сессии, кроме текущей?')"
                                         class="px-3 py-1 bg-orange-600 hover:bg-orange-700 text-white text-xs rounded w-full">
                                         Завершить остальные
-                                        </button>
+                                    </button>
                                     </form>
 
                                     {% else %}
@@ -145,6 +145,47 @@
                         </tbody>
                     </table>
                 </div>
+                <!-- PAGINATION -->
+                {% if total_pages > 1 %}
+                <div class="mt-6 flex justify-center">
+
+                    <nav class="inline-flex items-center space-x-1">
+
+                        <!-- Prev -->
+                        {% if page > 1 %}
+                        <a href="?page={{ page - 1 }}"
+                            class="px-3 py-1 rounded-lg bg-gray-200 hover:bg-gray-300 text-gray-700 text-sm">
+                            ← Назад
+                        </a>
+                        {% endif %}
+
+                        <!-- Page numbers -->
+                        {% for p in range(1, total_pages + 1) %}
+                        {% if p == page %}
+                        <span class="px-3 py-1 rounded-lg bg-red-700 text-white text-sm font-semibold">
+                            {{ p }}
+                        </span>
+                        {% else %}
+                        <a href="?page={{ p }}"
+                            class="px-3 py-1 rounded-lg bg-gray-200 hover:bg-gray-300 text-gray-700 text-sm">
+                            {{ p }}
+                        </a>
+                        {% endif %}
+                        {% endfor %}
+
+                        <!-- Next -->
+                        {% if page < total_pages %} <a href="?page={{ page + 1 }}"
+                            class="px-3 py-1 rounded-lg bg-gray-200 hover:bg-gray-300 text-gray-700 text-sm">
+                            Вперёд →
+                            </a>
+                            {% endif %}
+
+                    </nav>
+
+                </div>
+                {% endif %}
+
+
 
             </div>
 

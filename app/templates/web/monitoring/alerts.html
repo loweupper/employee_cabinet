@@ -1,10 +1,10 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ru">
 
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Security Alerts</title>
+    <title>Предупреждения безопасности</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         .alert-row {
@@ -13,6 +13,8 @@
 
         .alert-row:hover {
             background-color: #f9fafb;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
         }
 
         .filter-badge {
@@ -22,11 +24,42 @@
 
         .filter-badge:hover {
             transform: scale(1.05);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }
 
         .filter-badge.active {
             ring: 2px;
             ring-color: #4f46e5;
+        }
+
+        .fade-out {
+            opacity: 0;
+            transition: opacity 0.4s ease-out;
+        }
+
+        .severity-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.25rem;
+            min-width: 90px;
+            justify-content: center;
+        }
+
+        .pagination-btn {
+            transition: all 0.2s ease;
+        }
+
+        .pagination-btn:hover:not(.disabled) {
+            transform: translateY(-1px);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.25rem;
+            min-width: 110px;
+            justify-content: center;
         }
     </style>
 </head>
@@ -42,17 +75,19 @@
         <main class="flex-1 overflow-y-auto">
 
             <!-- Header -->
-            <header class="bg-white shadow-sm px-8 py-4 flex justify-between items-center">
+            <header class="bg-white shadow-sm px-8 py-4 flex justify-between items-center sticky top-0 z-10">
                 <div>
-                    <h1 class="text-2xl font-bold text-gray-800">🚨 Security Alerts</h1>
-                    <p class="text-sm text-gray-600 mt-1">Monitor and manage security events</p>
+                    <h1 class="text-2xl font-bold text-gray-800">🚨 Предупреждения безопасности</h1>
+                    <p class="text-sm text-gray-600 mt-1">Мониторинг и управление событиями безопасности</p>
                 </div>
                 <div class="flex items-center gap-4">
-                    <a href="/api/v1/monitoring/dashboard" class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition">
-                        📊 Dashboard
+                    <a href="/admin/monitoring/dashboard"
+                        class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition flex items-center gap-2 shadow-md hover:shadow-lg">
+                        📊 Панель управления
                     </a>
                     <span class="text-sm text-gray-600">{{ user.email }}</span>
-                    <div class="w-10 h-10 bg-indigo-600 text-white rounded-full flex items-center justify-center font-bold">
+                    <div
+                        class="w-10 h-10 bg-gradient-to-br from-indigo-600 to-purple-600 text-white rounded-full flex items-center justify-center font-bold shadow-md">
                         {{ (user.first_name[0] if user.first_name else user.email[0]) | upper }}
                     </div>
                 </div>
@@ -63,60 +98,63 @@
 
                 <!-- Alert Counts Summary -->
                 <div class="grid grid-cols-2 md:grid-cols-6 gap-4 mb-8">
-                    <div class="bg-white rounded-lg shadow-md p-4">
+                    <div class="bg-white rounded-lg shadow-md p-4 border-l-4 border-gray-400 hover:shadow-lg transition">
                         <p class="text-2xl font-bold text-gray-800">{{ counts.total }}</p>
-                        <p class="text-sm text-gray-600">Total</p>
+                        <p class="text-sm text-gray-600">Всего</p>
                     </div>
-                    <div class="bg-white rounded-lg shadow-md p-4">
+                    <div class="bg-white rounded-lg shadow-md p-4 border-l-4 border-yellow-400 hover:shadow-lg transition">
                         <p class="text-2xl font-bold text-gray-800">{{ counts.unresolved }}</p>
-                        <p class="text-sm text-gray-600">Unresolved</p>
+                        <p class="text-sm text-gray-600">Неразрешенные</p>
                     </div>
-                    <div class="bg-red-50 rounded-lg shadow-md p-4">
+                    <div class="bg-red-50 rounded-lg shadow-md p-4 border-l-4 border-red-600 hover:shadow-lg transition">
                         <p class="text-2xl font-bold text-red-600">{{ counts.critical }}</p>
-                        <p class="text-sm text-red-600">🔴 Critical</p>
+                        <p class="text-sm text-red-600 font-medium">🔴 Критические</p>
                     </div>
-                    <div class="bg-orange-50 rounded-lg shadow-md p-4">
+                    <div class="bg-orange-50 rounded-lg shadow-md p-4 border-l-4 border-orange-500 hover:shadow-lg transition">
                         <p class="text-2xl font-bold text-orange-600">{{ counts.high }}</p>
-                        <p class="text-sm text-orange-600">🟠 High</p>
+                        <p class="text-sm text-orange-600 font-medium">🟠 Важные</p>
                     </div>
-                    <div class="bg-yellow-50 rounded-lg shadow-md p-4">
+                    <div class="bg-yellow-50 rounded-lg shadow-md p-4 border-l-4 border-yellow-500 hover:shadow-lg transition">
                         <p class="text-2xl font-bold text-yellow-600">{{ counts.medium }}</p>
-                        <p class="text-sm text-yellow-600">🟡 Medium</p>
+                        <p class="text-sm text-yellow-600 font-medium">🟡 Средние</p>
                     </div>
-                    <div class="bg-green-50 rounded-lg shadow-md p-4">
+                    <div class="bg-green-50 rounded-lg shadow-md p-4 border-l-4 border-green-500 hover:shadow-lg transition">
                         <p class="text-2xl font-bold text-green-600">{{ counts.low }}</p>
-                        <p class="text-sm text-green-600">🟢 Low</p>
+                        <p class="text-sm text-green-600 font-medium">🟢 Низкие</p>
                     </div>
                 </div>
 
                 <!-- Filters -->
-                <div class="bg-white rounded-xl shadow-md p-6 mb-6">
-                    <h3 class="text-lg font-semibold text-gray-800 mb-4">Filters</h3>
+                <div class="bg-white rounded-xl shadow-md p-6 mb-6 border border-gray-200">
+                    <h3 class="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                        <span class="w-1 h-6 bg-indigo-600 rounded-full"></span>
+                        Фильтры
+                    </h3>
                     <div class="flex flex-wrap gap-4">
                         <!-- Severity Filter -->
                         <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-2">Severity</label>
-                            <div class="flex gap-2">
-                                <a href="?severity=critical{% if resolved_filter is not None %}&resolved={{ resolved_filter }}{% endif %}" 
-                                   class="filter-badge px-3 py-2 rounded-lg {% if severity_filter == 'critical' %}bg-red-100 text-red-800 border-2 border-red-500{% else %}bg-gray-100 text-gray-700{% endif %}">
-                                    🔴 Critical
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Уровень серьезности</label>
+                            <div class="flex gap-2 flex-wrap">
+                                <a href="?severity=critical{% if resolved_filter is not none %}&resolved={{ resolved_filter }}{% endif %}"
+                                    class="filter-badge px-3 py-2 rounded-lg {% if severity_filter == 'critical' %}bg-red-100 text-red-800 border-2 border-red-500 shadow-md{% else %}bg-gray-100 text-gray-700 hover:bg-gray-200{% endif %}">
+                                    🔴 Критические
                                 </a>
-                                <a href="?severity=high{% if resolved_filter is not None %}&resolved={{ resolved_filter }}{% endif %}" 
-                                   class="filter-badge px-3 py-2 rounded-lg {% if severity_filter == 'high' %}bg-orange-100 text-orange-800 border-2 border-orange-500{% else %}bg-gray-100 text-gray-700{% endif %}">
-                                    🟠 High
+                                <a href="?severity=high{% if resolved_filter is not none %}&resolved={{ resolved_filter }}{% endif %}"
+                                    class="filter-badge px-3 py-2 rounded-lg {% if severity_filter == 'high' %}bg-orange-100 text-orange-800 border-2 border-orange-500 shadow-md{% else %}bg-gray-100 text-gray-700 hover:bg-gray-200{% endif %}">
+                                    🟠 Важные
                                 </a>
-                                <a href="?severity=medium{% if resolved_filter is not None %}&resolved={{ resolved_filter }}{% endif %}" 
-                                   class="filter-badge px-3 py-2 rounded-lg {% if severity_filter == 'medium' %}bg-yellow-100 text-yellow-800 border-2 border-yellow-500{% else %}bg-gray-100 text-gray-700{% endif %}">
-                                    🟡 Medium
+                                <a href="?severity=medium{% if resolved_filter is not none %}&resolved={{ resolved_filter }}{% endif %}"
+                                    class="filter-badge px-3 py-2 rounded-lg {% if severity_filter == 'medium' %}bg-yellow-100 text-yellow-800 border-2 border-yellow-500 shadow-md{% else %}bg-gray-100 text-gray-700 hover:bg-gray-200{% endif %}">
+                                    🟡 Средние
                                 </a>
-                                <a href="?severity=low{% if resolved_filter is not None %}&resolved={{ resolved_filter }}{% endif %}" 
-                                   class="filter-badge px-3 py-2 rounded-lg {% if severity_filter == 'low' %}bg-green-100 text-green-800 border-2 border-green-500{% else %}bg-gray-100 text-gray-700{% endif %}">
-                                    🟢 Low
+                                <a href="?severity=low{% if resolved_filter is not none %}&resolved={{ resolved_filter }}{% endif %}"
+                                    class="filter-badge px-3 py-2 rounded-lg {% if severity_filter == 'low' %}bg-green-100 text-green-800 border-2 border-green-500 shadow-md{% else %}bg-gray-100 text-gray-700 hover:bg-gray-200{% endif %}">
+                                    🟢 Низкие
                                 </a>
                                 {% if severity_filter %}
-                                <a href="?{% if resolved_filter is not None %}resolved={{ resolved_filter }}{% endif %}" 
-                                   class="filter-badge px-3 py-2 rounded-lg bg-gray-200 text-gray-800 hover:bg-gray-300">
-                                    ✕ Clear
+                                <a href="?{% if resolved_filter is not none %}resolved={{ resolved_filter }}{% endif %}"
+                                    class="filter-badge px-3 py-2 rounded-lg bg-gray-200 text-gray-800 hover:bg-gray-300 border border-gray-400">
+                                    ✕ Сбросить
                                 </a>
                                 {% endif %}
                             </div>
@@ -124,21 +162,20 @@
 
                         <!-- Status Filter -->
                         <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-2">Status</label>
-                            <div class="flex gap-2">
-                                <a href="?resolved=false{% if severity_filter %}&severity={{ severity_filter }}{% endif %}" 
-
-                                   class="filter-badge px-3 py-2 rounded-lg {% if resolved_filter == 'false' %}bg-yellow-100 text-yellow-800 border-2 border-yellow-500{% else %}bg-gray-100 text-gray-700{% endif %}">
-                                    ⏳ Unresolved
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Статус</label>
+                            <div class="flex gap-2 flex-wrap">
+                                <a href="?resolved=false{% if severity_filter %}&severity={{ severity_filter }}{% endif %}"
+                                    class="filter-badge px-3 py-2 rounded-lg {% if resolved_filter == 'false' %}bg-yellow-100 text-yellow-800 border-2 border-yellow-500 shadow-md{% else %}bg-gray-100 text-gray-700 hover:bg-gray-200{% endif %}">
+                                    ⏳ Неразрешенные
                                 </a>
-                                <a href="?resolved=true{% if severity_filter %}&severity={{ severity_filter }}{% endif %}" 
-                                   class="filter-badge px-3 py-2 rounded-lg {% if resolved_filter == 'true' %}bg-green-100 text-green-800 border-2 border-green-500{% else %}bg-gray-100 text-gray-700{% endif %}">
-                                    ✅ Resolved
+                                <a href="?resolved=true{% if severity_filter %}&severity={{ severity_filter }}{% endif %}"
+                                    class="filter-badge px-3 py-2 rounded-lg {% if resolved_filter == 'true' %}bg-green-100 text-green-800 border-2 border-green-500 shadow-md{% else %}bg-gray-100 text-gray-700 hover:bg-gray-200{% endif %}">
+                                    ✅ Разрешенные
                                 </a>
-                                {% if resolved_filter is not None %}
-                                <a href="?{% if severity_filter %}severity={{ severity_filter }}{% endif %}" 
-                                   class="filter-badge px-3 py-2 rounded-lg bg-gray-200 text-gray-800 hover:bg-gray-300">
-                                    ✕ Clear
+                                {% if resolved_filter is not none %}
+                                <a href="?{% if severity_filter %}severity={{ severity_filter }}{% endif %}"
+                                    class="filter-badge px-3 py-2 rounded-lg bg-gray-200 text-gray-800 hover:bg-gray-300 border border-gray-400">
+                                    ✕ Сбросить
                                 </a>
                                 {% endif %}
                             </div>
@@ -146,19 +183,35 @@
                     </div>
                 </div>
 
+                <!-- Bulk Actions -->
+                <div class="flex items-center justify-between px-4 py-3 bg-gray-50 border border-gray-200 rounded-t-lg">
+                    <div class="flex items-center gap-3">
+                        <input type="checkbox" id="select-all" class="h-4 w-4 text-indigo-600 rounded border-gray-300 focus:ring-indigo-500">
+                        <label for="select-all" class="text-sm text-gray-700 font-medium">Выделить все</label>
+                    </div>
+                    <button id="resolve-selected"
+                        class="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm disabled:opacity-40 disabled:cursor-not-allowed transition flex items-center gap-2 shadow-md hover:shadow-lg"
+                        disabled>
+                        ✔ Разрешить выбранные ({{ counts.unresolved }})
+                    </button>
+                </div>
+
                 <!-- Alerts Table -->
-                <div class="bg-white rounded-xl shadow-md overflow-hidden">
+                <div class="bg-white rounded-b-xl shadow-md overflow-hidden border border-t-0 border-gray-200">
                     <div class="overflow-x-auto">
                         <table class="min-w-full divide-y divide-gray-200">
-                            <thead class="bg-gray-50">
+                            <thead class="bg-gray-100">
                                 <tr>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Severity</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Message</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">IP Address</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Time</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">Важность</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">Тип</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">Сообщение</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">IP Адрес</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">Время</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">Статус</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">Действия</th>
+                                    <th class="px-4 py-2 text-center text-xs font-medium text-gray-600 uppercase tracking-wider">
+                                        <span class="sr-only">Выбрать</span>
+                                    </th>
                                 </tr>
                             </thead>
                             <tbody class="bg-white divide-y divide-gray-200">
@@ -166,77 +219,227 @@
                                 {% for alert in alerts %}
                                 <tr class="alert-row">
                                     <td class="px-6 py-4 whitespace-nowrap">
-                                        <span class="px-2 py-1 text-xs font-semibold rounded-full
-                                            {% if alert.severity.value == 'critical' %}bg-red-100 text-red-800
-                                            {% elif alert.severity.value == 'high' %}bg-orange-100 text-orange-800
-                                            {% elif alert.severity.value == 'medium' %}bg-yellow-100 text-yellow-800
-                                            {% else %}bg-green-100 text-green-800{% endif %}">
-                                            {% if alert.severity.value == 'critical' %}🔴
-                                            {% elif alert.severity.value == 'high' %}🟠
-                                            {% elif alert.severity.value == 'medium' %}🟡
-                                            {% else %}🟢{% endif %}
-                                            {{ alert.severity.value.upper() }}
+                                        <span class="px-2 py-1 text-xs font-semibold rounded-full severity-badge
+                                            {% if alert.severity.value == 'critical' %}bg-red-100 text-red-800 border border-red-300
+                                            {% elif alert.severity.value == 'high' %}bg-orange-100 text-orange-800 border border-orange-300
+                                            {% elif alert.severity.value == 'medium' %}bg-yellow-100 text-yellow-800 border border-yellow-300
+                                            {% else %}bg-green-100 text-green-800 border border-green-300{% endif %}">
+                                            {% if alert.severity.value == 'critical' %}🔴 Критичный
+                                            {% elif alert.severity.value == 'high' %}🟠 Высокий
+                                            {% elif alert.severity.value == 'medium' %}🟡 Средний
+                                            {% else %}🟢 Низкий{% endif %}
                                         </span>
                                     </td>
-                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-medium">
                                         {{ alert.type.value.replace('_', ' ').title() }}
                                     </td>
                                     <td class="px-6 py-4 text-sm text-gray-900 max-w-md">
-                                        {{ alert.message }}
+                                        <div class="line-clamp-2">{{ alert.message }}</div>
                                     </td>
                                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                        <code class="bg-gray-100 px-2 py-1 rounded">{{ alert.ip_address }}</code>
+                                        <code class="bg-gray-100 px-2 py-1 rounded font-mono text-xs">{{ alert.ip_address }}</code>
                                     </td>
                                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                        {{ alert.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}
+                                        {{ alert.timestamp.strftime('%d.%m.%Y %H:%M') }}
                                     </td>
                                     <td class="px-6 py-4 whitespace-nowrap">
                                         {% if alert.resolved %}
-                                        <span class="px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">
-                                            ✅ Resolved
+                                        <span class="px-2 py-1 text-xs font-semibold rounded-full status-badge bg-green-100 text-green-800 border border-green-300">
+                                            ✅ Разрешено
                                         </span>
                                         {% else %}
-                                        <span class="px-2 py-1 text-xs font-semibold rounded-full bg-yellow-100 text-yellow-800">
-                                            ⏳ Unresolved
+                                        <span class="px-2 py-1 text-xs font-semibold rounded-full status-badge bg-yellow-100 text-yellow-800 border border-yellow-300">
+                                            ⏳ Ожидает
                                         </span>
                                         {% endif %}
                                     </td>
                                     <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
                                         {% if not alert.resolved %}
-                                        <button onclick="resolveAlert('{{ alert.id }}')" 
-                                                class="text-indigo-600 hover:text-indigo-900">
-                                            Mark Resolved
+                                        <button onclick="resolveAlert('{{ alert.id }}')"
+                                            class="text-indigo-600 hover:text-indigo-900 hover:underline transition flex items-center gap-1">
+                                            <span>✓</span> Разрешить
                                         </button>
+                                        {% else %}
+                                        <span class="text-gray-400 text-xs">✓ Разрешено</span>
                                         {% endif %}
+                                    </td>
+                                    <td class="px-4 py-2 text-center">
+                                        <input type="checkbox" class="alert-checkbox h-4 w-4 text-indigo-600 rounded border-gray-300 focus:ring-indigo-500"
+                                            value="{{ alert.id }}" {% if alert.resolved %}disabled{% endif %}>
                                     </td>
                                 </tr>
                                 {% endfor %}
                                 {% else %}
                                 <tr>
-                                    <td colspan="7" class="px-6 py-12 text-center text-gray-500">
-                                        ✅ No alerts found matching your filters
+                                    <td colspan="8" class="px-6 py-12 text-center text-gray-500 bg-gray-50">
+                                        <div class="flex flex-col items-center gap-2">
+                                            <span class="text-4xl">✅</span>
+                                            <p class="text-lg font-medium">Предупреждения не найдены</p>
+                                            <p class="text-sm">По указанным фильтрам ничего нет</p>
+                                        </div>
                                     </td>
                                 </tr>
                                 {% endif %}
                             </tbody>
                         </table>
                     </div>
+
+                    <!-- Pagination -->
+                    {% if total_pages > 1 %}
+                    <div class="flex justify-center items-center gap-2 py-4 border-t border-gray-200 bg-gray-50">
+                        {# Кнопка "Назад" #}
+                        {% if current_page > 1 %}
+                        <a href="?page={{ current_page - 1 }}{% if severity_filter %}&severity={{ severity_filter }}{% endif %}{% if resolved_filter is not none %}&resolved={{ resolved_filter }}{% endif %}"
+                            class="pagination-btn px-3 py-2 bg-white hover:bg-gray-100 rounded-lg text-sm border border-gray-300 shadow-sm flex items-center gap-1">
+                            ← Назад
+                        </a>
+                        {% endif %}
+
+                        {# Всегда показываем первую страницу #}
+                        {% if current_page > 3 %}
+                        <a href="?page=1{% if severity_filter %}&severity={{ severity_filter }}{% endif %}{% if resolved_filter is not none %}&resolved={{ resolved_filter }}{% endif %}"
+                            class="pagination-btn px-3 py-2 bg-white hover:bg-gray-100 rounded-lg text-sm border border-gray-300 shadow-sm">1</a>
+                        <span class="px-2 text-gray-500">…</span>
+                        {% endif %}
+
+                        {# Окно вокруг текущей страницы #}
+                        {% for p in range(current_page - 1, current_page + 2) %}
+                        {% if 1 <= p <= total_pages %}
+                        <a href="?page={{ p }}{% if severity_filter %}&severity={{ severity_filter }}{% endif %}{% if resolved_filter is not none %}&resolved={{ resolved_filter }}{% endif %}"
+                            class="pagination-btn px-3 py-2 rounded-lg text-sm border shadow-sm
+                                {% if p == current_page %}
+                                    bg-indigo-600 text-white border-indigo-600 hover:bg-indigo-700
+                                {% else %}
+                                    bg-white text-gray-700 border-gray-300 hover:bg-gray-100
+                                {% endif %}">
+                            {{ p }}
+                        </a>
+                        {% endif %}
+                        {% endfor %}
+
+                        {# Всегда показываем последнюю страницу #}
+                        {% if current_page < total_pages - 2 %}
+                        <span class="px-2 text-gray-500">…</span>
+                        <a href="?page={{ total_pages }}{% if severity_filter %}&severity={{ severity_filter }}{% endif %}{% if resolved_filter is not none %}&resolved={{ resolved_filter }}{% endif %}"
+                            class="pagination-btn px-3 py-2 bg-white hover:bg-gray-100 rounded-lg text-sm border border-gray-300 shadow-sm">
+                            {{ total_pages }}
+                        </a>
+                        {% endif %}
+
+                        {# Кнопка "Вперёд" #}
+                        {% if current_page < total_pages %}
+                        <a href="?page={{ current_page + 1 }}{% if severity_filter %}&severity={{ severity_filter }}{% endif %}{% if resolved_filter is not none %}&resolved={{ resolved_filter }}{% endif %}"
+                            class="pagination-btn px-3 py-2 bg-white hover:bg-gray-100 rounded-lg text-sm border border-gray-300 shadow-sm flex items-center gap-1">
+                            Вперёд →
+                        </a>
+                        {% endif %}
+                    </div>
+                    {% endif %}
                 </div>
-
             </div>
-
         </main>
-
     </div>
 
     <script>
+        // Дождаться загрузки DOM
+        document.addEventListener('DOMContentLoaded', function() {
+            const selectAll = document.getElementById("select-all");
+            const checkboxes = document.querySelectorAll(".alert-checkbox:not([disabled])");
+            const resolveBtn = document.getElementById("resolve-selected");
+            const rows = document.querySelectorAll(".alert-row");
+
+            function updateButtonState() {
+                const anyChecked = [...checkboxes].some(cb => cb.checked);
+                resolveBtn.disabled = !anyChecked;
+                
+                // Обновить текст кнопки с количеством выбранных
+                const checkedCount = [...checkboxes].filter(cb => cb.checked).length;
+                if (checkedCount > 0) {
+                    resolveBtn.innerHTML = `✔ Разрешить выбранные (${checkedCount})`;
+                } else {
+                    resolveBtn.innerHTML = `✔ Разрешить выбранные ({{ counts.unresolved }})`;
+                }
+            }
+
+            if (selectAll) {
+                selectAll.addEventListener("change", () => {
+                    checkboxes.forEach(cb => cb.checked = selectAll.checked);
+                    updateButtonState();
+                });
+            }
+
+            // Клик по строке — переключает чекбокс
+            rows.forEach((row, index) => {
+                row.addEventListener("click", (e) => {
+                    if (e.target.tagName !== "INPUT" && e.target.tagName !== "BUTTON" && e.target.tagName !== "A") {
+                        const cb = row.querySelector('.alert-checkbox');
+                        if (cb && !cb.disabled) {
+                            cb.checked = !cb.checked;
+                            updateButtonState();
+                        }
+                    }
+                });
+            });
+
+            checkboxes.forEach(cb => {
+                cb.addEventListener("change", updateButtonState);
+            });
+
+            if (resolveBtn) {
+                resolveBtn.addEventListener("click", async () => {
+                    const ids = [...checkboxes]
+                        .filter(cb => cb.checked)
+                        .map(cb => parseInt(cb.value));
+
+                    if (ids.length === 0) return;
+
+                    resolveBtn.disabled = true;
+                    resolveBtn.innerHTML = '⏳ Разрешение...';
+
+                    try {
+                        const response = await fetch("/admin/monitoring/alerts/resolve-bulk", {
+                            method: "POST",
+                            headers: {"Content-Type": "application/json"},
+                            body: JSON.stringify(ids)
+                        });
+
+                        if (response.ok) {
+                            // Плавное исчезновение строк
+                            checkboxes.forEach((cb, i) => {
+                                if (cb.checked) {
+                                    const row = cb.closest('tr');
+                                    if (row) row.classList.add("fade-out");
+                                }
+                            });
+
+                            setTimeout(() => location.reload(), 400);
+                        } else {
+                            alert("Ошибка при разрешении алертов");
+                            resolveBtn.disabled = false;
+                            updateButtonState();
+                        }
+                    } catch (error) {
+                        console.error('Ошибка:', error);
+                        alert("Ошибка при разрешении алертов");
+                        resolveBtn.disabled = false;
+                        updateButtonState();
+                    }
+                });
+            }
+        });
+
         async function resolveAlert(alertId) {
-            if (!confirm('Mark this alert as resolved?')) {
+            if (!confirm('Разрешить это предупреждение?')) {
                 return;
             }
 
+            const btn = event.target;
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '⏳...';
+            btn.disabled = true;
+
             try {
-                const response = await fetch(`/api/v1/monitoring/alerts/${alertId}/resolve`, {
+                const response = await fetch(`/admin/monitoring/alerts/${alertId}/resolve`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
@@ -245,17 +448,22 @@
                 });
 
                 if (response.ok) {
-                    location.reload();
+                    const row = btn.closest('tr');
+                    row.classList.add("fade-out");
+                    setTimeout(() => location.reload(), 400);
                 } else {
-                    alert('Failed to resolve alert');
+                    alert('Не удалось разрешить предупреждение');
+                    btn.innerHTML = originalText;
+                    btn.disabled = false;
                 }
             } catch (error) {
-                console.error('Error resolving alert:', error);
-                alert('Error resolving alert');
+                console.error('Ошибка разрешения предупреждения:', error);
+                alert('Ошибка разрешения предупреждения');
+                btn.innerHTML = originalText;
+                btn.disabled = false;
             }
         }
     </script>
-
 </body>
 
 </html>

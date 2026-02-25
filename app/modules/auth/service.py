@@ -2,6 +2,7 @@ import logging
 
 from modules.auth.models import LoginAttempt
 from datetime import datetime, timezone, timedelta
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 from fastapi import HTTPException, status
 from modules.monitoring.service_alerts import AlertService 
@@ -149,13 +150,16 @@ class AuthService:
             db.commit()
 
             # 1. Считаем количество неудачных попыток за последние 10 минут
-            failed_attempts = db.execute("""
-                SELECT COUNT(*)
-                FROM login_attempts
-                WHERE email = :email
-                  AND success = false
-                  AND timestamp > :since
-            """, {"email": email, "since": datetime.utcnow() - timedelta(minutes=10)}).scalar()
+            failed_attempts = (
+                db.query(LoginAttempt)
+                .filter(
+                    LoginAttempt.email == email,
+                    LoginAttempt.ip_address == ip_address,
+                    LoginAttempt.success == False,
+                    LoginAttempt.timestamp >= datetime.utcnow() - timedelta(minutes=10)
+                )
+                .count()
+            )
 
             # Если >= 5 → создаём алерт
             if failed_attempts >= 5:

@@ -21,7 +21,12 @@ from datetime import datetime, timedelta # Для работы с датой и 
 from core.template_helpers import get_sidebar_context # Утилита для получения контекста сайдбара (например, количество ожидающих пользователей)
 from modules.auth import department_service # Service for department operations
 from modules.auth.models import Session as SessionModel # Модель для сессий пользователей (для управления активными сессиями при удалении или деактивации пользователя)
-from core.logging.actions import log_admin_action # Унифицированное логирование действий администратора
+from core.logging.actions import (
+    log_admin_action,
+    log_user_action,
+    log_system_event,
+    log_security_event
+) # Унифицированное логирование действий администратора
 
 logger = logging.getLogger("app")
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -1014,7 +1019,6 @@ async def logs_stats(
 # ===================================
 # Department Management Endpoints
 # ===================================
-
 @router.get("/departments")
 async def get_departments_list(
     admin: User = Depends(get_current_user_from_cookie),
@@ -1025,7 +1029,7 @@ async def get_departments_list(
         raise HTTPException(status_code=403, detail="Доступ запрещён")
     
     departments = department_service.get_departments(db)
-    return {"departments": [{"id": d.id, "name": d.name, "description": d.description} for d in departments]}
+    return {"departments": [{"id": d.id, "name": d.name, "description": d.description, "created_at": d.created_at, "updated_at": d.updated_at} for d in departments]}
 
 # ===================================
 # Создание нового отдела
@@ -1038,7 +1042,7 @@ async def create_department(
 ):
     """Create a new department"""
     if admin.role != UserRole.ADMIN:
-        return JSONResponse({"success": False, "message": "Access denied"}, status_code=403)
+        return JSONResponse({"success": False, "message": "Доступ запрещён"}, status_code=403)
     
     try:
         form = await request.form()
@@ -1046,7 +1050,7 @@ async def create_department(
         description = form.get("description", "").strip()
         
         if not name:
-            return JSONResponse({"success": False, "message": "Department name is required"}, status_code=400)
+            return JSONResponse({"success": False, "message": "Название отдела обязательно"}, status_code=400)
         
         from modules.auth.schemas import DepartmentCreate
         dept_data = DepartmentCreate(name=name, description=description or None)
@@ -1075,7 +1079,7 @@ async def create_department(
     except HTTPException as e:
         return JSONResponse({"success": False, "message": e.detail}, status_code=e.status_code)
     except Exception as e:
-        logger.error(f"Error creating department: {str(e)}", exc_info=True)
+        logger.error(f"Ошибка создания отдела: {str(e)}", exc_info=True)
         return JSONResponse({"success": False, "message": str(e)}, status_code=500)
 
 # ===================================
@@ -1127,10 +1131,12 @@ async def update_department(
     except HTTPException as e:
         return JSONResponse({"success": False, "message": e.detail}, status_code=e.status_code)
     except Exception as e:
-        logger.error(f"Error updating department: {str(e)}", exc_info=True)
+        logger.error(f"Ошибка обновления отдела: {str(e)}", exc_info=True)
         return JSONResponse({"success": False, "message": str(e)}, status_code=500)
 
-
+# ===================================
+# Удаление отдела
+# ===================================
 @router.delete("/departments/{department_id}")
 async def delete_department(
     department_id: int,
@@ -1157,7 +1163,7 @@ async def delete_department(
     except HTTPException as e:
         return JSONResponse({"success": False, "message": e.detail}, status_code=e.status_code)
     except Exception as e:
-        logger.error(f"Error deleting department: {str(e)}", exc_info=True)
+        logger.error(f"Ошибка удаления отдела: {str(e)}", exc_info=True)
         return JSONResponse({"success": False, "message": str(e)}, status_code=500)
     
 # ===================================
@@ -1167,6 +1173,8 @@ async def delete_department(
 async def user_sessions_page(
     user_id: int,
     request: Request,
+    page: int = 1, # номер страницы для пагинации
+    per_page: int = 20, # количество сессий на странице
     admin: User = Depends(get_current_user_from_cookie),
     db: Session = Depends(get_db)
 ):
@@ -1179,22 +1187,24 @@ async def user_sessions_page(
     if not target_user:
         raise HTTPException(status_code=404, detail="Пользователь не найден")
 
-    # Получаем все сессии пользователя
-    sessions = (
+    # Базовый запрос
+    query = (
         db.query(SessionModel)
         .filter(SessionModel.user_id == user_id)
         .order_by(SessionModel.expires_at.desc())
-        .all()
     )
 
-    for s in sessions:
-        s.geo = get_ip_geo(s.ip_address)  # Получаем гео-информацию по IP
-        if s.user_agent:
-            s.ua = parse_user_agent(s.user_agent)
-        else:
-            s.ua = {"device": "_", "browser": "_"}
+    # Пагинация
+    total = query.count()
+    total_pages = (total + per_page - 1) // per_page
+    offset = (page - 1) * per_page
 
-        # Конвертируем даты в локальное время (по Москве)
+    sessions = query.limit(per_page).offset(offset).all()
+
+    # Обработка данных
+    for s in sessions:
+        s.geo = get_ip_geo(s.ip_address)
+        s.ua = parse_user_agent(s.user_agent) if s.user_agent else {"device": "_", "browser": "_"}
         s.created_at_local = s.created_at.astimezone(MSK)
         s.expires_at_local = s.expires_at.astimezone(MSK)
 
@@ -1208,10 +1218,15 @@ async def user_sessions_page(
             "admin": admin,
             "current_user": admin,
             "sessions": sessions,
+            "page": page,
+            "per_page": per_page,
+            "total": total,
+            "total_pages": total_pages,
             "now": datetime.now(MSK),
-            **sidebar_context 
+            **sidebar_context
         }
     )
+
 
 # ===================================
 # Отозвать сессию пользователя
@@ -1347,9 +1362,9 @@ async def revoke_other_sessions(
     log_admin_action(
         event="revoke_other_sessions",
         admin=admin,
-        target_user=target_user,
         request=request,
         extra={
+            "target_user": target_user,
             "revoked_count": updated
         }
     )
@@ -1361,21 +1376,16 @@ async def revoke_other_sessions(
 
 
 
-from core.logging.actions import (
-    log_admin_action,
-    log_user_action,
-    log_system_event,
-    log_security_event
-)
 
-@router.get("/test-logs")
-async def test_logs(request: Request):
-    user = None
 
-    log_admin_action("admin_test_event", admin=user, request=request)
-    log_user_action("user_test_event", user=user, request=request)
-    log_system_event("system_test_event", {"info": "system ok"})
-    await log_security_event("security_test_event", request=request)
+# @router.get("/test-logs")
+# async def test_logs(request: Request):
+#     user = None
 
-    return {"status": "ok"}
+#     log_admin_action("admin_test_event", admin=user, request=request)
+#     log_user_action("user_test_event", user=user, request=request)
+#     log_system_event("system_test_event", {"info": "system ok"})
+#     await log_security_event("security_test_event", request=request)
+
+#     return {"status": "ok"}
 
