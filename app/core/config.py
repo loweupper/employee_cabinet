@@ -1,15 +1,77 @@
 from pydantic_settings import BaseSettings
-from datetime import timedelta
+from datetime import timezone, timedelta, datetime
 from pydantic import Field, field_validator, ValidationInfo
-import os
 from typing import Optional
 import warnings
 import logging
 from urllib.parse import quote_plus
 
-from typing import List, Union
+import os
+from zoneinfo import ZoneInfo  
+
+from typing import List
 
 logger = logging.getLogger(__name__)
+
+# ===================================
+#  Настройки временной зоны
+# ===================================
+TZ_STRING = os.getenv("TZ", "Europe/Moscow")
+
+# Флаг для использования фиксированного смещения (если нужно)
+USE_FIXED_OFFSET = os.getenv("USE_FIXED_OFFSET", "false").lower() == "true"
+FIXED_OFFSET_HOURS = int(os.getenv("TIMEZONE_OFFSET", "3"))
+
+if USE_FIXED_OFFSET:
+    # Используем фиксированное смещение (например, UTC+3 для MSK)
+    APP_TIMEZONE = timezone(timedelta(hours=FIXED_OFFSET_HOURS))
+    TIMEZONE_NAME = f"UTC{'+' if FIXED_OFFSET_HOURS >= 0 else ''}{FIXED_OFFSET_HOURS}"
+else:
+    # Используем полноценную временную зону из IANA (Europe/Moscow)
+    try:
+        APP_TIMEZONE = ZoneInfo(TZ_STRING)
+        TIMEZONE_NAME = TZ_STRING
+    except Exception as e:
+        # Fallback на UTC+3 если что-то пошло не так
+        print(f"⚠️ Ошибка загрузки временной зоны {TZ_STRING}: {e}. Используем UTC+3")
+        APP_TIMEZONE = timezone(timedelta(hours=3))
+        TIMEZONE_NAME = "Europe/Moscow (fixed UTC+3)"
+
+# Для обратной совместимости
+MSK = APP_TIMEZONE
+
+# ===================================
+#  Форматирование времени
+# ===================================
+
+def now() -> datetime:
+    """Текущее время в настроенной временной зоне"""
+    return datetime.now(APP_TIMEZONE)
+
+def format_timestamp(dt: Optional[datetime] = None, format: str = "iso") -> str:
+    """
+    Форматирует время в нужном формате
+    
+    Args:
+        dt: время (если None - текущее)
+        format: "iso" (ISO формат), "msk" (для отображения), "utc" (для сортировки)
+    
+    Returns:
+        str: отформатированное время
+    """
+    if dt is None:
+        dt = now()
+    
+    if format == "iso":
+        return dt.isoformat()
+    elif format == "msk":
+        return dt.strftime("%Y-%m-%d %H:%M:%S")
+    elif format == "utc":
+        return dt.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+    elif format == "file":
+        return dt.strftime("%Y%m%d_%H%M%S")
+    else:
+        return dt.isoformat()
 
 
 class Settings(BaseSettings):

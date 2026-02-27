@@ -7,6 +7,7 @@ import logging
 from modules.objects.models import Object, ObjectAccess, ObjectAccessRole
 from modules.objects.schemas import ObjectAccessUpdate, ObjectCreate, ObjectUpdate, ObjectAccessCreate
 from modules.auth.models import User
+from core.constants import UserRole  # ✅ Добавить импорт
 
 logger = logging.getLogger("app")
 
@@ -87,7 +88,7 @@ class ObjectService:
                 Object.is_archived == False
             )
         elif status == "inactive":
-            if user.role == "admin":
+            if user.role == UserRole.ADMIN:  # ✅ используем Enum
                 query = db.query(Object).filter(
                     Object.is_active == False,
                     Object.is_archived == False,
@@ -132,6 +133,49 @@ class ObjectService:
         
         return objects, total
     
+    # =================================== Проверка прав управления ============================================
+    @staticmethod
+    def can_manage_access(user: User, object_id: int, db: Session) -> bool:
+        """
+        Проверить, может ли пользователь управлять доступом к объекту
+        """
+        obj = db.query(Object).filter(Object.id == object_id).first()
+        if not obj:
+            return False
+    
+        # 1. Создатель объекта
+        if obj.created_by == user.id:
+            return True
+    
+        # 2. Глобальный админ
+        if user.role == UserRole.ADMIN:
+            return True
+    
+        # 3. Проверка через ObjectAccess
+        admin_access = db.query(ObjectAccess).filter(
+            ObjectAccess.object_id == object_id,
+            ObjectAccess.user_id == user.id,
+            ObjectAccess.role.in_([ObjectAccessRole.OWNER, ObjectAccessRole.ADMIN])
+        ).first()
+    
+        if admin_access:
+            return True
+    
+        # 4. Проверка через ACL
+        try:
+            from modules.access.service import AccessService
+            from modules.access.models import PermissionType
+        
+            return AccessService.has_access(
+                user=user,
+                resource_type="object",
+                resource_id=object_id,
+                permission=PermissionType.ADMIN,
+                db=db
+            )
+        except ImportError:
+            return False
+
     # =================================== Получение объекта ============================================
     @staticmethod
     def get_object(object_id: int, user: User, db: Session) -> Object:
@@ -148,7 +192,7 @@ class ObjectService:
         
         # Неактивные — только владелец + админ
         if not obj.is_active and not obj.is_archived:
-            if obj.created_by != user.id and user.role != "admin":
+            if obj.created_by != user.id and user.role != UserRole.ADMIN:  # ✅ используем Enum
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail="Объект неактивен. Доступ только для владельца и администратора."
@@ -160,7 +204,7 @@ class ObjectService:
             ObjectAccess.user_id == user.id
         ).first()
         
-        if not access and user.role != "admin":
+        if not access and user.role != UserRole.ADMIN:  # ✅ используем Enum
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Нет доступа к этому объекту"
@@ -185,7 +229,7 @@ class ObjectService:
             ObjectAccess.role.in_([ObjectAccessRole.EDITOR, ObjectAccessRole.ADMIN, ObjectAccessRole.OWNER])
         ).first()
         
-        if not access and user.role != "admin":
+        if not access and user.role != UserRole.ADMIN:  # ✅ используем Enum
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Недостаточно прав для редактирования"
@@ -234,19 +278,12 @@ class ObjectService:
                 detail="Объект не найден"
             )
         
-        # Проверяем права
-        if obj.created_by != user.id and user.role != "admin":
-            existing_access = db.query(ObjectAccess).filter(
-                ObjectAccess.object_id == object_id,
-                ObjectAccess.user_id == user.id,
-                ObjectAccess.role == ObjectAccessRole.ADMIN
-            ).first()
-            
-            if not existing_access:
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="Недостаточно прав для управления доступом"
-                )
+        # ✅ УНИВЕРСАЛЬНАЯ ПРОВЕРКА ПРАВ (одна!)
+        if not ObjectService.can_manage_access(user, object_id, db):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Недостаточно прав для управления доступом"
+            )
         
         # Проверяем, нет ли уже доступа
         existing = db.query(ObjectAccess).filter(
@@ -272,9 +309,10 @@ class ObjectService:
         # Добавляем автоматический доступ к разделу по отделу
         sections = list(data.sections_access)
         
-        if target_user.department:
+        if target_user.department_rel and target_user.department_rel.name:
             from modules.objects.models import DEPARTMENT_SECTION_MAP
-            auto_section = DEPARTMENT_SECTION_MAP.get(target_user.department)
+            # ✅ Используем название отдела, а не ID
+            auto_section = DEPARTMENT_SECTION_MAP.get(target_user.department_rel.name)
             if auto_section and auto_section.value not in sections:
                 sections.append(auto_section.value)
         
@@ -323,7 +361,7 @@ class ObjectService:
             )
         
         # Проверяем права
-        if obj.created_by != current_user.id and current_user.role != "admin":
+        if obj.created_by != current_user.id and current_user.role != UserRole.ADMIN:  # ✅ используем Enum
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Недостаточно прав"
@@ -384,7 +422,7 @@ class ObjectService:
             ObjectAccess.role.in_([ObjectAccessRole.ADMIN, ObjectAccessRole.OWNER])
         ).first()
         
-        if not access and current_user.role != "admin":
+        if not access and current_user.role != UserRole.ADMIN:  # ✅ используем Enum
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Недостаточно прав для управления доступом"
@@ -437,7 +475,7 @@ class ObjectService:
                 detail="Объект не найден"
             )
         
-        if obj.created_by != user.id and user.role != "admin":
+        if obj.created_by != user.id and user.role != UserRole.ADMIN:  # ✅ используем Enum
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Недостаточно прав для удаления"
@@ -467,7 +505,7 @@ class ObjectService:
         """
         Восстановить удаленный объект (только админ)
         """
-        if user.role != "admin":
+        if user.role != UserRole.ADMIN:  # ✅ используем Enum
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Только администратор может восстанавливать объекты"
@@ -518,14 +556,12 @@ class ObjectService:
                     Object.title.ilike(f"%{search}%"),
                     Object.address.ilike(f"%{search}%")
                 )
-
             )
         
         total = query.count()
         objects = query.order_by(Object.created_at.desc()).offset(skip).limit(limit).all()
         
         return objects, total
-    
     
     # =================================== Список доступов к объекту ============================================
     @staticmethod
@@ -546,3 +582,97 @@ class ObjectService:
         ).order_by(ObjectAccess.created_at.desc()).all()
         
         return accesses
+    
+
+    @staticmethod
+    def sync_user_access_by_role(user: User, db: Session):
+        """
+        Обновить доступы пользователя ко всем объектам на основе его роли
+        """
+        # Маппинг роли на раздел документов
+        role_to_section = {
+            UserRole.ACCOUNTANT: "accounting",
+            UserRole.HR: "hr",
+            UserRole.ENGINEER: "technical",
+            UserRole.LAWYER: "legal",
+            # UserRole.SAFETY: "safety"  # если добавите
+        }
+    
+        # Если у роли нет соответствующего раздела - ничего не делаем
+        if user.role not in role_to_section:
+            return
+    
+        new_section = role_to_section[user.role]
+    
+        # Получаем все доступы пользователя к объектам
+        accesses = db.query(ObjectAccess).filter(
+            ObjectAccess.user_id == user.id
+        ).all()
+    
+        updated_count = 0
+        for access in accesses:
+            current_sections = access.sections_access or ["general"]
+        
+            # Добавляем новый раздел, если его ещё нет
+            if new_section not in current_sections:
+                current_sections.append(new_section)
+                access.sections_access = current_sections
+                updated_count += 1
+    
+        db.commit()
+    
+        logger.info({
+            "event": "user_access_synced_by_role",
+            "user_id": user.id,
+            "user_role": user.role.value,
+            "new_section": new_section,
+            "updated_accesses": updated_count
+        })
+
+    @staticmethod
+    def sync_user_access_by_department(user: User, db: Session):
+        """
+        Обновить доступы пользователя ко всем объектам на основе его отдела
+        """
+        if not user.department_rel:
+            return
+    
+        # Маппинг названия отдела на раздел документов
+        department_to_section = {
+            "Бухгалтерия": "accounting",
+            "Отдел кадров": "hr",
+            "Технический отдел": "technical",
+            "Юридический": "legal",
+            "Охрана труда": "safety"
+        }
+    
+        dept_name = user.department_rel.name
+        if dept_name not in department_to_section:
+            return
+    
+        new_section = department_to_section[dept_name]
+    
+        # Получаем все доступы пользователя к объектам
+        accesses = db.query(ObjectAccess).filter(
+            ObjectAccess.user_id == user.id
+        ).all()
+    
+        updated_count = 0
+        for access in accesses:
+            current_sections = access.sections_access or ["general"]
+        
+            # Добавляем новый раздел, если его ещё нет
+            if new_section not in current_sections:
+                current_sections.append(new_section)
+                access.sections_access = current_sections
+                updated_count += 1
+    
+        db.commit()
+    
+        logger.info({
+            "event": "user_access_synced_by_department",
+            "user_id": user.id,
+            "department": dept_name,
+            "new_section": new_section,
+            "updated_accesses": updated_count
+        })

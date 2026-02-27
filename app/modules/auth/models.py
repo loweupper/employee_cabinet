@@ -1,4 +1,5 @@
 from datetime import datetime
+from core.constants import UserRole
 from enum import Enum
 
 from sqlalchemy import (
@@ -17,19 +18,6 @@ from sqlalchemy import (
 from sqlalchemy.orm import relationship
 
 from core.database import Base
-
-
-# ---------------------------------------------------------
-# Роли пользователей
-# ---------------------------------------------------------
-class UserRole(str, Enum):
-    ADMIN = "admin"  # Администратор с полными правами
-    ACCOUNTANT = "accountant"  # Бухгалтер
-    HR = "hr"  # Специалист по кадрам
-    ENGINEER = "engineer"  # Инженер
-    LAWYER = "lawyer"  # Юрист
-    EMPLOYEE = "employee"  # Обычный сотрудник
-
 
 # ---------------------------------------------------------
 # Модель отдела

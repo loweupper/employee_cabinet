@@ -1,6 +1,7 @@
 from sqlalchemy import func
 from core.template_helpers import get_sidebar_context
 from core.config import settings
+from core.constants import UserRole  # ✅ импорт из constants
 from core.validators import (
     sanitize_filename,
     validate_file_extension,
@@ -18,7 +19,7 @@ from slowapi.util import get_remote_address
 
 from core.database import get_db
 from modules.auth.dependencies import get_current_user_from_cookie
-from modules.auth.models import User, UserRole
+from modules.auth.models import User
 from modules.documents.schemas import *
 from modules.documents.service import DocumentService
 from modules.documents.models import Document, DocumentCategory, DocumentSubcategory
@@ -90,10 +91,6 @@ async def upload_documents(
                 # ===== File Upload Security Validation =====
                 
                 # 1. Check file size - read content to validate actual size
-                # Note: Reading entire file into memory is a trade-off between:
-                # - Security: Prevents Content-Length header manipulation
-                # - Memory: For large files, could use streaming (future improvement)
-                # Current limit (10MB) is reasonable for in-memory processing
                 file_contents = await file.read()
                 actual_size = len(file_contents)
                 
@@ -229,7 +226,7 @@ async def update_document(
         from modules.objects.service import ObjectService
         obj = ObjectService.get_object(object_id, user, db)
         
-        if obj.created_by != user.id and user.role != "admin":
+        if obj.created_by != user.id and user.role != UserRole.ADMIN:  # ✅ исправлено
             return RedirectResponse(
                 url=f"/objects/{object_id}?error=Нет прав для редактирования",
                 status_code=303
@@ -291,7 +288,7 @@ async def delete_document(
         from modules.objects.service import ObjectService
         obj = ObjectService.get_object(object_id, user, db)
         
-        if obj.created_by != user.id and user.role != "admin":
+        if obj.created_by != user.id and user.role != UserRole.ADMIN:  # ✅ исправлено
             return RedirectResponse(
                 url=f"/objects/{object_id}?error=Нет прав для удаления",
                 status_code=303
@@ -375,7 +372,7 @@ async def documents_list(
         raise HTTPException(status_code=404, detail="Объект не найден")
     
     # ✅ ИСПРАВЛЕНИЕ: Проверка доступа
-    if user.role != UserRole.ADMIN:
+    if user.role != UserRole.ADMIN:  # ✅ используем Enum
         access = db.query(ObjectAccess).filter(
             ObjectAccess.user_id == user.id,
             ObjectAccess.object_id == object_id
@@ -393,7 +390,7 @@ async def documents_list(
     # ✅ ИСПРАВЛЕНИЕ: Фильтрация по категориям с учётом доступов
     allowed_categories = []
     
-    if user.role == UserRole.ADMIN:
+    if user.role == UserRole.ADMIN:  # ✅ используем Enum
         # Админ видит всё
         if category:
             # ✅ Фильтруем по Document.category (это enum в самой таблице Document)
@@ -451,10 +448,10 @@ async def documents_list(
             # Показываем только документы из разрешённых категорий
             query = query.filter(Document.category.in_(allowed_categories))
     
-    documents = query.order_by(Document.uploaded_at.desc()).all()
+    documents = query.order_by(Document.created_at.desc()).all()
     
     # Получаем статистику по категориям (с учётом доступов)
-    if user.role == UserRole.ADMIN:
+    if user.role == UserRole.ADMIN:  # ✅ используем Enum
         # Админ видит все категории
         categories_stats = db.query(
             Document.category,

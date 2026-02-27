@@ -3,17 +3,7 @@ from typing import Optional, Literal
 from datetime import datetime
 from enum import Enum
 
-
-# ===================================
-# Enum для ролей
-# ===================================
-class UserRoleEnum(str, Enum):
-    ADMIN = "admin"
-    ACCOUNTANT = "accountant"
-    HR = "hr"
-    ENGINEER = "engineer"
-    LAWYER = "lawyer"
-    EMPLOYEE = "employee"
+from core.constants import UserRole as UserRoleEnum  # ✅ импорт из constants
 
 
 # ===================================
@@ -93,7 +83,7 @@ class UserRead(BaseModel):
     id: int
     email: EmailStr
 
-    role: UserRoleEnum
+    role: UserRoleEnum  # ✅ используем импортированный Enum
     is_active: bool
 
     first_name: Optional[str]
@@ -161,7 +151,7 @@ class UserUpdateAdmin(BaseModel):
     phone_number: Optional[str] = Field(None, pattern=r"^\+?[\d\s\-()]+$", max_length=20)
     avatar_url: Optional[str] = Field(None, max_length=500)
 
-    role: Optional[UserRoleEnum] = None
+    role: Optional[UserRoleEnum] = None  # ✅ используем импортированный Enum
     is_active: Optional[bool] = None
 
     department_id: Optional[int] = Field(None, ge=1)

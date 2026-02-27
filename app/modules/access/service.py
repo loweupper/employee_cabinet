@@ -1,8 +1,8 @@
-from typing import Optional
+from typing import Optional, List
 from functools import lru_cache
 from sqlalchemy import and_, or_
 from sqlalchemy.orm import Session
-from modules.access.models import ACL, ACLEffect, PermissionType
+from modules.access.models_sql import ACL, ACLEffect, PermissionType  
 from modules.auth.models import User, UserRole
 import redis
 import json
@@ -47,12 +47,15 @@ class AccessService:
         except Exception:
             pass  # Логировать в production
     
-    def _invalidate_cache(self, user_id: int, resource_type: str = "*", resource_id: int = None):
+    def _invalidate_cache(self, user_id: int, resource_type: str = "*", resource_id: Optional[int] = None):
         """Инвалидирует кэш для пользователя"""
         if not self.redis:
             return
         try:
-            pattern = f"acl:{user_id}:{resource_type}:*"
+            if resource_id:
+                pattern = f"acl:{user_id}:{resource_type}:{resource_id}:*"
+            else:
+                pattern = f"acl:{user_id}:{resource_type}:*:*"
             keys = self.redis.keys(pattern)
             if keys:
                 self.redis.delete(*keys)
@@ -76,7 +79,7 @@ class AccessService:
         """
         
         service = AccessService(redis_client)
-        cache_key = service._get_cache_key(user.id, resource_type, resource_id, str(permission))
+        cache_key = service._get_cache_key(user.id, resource_type, resource_id, permission.value)
         
         # Проверяем кэш
         cached_result = service._check_from_cache(cache_key)
@@ -92,7 +95,7 @@ class AccessService:
                 ACL.effect == ACLEffect.DENY,
                 or_(
                     ACL.user_id == user.id,
-                    ACL.role.in_(service.ROLE_HIERARCHY.get(user.role, [user.role])),
+                    ACL.role.in_([r.value for r in service.ROLE_HIERARCHY.get(user.role, [user.role])]),
                     ACL.department == getattr(user, 'department', None),
                     ACL.position == getattr(user, 'position', None),
                     ACL.location == getattr(user, 'location', None),
@@ -116,7 +119,7 @@ class AccessService:
                     # 1. Конкретный пользователь
                     ACL.user_id == user.id,
                     # 2. Роль с учетом иерархии
-                    ACL.role.in_(service.ROLE_HIERARCHY.get(user.role, [user.role])),
+                    ACL.role.in_([r.value for r in service.ROLE_HIERARCHY.get(user.role, [user.role])]),
                     # 3. ABAC атрибуты
                     ACL.department == getattr(user, 'department', None),
                     ACL.position == getattr(user, 'position', None),
@@ -152,7 +155,7 @@ class AccessService:
             resource_type=resource_type,
             resource_id=resource_id,
             user_id=user_id,
-            role=role,
+            role=role.value if role else None,
             department=department,
             position=position,
             location=location,
@@ -189,10 +192,10 @@ class AccessService:
             ACL.permission == permission,
         ]
         
-        if user_id:
+        if user_id is not None:
             filters.append(ACL.user_id == user_id)
-        if role:
-            filters.append(ACL.role == role)
+        if role is not None:
+            filters.append(ACL.role == role.value)
         
         rule = db.query(ACL).filter(*filters).first()
         if rule:
@@ -200,7 +203,7 @@ class AccessService:
             db.commit()
             
             # Инвалидируем кэш
-            if user_id:
+            if user_id is not None:
                 AccessService(redis_client)._invalidate_cache(user_id, resource_type, resource_id)
             
             return True
@@ -212,7 +215,7 @@ class AccessService:
         resource_type: str,
         resource_id: int,
         db: Session,
-    ) -> list[str]:
+    ) -> List[str]:
         """Получить все разрешения пользователя для ресурса"""
         
         # Получаем пользователя для проверки атрибутов
@@ -230,7 +233,7 @@ class AccessService:
                 ACL.effect == ACLEffect.ALLOW,
                 or_(
                     ACL.user_id == user_id,
-                    ACL.role.in_(AccessService.ROLE_HIERARCHY.get(user.role, [user.role])),
+                    ACL.role.in_([r.value for r in AccessService.ROLE_HIERARCHY.get(user.role, [user.role])]),
                     ACL.department == getattr(user, 'department', None),
                     ACL.position == getattr(user, 'position', None),
                     ACL.location == getattr(user, 'location', None),
@@ -250,7 +253,7 @@ class AccessService:
                 ACL.effect == ACLEffect.DENY,
                 or_(
                     ACL.user_id == user_id,
-                    ACL.role.in_(AccessService.ROLE_HIERARCHY.get(user.role, [user.role])),
+                    ACL.role.in_([r.value for r in AccessService.ROLE_HIERARCHY.get(user.role, [user.role])]),
                     ACL.department == getattr(user, 'department', None),
                     ACL.position == getattr(user, 'position', None),
                     ACL.location == getattr(user, 'location', None),

@@ -44,7 +44,7 @@ class UserCreate(BaseModel):
     phone_number: Optional[str] = Field(
         None,
         max_length=20,
-        regex=r"^\+?[\d\s\-()]+$",
+        pattern=r"^\+?[\d\s\-()]+$",
         description="Номер телефона в международном формате"
     )
     avatar_url: Optional[str] = Field(None, max_length=512)
@@ -169,7 +169,7 @@ class UserUpdate(BaseModel):
     first_name: Optional[str] = Field(None, max_length=255)
     last_name: Optional[str] = Field(None, max_length=255)
     middle_name: Optional[str] = Field(None, max_length=255)
-    phone_number: Optional[str] = Field(None, max_length=20, regex=r"^\+?[\d\s\-()]+$")
+    phone_number: Optional[str] = Field(None, max_length=20, pattern=r"^\+?[\d\s\-()]+$")
     avatar_url: Optional[str] = Field(None, max_length=512)
 
     @field_validator('first_name', 'last_name', 'middle_name', mode='before')
@@ -187,7 +187,7 @@ class UserUpdateAdmin(BaseModel):
     first_name: Optional[str] = Field(None, max_length=255)
     last_name: Optional[str] = Field(None, max_length=255)
     middle_name: Optional[str] = Field(None, max_length=255)
-    phone_number: Optional[str] = Field(None, max_length=20, regex=r"^\+?[\d\s\-()]+$")
+    phone_number: Optional[str] = Field(None, max_length=20, pattern=r"^\+?[\d\s\-()]+$")
     avatar_url: Optional[str] = Field(None, max_length=512)
 
     role: Optional[UserRoleEnum] = None
@@ -422,8 +422,10 @@ class ErrorResponse(BaseModel):
 # ===================================
 # PaginatedResponse — пагинированный ответ
 # ===================================
-T = TypeVar("T")
-class PaginatedResponse[T](BaseModel, Generic[T]):
+class PaginatedResponse[T](BaseModel):
+    """
+    Пагинированный ответ с элементами типа T
+    """
     data: list[T] = Field(..., description="Список элементов")
     total: int = Field(..., description="Общее количество элементов")
     page: int = Field(..., description="Номер текущей страницы")

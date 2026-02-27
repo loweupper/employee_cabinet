@@ -1,7 +1,7 @@
 from datetime import timezone
-from core.logging.actions import log_security_event
+from core.logging.actions import log_event
 from fastapi import APIRouter, Depends, HTTPException, status, Query, Request, Form, Response
-from fastapi.responses import JSONResponse, RedirectResponse, HTMLResponse
+from fastapi.responses import RedirectResponse, HTMLResponse
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 import logging
@@ -18,7 +18,7 @@ from modules.auth.dependencies import get_current_user
 from modules.auth.models import User, Session as SessionModel
 from modules.auth.service import AuthService
 
-logger = logging.getLogger("app")
+# logger = logging.getLogger("app")
 
 # Initialize rate limiter
 limiter = Limiter(key_func=get_remote_address)
@@ -98,12 +98,17 @@ async def register(
     request_id = getattr(request.state, "request_id", "unknown")
     
     # Логируем попытку регистрации
-    logger.info({
-        "event": "registration_attempt",
-        "email": email,
-        "client_ip": client_ip,
-        "request_id": request_id,
-    })
+    await log_event(
+        event="registration_attempt",
+        request=request,
+        client_ip=client_ip,
+        request_id=request_id,
+        extra={
+            "email": email,
+            "client_ip": client_ip,
+            "request_id": request_id,
+         }
+    )
     
     # Валидация данных через Pydantic
     try:
@@ -111,19 +116,27 @@ async def register(
             email=email,
             password=password,
             first_name=first_name,
-            last_name=last_name
+            last_name=last_name,
         )
+
     except ValidationError as e:
         error_msg = e.errors()[0]["msg"]
         
-        logger.warning({
-            "event": "registration_validation_failed",
-            "email": email,
-            "error": error_msg,
-            "client_ip": client_ip,
-            "request_id": request_id,
-        })
-        
+        await log_event(
+            event="registration_validation_failed",
+            request=request,
+            level="WARNING",
+            client_ip=client_ip,
+            request_id=request_id,
+            extra={
+                "email": email,
+                "error": error_msg,
+                "client_ip": client_ip,
+                "request_id": request_id,
+            }
+        )
+
+
         return templates.TemplateResponse(
             "web/auth/register.html",
             {
@@ -140,32 +153,45 @@ async def register(
     try:
         user = AuthService.register(data, db, client_ip)
         
-        logger.info({
-            "event": "registration_success",
-            "user_id": user.id,
-            "email": user.email,
-            "client_ip": client_ip,
-            "request_id": request_id,
-        })
+        # Получаем пользователя
+        user = db.query(User).filter(User.email == email).first()
+
+        # ✅ Логируем успешную регистрацию
+        await log_event(
+            event="registration_success",
+            request=request,
+            actor=user,
+            extra={
+                "client_ip": client_ip,
+                "request_id": request_id,
+            }
+        )
         
         # Редирект на страницу логина с success message
         return RedirectResponse(
             url="/api/v1/auth/login-page?registered=true",
             status_code=303  # POST -> GET редирект
         )
-        
+
     except IntegrityError:
         # Email уже существует
         db.rollback()
-        
-        logger.warning({
-            "event": "registration_failed",
-            "reason": "email_exists",
-            "email": email,
-            "client_ip": client_ip,
-            "request_id": request_id,
-        })
-        
+
+        # ✅ Логируем ошибку (email уже существует)
+        await log_event(
+            event="registration_failed",
+            request=request,
+            level="WARNING",
+            client_ip=client_ip,
+            request_id=request_id,
+            extra={
+                "reason": "email_exists",
+                "email": email,
+                "client_ip": client_ip,
+                "request_id": request_id,
+            }
+        )
+
         return templates.TemplateResponse(
             "web/auth/register.html",
             {
@@ -177,18 +203,25 @@ async def register(
             },
             status_code=400
         )
-        
+
     except Exception as e:
-        # Неожиданная ошибка
-        logger.error({
-            "event": "registration_error",
-            "error": str(e),
-            "error_type": type(e).__name__,
-            "email": email,
-            "client_ip": client_ip,
-            "request_id": request_id,
-        }, exc_info=True)
-        
+        # ✅ Логируем неожиданную ошибку
+        await log_event(
+            event="registration_error",
+            request=request,
+            level="ERROR",
+            create_alert=True,  # 👈 создаём алерт в БД
+            client_ip=client_ip,
+            request_id=request_id,
+            extra={
+                "error": str(e),
+                "error_type": type(e).__name__,
+                "email": email,
+                "client_ip": client_ip,
+                "request_id": request_id,
+            }
+        )
+
         return templates.TemplateResponse(
             "web/auth/register.html",
             {
@@ -200,7 +233,7 @@ async def register(
             },
             status_code=500
         )
-    
+
 
 # ===================================
 # Логин
@@ -228,10 +261,10 @@ async def login(
     user_agent = get_user_agent(request)
     request_id = getattr(request.state, "request_id", "unknown")
     
-    await log_security_event(
+    # ✅ Логируем попытку входа
+    await log_event(
         event="login_attempt",
         request=request,
-        user=None,
         extra={
             "email": email,
             "client_ip": client_ip,
@@ -247,6 +280,21 @@ async def login(
         # Логин через сервис (возвращает TokenResponse — Pydantic модель)
         token_response = AuthService.login(data, db, user_agent, client_ip)
         
+        # Получаем пользователя
+        user = db.query(User).filter(User.email == email).first()
+
+        # ✅ Логируем успешный вход
+        await log_event(
+            event="login_success",
+            request=request,
+            actor=user,
+            extra={
+                "client_ip": client_ip,
+                "user_agent": user_agent,
+                "request_id": request_id,
+            }
+        )
+
         # Record successful login attempt
         try:
             from core.monitoring.detector import get_login_tracker
@@ -255,12 +303,12 @@ async def login(
             user = db.query(User).filter(User.email == email).first()
             await tracker.record_attempt(email, client_ip, True, user.id if user else None)
         except Exception as tracker_error:
-            logger.debug(f"Не удалось записать успешную попытку входа: {tracker_error}")
-
-            await log_security_event(
+            
+            # ✅ Логируем ошибку трекера
+            await log_event(
                 event="login_failed_tracker",
                 request=request,
-                user=None,
+                level="WARNING",
                 extra={
                     "error": str(tracker_error),
                     "email": email,
@@ -269,7 +317,7 @@ async def login(
                 }
             )
         
-        # ✅ ИСПРАВЛЕНО: используем атрибуты объекта, а не ["ключ"]
+        # Устанавливаем cookies
         redirect = RedirectResponse(
             url="/dashboard",
             status_code=303
@@ -302,17 +350,19 @@ async def login(
             tracker = get_login_tracker()
             await tracker.record_attempt(email, client_ip, False, None)
         except Exception as tracker_error:
-            logger.debug(f"Не удалось записать неудачную попытку входа: {tracker_error}")
-        
-        await log_security_event(
+            pass
+
+        # ✅ Логируем неудачную попытку входа (создаём алерт)
+        await log_event(
             event="login_failed",
             request=request,
-            user=None,
+            level="WARNING",
+            create_alert=True,  # 👈 создаём алерт в БД
             extra={
                 "email": email,
                 "client_ip": client_ip,
                 "request_id": request_id,
-                "error": str(e)
+                "error": e.detail
             }
         )
         
@@ -327,10 +377,12 @@ async def login(
         )
         
     except Exception as e:
-        await log_security_event(
+        # ✅ Логируем неожиданную ошибку входа
+        await log_event(
             event="login_error",
             request=request,
-            user=None,
+            level="ERROR",
+            create_alert=True,  # 👈 создаём алерт в БД
             extra={
                 "error": str(e),
                 "error_type": type(e).__name__,
@@ -381,7 +433,7 @@ async def logout_web(request: Request):
     response.delete_cookie("access_token")
     response.delete_cookie("refresh_token")
     
-    await log_security_event(
+    await log_event(
         event="user_logout",
         request=request,
         user=None,

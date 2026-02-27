@@ -9,7 +9,8 @@ from modules.monitoring.service_alerts import AlertService
 from modules.monitoring.models import AlertSeverity, AlertType
 from core.config import settings, OTP_EXPIRATION_DELTA
 from core.redis import redis_client
-from modules.auth.models import User, Session as SessionModel, OTP, UserRole, OTPPurpose
+from core.constants import UserRole  # ✅ импорт из constants
+from modules.auth.models import User, Session as SessionModel, OTP, OTPPurpose
 from modules.auth.schemas import (
     UserCreate, UserLogin, UserUpdate,
     ChangePasswordRequest, TokenResponse, UserRead,
@@ -31,8 +32,7 @@ from modules.auth.brute_force import (
     PasswordResetRateLimitException
 )
 
-from modules.auth.models import Session as SessionModel
-
+# ✅ дублирующийся импорт удалён
 
 logger = logging.getLogger("app")
 
@@ -79,7 +79,7 @@ class AuthService:
         user = User(
             email=data.email.lower(),
             hashed_password=hash_password(data.password),
-            role=UserRole.EMPLOYEE,
+            role=UserRole.EMPLOYEE,  # ✅ используем импортированный UserRole
             is_active=False,  # Требуется активация админом
             first_name=data.first_name,
             last_name=data.last_name,
@@ -190,7 +190,7 @@ class AuthService:
 
         # ===== Успешный логин — сбрасываем счётчик =====
         brute_force.clear_login_attempts(email, ip_address)
-        logger.info(f"User logged in: {user.email} from IP {ip_address}")
+        # logger.info(f"User logged in: {user.email} from IP {ip_address}")
 
         # Записываем успешную попытку
         attempt = LoginAttempt(
@@ -617,4 +617,13 @@ class AuthService:
 
         return {"message": "Сессия успешно отозвана"}
     
-
+    @staticmethod
+    def change_user_role(user_id: int, new_role: UserRole, db: Session):
+        user = db.query(User).filter(User.id == user_id).first()
+        user.role = new_role
+    
+        # ✅ СИНХРОНИЗАЦИЯ ДОСТУПОВ КО ВСЕМ ОБЪЕКТАМ
+        from modules.objects.service import ObjectService
+        ObjectService.sync_user_access_by_role(user, db)
+    
+        db.commit()

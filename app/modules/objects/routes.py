@@ -7,6 +7,7 @@ import uuid
 from pathlib import Path
 
 from core.database import get_db
+from core.constants import UserRole  # ✅ импорт из constants
 from modules.auth.dependencies import get_current_user_from_cookie
 from modules.auth.models import User
 from modules.objects.schemas import *
@@ -16,8 +17,9 @@ from typing import List, Optional
 from modules.documents.models import DocumentCategory, DocumentSubcategory
 from datetime import datetime
 from modules.objects.schemas import ObjectAccessCreate, ObjectAccessRoleEnum
-from collections import defaultdict
 from core.template_helpers import get_sidebar_context
+from modules.access.service import AccessService
+from modules.access.models_sql import PermissionType
 
 
 logger = logging.getLogger("app")
@@ -61,9 +63,11 @@ async def objects_list(
     
     logger.info({
         "event": "objects_list_view",
-        "user_id": user.id,
-        "total": total,
-        "status": status
+        "actor_id": user.id,
+        "actor_email": user.email,
+        "total_objects": total,
+        "status_filter": status,
+        "timestamp": datetime.utcnow().isoformat()
     })
     
     sidebar_context = get_sidebar_context(user, db)
@@ -182,7 +186,7 @@ async def edit_object_page(
         obj = ObjectService.get_object(object_id, user, db)
         
         # Проверяем права (только владелец или админ)
-        if obj.created_by != user.id and user.role != "admin":
+        if obj.created_by != user.id and user.role != UserRole.ADMIN:  # ✅ исправлено
             return RedirectResponse(
                 url=f"/objects/{object_id}?error=Недостаточно прав для редактирования",
                 status_code=303
@@ -355,9 +359,7 @@ async def object_detail(
         # ✅ ИСПРАВЛЕНИЕ: Правильный подсчёт сотрудников по отделам
         department_stats = {}
         
-        # Маппинг ролей на отделы
-        from modules.auth.models import UserRole
-        
+        # Маппинг ролей на отделы (используем UserRole из constants)
         role_to_department = {
             UserRole.ENGINEER: 'technical',
             UserRole.LAWYER: 'legal',
@@ -403,6 +405,7 @@ async def object_detail(
             {
                 "request": request,
                 "user": user,
+                "current_user": user,
                 "object": obj,
                 "accesses": accesses,
                 "total_users": len(accesses),
@@ -476,7 +479,7 @@ async def admin_objects_list(
     Админ-панель: список всех объектов
     """
     # Проверка прав
-    if user.role != "admin":
+    if user.role != UserRole.ADMIN:  # ✅ исправлено
         return RedirectResponse(
             url="/objects?error=Доступ запрещен",
             status_code=303
@@ -564,7 +567,7 @@ async def activate_object(
     if not obj:
         return RedirectResponse(url="/objects?error=Объект не найден", status_code=303)
     
-    if obj.created_by != user.id and user.role != "admin":
+    if obj.created_by != user.id and user.role != UserRole.ADMIN:  # ✅ исправлено
         return RedirectResponse(url=f"/objects/{object_id}?error=Недостаточно прав", status_code=303)
     
     obj.is_active = True
@@ -589,7 +592,7 @@ async def deactivate_object(
     if not obj:
         return RedirectResponse(url="/objects?error=Объект не найден", status_code=303)
     
-    if obj.created_by != user.id and user.role != "admin":
+    if obj.created_by != user.id and user.role != UserRole.ADMIN:  # ✅ исправлено
         return RedirectResponse(url=f"/objects/{object_id}?error=Недостаточно прав", status_code=303)
     
     obj.is_active = False
@@ -614,7 +617,7 @@ async def archive_object(
     if not obj:
         return RedirectResponse(url="/objects?error=Объект не найден", status_code=303)
     
-    if obj.created_by != user.id and user.role != "admin":
+    if obj.created_by != user.id and user.role != UserRole.ADMIN:  # ✅ исправлено
         return RedirectResponse(url=f"/objects/{object_id}?error=Недостаточно прав", status_code=303)
     
     obj.is_archived = True
@@ -640,7 +643,7 @@ async def unarchive_object(
     if not obj:
         return RedirectResponse(url="/objects?error=Объект не найден", status_code=303)
     
-    if obj.created_by != user.id and user.role != "admin":
+    if obj.created_by != user.id and user.role != UserRole.ADMIN:  # ✅ исправлено
         return RedirectResponse(url=f"/objects/{object_id}?error=Недостаточно прав", status_code=303)
     
     obj.is_archived = False
@@ -666,8 +669,13 @@ async def grant_object_access(
 ):
     """Предоставить доступ пользователю к объекту"""
     try:
-        from modules.auth.models import UserRole
-        
+        # ✅ Проверка прав ДО всех операций
+        if not ObjectService.can_manage_access(current_user, object_id, db):
+            return RedirectResponse(
+                url=f"/objects/{object_id}?error=Недостаточно прав для управления доступом",
+                status_code=303
+            )
+
         # Находим пользователя по email
         target_user = db.query(User).filter(User.email == user_email).first()
         
@@ -689,7 +697,7 @@ async def grant_object_access(
                 status_code=303
             )
         
-        # ✅ ИСПРАВЛЕНИЕ: Автоматически добавляем отдел на основе роли
+        # Автоматически добавляем отдел на основе роли
         role_to_department = {
             UserRole.ENGINEER: 'technical',
             UserRole.LAWYER: 'legal',
@@ -716,12 +724,15 @@ async def grant_object_access(
         
         ObjectService.grant_access(object_id, access_data, current_user, db)
         
+        # ✅ Логируем с новым форматом
         logger.info({
-            "event": "user_added_to_object",
+            "event": "access_granted",
             "actor_id": current_user.id,
             "object_id": object_id,
             "target_user_id": target_user.id,
-            "departments": sections
+            "target_user_email": target_user.email,
+            "role": role,
+            "sections": sections
         })
         
         return RedirectResponse(
@@ -734,6 +745,30 @@ async def grant_object_access(
             url=f"/objects/{object_id}?error={e.detail}",
             status_code=303
         )
+
+def sync_with_acl(object_id: int, user_id: int, role: ObjectAccessRole, db: Session):
+    """
+    Синхронизировать ObjectAccess с глобальной системой ACL
+    """
+    try:
+        # Определяем права в ACL на основе роли
+        if role in [ObjectAccessRole.OWNER, ObjectAccessRole.ADMIN]:
+            permissions = [PermissionType.ADMIN, PermissionType.READ, PermissionType.WRITE]
+        elif role == ObjectAccessRole.EDITOR:
+            permissions = [PermissionType.READ, PermissionType.WRITE]
+        else:  # VIEWER
+            permissions = [PermissionType.READ]
+        
+        for perm in permissions:
+            AccessService.grant_access(
+                resource_type="object",
+                resource_id=object_id,
+                permission=perm,
+                db=db,
+                user_id=user_id
+            )
+    except ImportError:
+        logger.warning("ACL service not available, skipping sync")
 
 # ===================================
 # Отзыв доступа пользователя к объекту
@@ -919,7 +954,7 @@ async def create_subcategory(
             status_code=303
         )
     
-    if obj.created_by != current_user.id and current_user.role != "admin":
+    if obj.created_by != current_user.id and current_user.role != UserRole.ADMIN:  # ✅ исправлено
         return RedirectResponse(
             url=f"/objects/{object_id}?error=Недостаточно прав",
             status_code=303
@@ -941,9 +976,13 @@ async def create_subcategory(
     
     logger.info({
         "event": "subcategory_created",
-        "object_id": object_id,
-        "subcategory": name,
-        "created_by": current_user.id
+        "object_id": obj.id,
+        "object_title": obj.title,
+        "subcategory_id": subcategory.id,
+        "subcategory_name": subcategory.name,
+        "actor_id": current_user.id,
+        "actor_email": current_user.email,
+        "timestamp": datetime.utcnow().isoformat()
     })
     
     return RedirectResponse(
@@ -982,7 +1021,7 @@ async def delete_subcategory(
         
         # Проверяем права: создатель подкатегории ИЛИ админ ИЛИ владелец объекта
         if (subcategory.created_by != current_user.id and 
-            current_user.role != "admin" and 
+            current_user.role != UserRole.ADMIN and  # ✅ исправлено
             obj.created_by != current_user.id):
             return RedirectResponse(
                 url=f"/objects/{object_id}?error=Недостаточно прав для удаления",
@@ -995,9 +1034,13 @@ async def delete_subcategory(
         
         logger.info({
             "event": "subcategory_deleted",
-            "object_id": object_id,
-            "subcategory_id": subcategory_id,
-            "deleted_by": current_user.id
+            "object_id": obj.id,
+            "object_title": obj.title,
+            "subcategory_id": subcategory.id,
+            "subcategory_name": subcategory.name,
+            "actor_id": current_user.id,
+            "actor_email": current_user.email,
+            "timestamp": datetime.utcnow().isoformat()
         })
         
         return RedirectResponse(
@@ -1045,7 +1088,7 @@ async def update_subcategory(
         
         # Проверяем права
         if (subcategory.created_by != current_user.id and 
-            current_user.role != "admin" and 
+            current_user.role != UserRole.ADMIN and  # ✅ исправлено
             obj.created_by != current_user.id):
             return RedirectResponse(
                 url=f"/objects/{object_id}?error=Недостаточно прав для редактирования",
@@ -1053,15 +1096,21 @@ async def update_subcategory(
             )
         
         # Обновляем подкатегорию
+        old_name = subcategory.name
         subcategory.name = name
         subcategory.description = description
         db.commit()
         
         logger.info({
             "event": "subcategory_updated",
-            "object_id": object_id,
-            "subcategory_id": subcategory_id,
-            "updated_by": current_user.id
+            "object_id": obj.id,
+            "object_title": obj.title,
+            "subcategory_id": subcategory.id,
+            "old_name": old_name,
+            "new_name": name,
+            "actor_id": current_user.id,
+            "actor_email": current_user.email,
+            "timestamp": datetime.utcnow().isoformat()
         })
         
         return RedirectResponse(

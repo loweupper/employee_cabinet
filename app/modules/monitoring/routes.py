@@ -150,18 +150,23 @@ async def get_alert(
 )
 async def resolve_alert(
     alert_id: str,
-    request: ResolveAlertRequest,
+    resolve_data: ResolveAlertRequest,
+    http_request: Request,
     user: User = Depends(require_admin),
     db: Session = Depends(get_db)
 ):
-    resolved_by = request.resolved_by or user.id
+    resolved_by = resolve_data.resolved_by or user.id
+
+    # ✅ Получаем IP из http_request
+    ip = http_request.client.host if http_request.client else None
+
     log_system_event(
         event="resolve_alert_attempt",
         extra={
             "alert_id": alert_id,
             "resolved_by": resolved_by,
             "user_id": user.id,
-            "ip": request.client.host if request.client else None
+            "ip": ip
         }
     )
 
@@ -300,10 +305,19 @@ async def dashboard_page(
         stats = await MonitoringService.get_dashboard_stats(db)
         
         # Get recent alerts
-        recent_alerts = await MonitoringService.get_alerts(limit=10)
+        recent_alerts, total = await MonitoringService.get_alerts(limit=10)
         
         # Get health status
         health = await MonitoringService.get_system_health(detailed=True)
+
+        # 🔥 ВРЕМЕННАЯ ОТЛАДКА
+        logger.info(f"Type of recent_alerts: {type(recent_alerts)}")
+        if recent_alerts and len(recent_alerts) > 0:
+            logger.info(f"Type of first alert: {type(recent_alerts[0])}")
+            if hasattr(recent_alerts[0], 'severity'):
+                logger.info(f"First alert severity: {recent_alerts[0].severity}")
+            else:
+                logger.warning(f"First alert has no severity! Attributes: {dir(recent_alerts[0])}")
 
         sidebar_context = get_sidebar_context(user, db)
         

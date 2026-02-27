@@ -351,6 +351,21 @@ app.add_middleware(
         re.compile(r"^/openapi\.json$"),           # ✅ Regex pattern
         re.compile(r"^/redoc$"),                   # ✅ Regex pattern
         re.compile(r"^/admin/.*"),
+
+        # ✅ ВАШИ ВЕБ-ЭНДПОИНТЫ ДЛЯ ОБЪЕКТОВ
+        re.compile(r"^/objects/\d+/access/grant$"),
+        re.compile(r"^/objects/\d+/access/\d+/revoke$"),
+        re.compile(r"^/objects/\d+/access/grant-department$"),
+        re.compile(r"^/objects/\d+/access/\d+/update$"),
+        re.compile(r"^/objects/\d+/delete$"),
+        re.compile(r"^/objects/\d+/activate$"),
+        re.compile(r"^/objects/\d+/deactivate$"),
+        re.compile(r"^/objects/\d+/archive$"),
+        re.compile(r"^/objects/\d+/unarchive$"),
+        re.compile(r"^/objects/\d+/restore$"),
+        re.compile(r"^/objects/\d+/subcategories/create$"),
+        re.compile(r"^/objects/\d+/subcategories/\d+/update$"),
+        re.compile(r"^/objects/\d+/subcategories/\d+/delete$"),
     ],
 )
 

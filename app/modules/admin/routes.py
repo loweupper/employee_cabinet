@@ -11,7 +11,7 @@ import json # Для работы с JSON данными
 from modules.auth.ip_geo import get_ip_geo # Утилита для получения геолокации по IP адресу
 from modules.auth.user_agent_parser import parse_user_agent # Утилита для парсинга User-Agent строки и определения устройства и браузера
 
-
+from core.constants import get_department_for_role
 from core.database import get_db, Base # Зависимости для получения сессии базы данных и базового класса для моделей
 from modules.auth.dependencies import get_current_user_from_cookie # Зависимости для получения текущего пользователя и проверки прав администратора
 from modules.auth.models import User, UserRole, Department # Модель пользователя и его роли 
@@ -262,6 +262,15 @@ async def change_user_role(
     
     try:
         target_user.role = UserRole(role)
+        from modules.documents.service import DocumentService
+        DocumentService.sync_user_access_by_role(target_user, db)
+        
+        dept_name = get_department_for_role(target_user.role)
+        if dept_name:
+            department = db.query(Department).filter(Department.name == dept_name).first()
+            if department:
+                target_user.department_id = department.id
+
         db.commit()
         db.refresh(target_user)
         
@@ -364,6 +373,9 @@ async def edit_user(
         return JSONResponse({"success": False, "message": "Пользователь не найден"}, status_code=404)
     
     try:
+        # ✅ Сохраняем старый отдел ДО изменений
+        old_department_id = target_user.department_id
+        
         # ✅ Читаем данные из формы
         form = await request.form()
         
@@ -379,6 +391,7 @@ async def edit_user(
         
         if form.get("email"):
             new_email = form.get("email").lower().strip()
+
             # Проверяем, не занят ли email
             existing = db.query(User).filter(
                 User.email == new_email,
@@ -412,15 +425,33 @@ async def edit_user(
         
         if form.get("location") is not None:
             target_user.location = form.get("location").strip() or None
+
+        if form.get("role"):
+            new_role = form.get("role")
+            try:
+                target_user.role = UserRole(new_role)
+            except ValueError:
+                return JSONResponse(
+                    {"success": False, "message": f"Недопустимая роль: {new_role}"},
+                    status_code=400
+                )
         
+        # ✅ Сначала коммитим основные изменения
         db.commit()
         db.refresh(target_user)
+
+        # ✅ Если отдел изменился - синхронизируем доступы к объектам
+        if old_department_id != target_user.department_id:
+            from modules.objects.service import ObjectService
+            ObjectService.sync_user_access_by_department(target_user, db)
+            # Дополнительный коммит не нужен, sync_user_access_by_department уже коммитит
         
         logger.info({
             "event": "user_edited",
             "admin_id": admin.id,
             "user_id": user_id,
-            "email": target_user.email
+            "email": target_user.email,
+            "department_changed": old_department_id != target_user.department_id
         })
         
         return JSONResponse({

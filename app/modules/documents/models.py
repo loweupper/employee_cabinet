@@ -7,32 +7,13 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import relationship
 from core.database import Base
+from core.constants import DocumentCategory, DepartmentName, CATEGORY_TO_DEPARTMENT, CATEGORY_DISPLAY
 
-
-
-# ===================================
-# Enum для категории документа
-# ===================================
-class DocumentCategory(str, Enum):
-    GENERAL = "general"              # Общие
-    ACCOUNTING = "accounting"        # Бухгалтерия
-    SAFETY = "safety"                # Охрана труда
-    TECHNICAL = "technical"          # Технические
-    LEGAL = "legal"                  # Юридические
-    HR = "hr"                        # Кадровые
 
 # ===================================
 # Иконки и названия категорий
 # ===================================
-CATEGORY_INFO = {
-    "general": {"emoji": "📋", "name": "Общие"},
-    "technical": {"emoji": "📐", "name": "Технические"},
-    "accounting": {"emoji": "💰", "name": "Бухгалтерия"},
-    "safety": {"emoji": "👷", "name": "Охрана труда"},
-    "legal": {"emoji": "⚖️", "name": "Юридические"},
-    "hr": {"emoji": "👔", "name": "Кадровые"},
-}
-
+CATEGORY_INFO = CATEGORY_DISPLAY
 
 # ===================================
 # Модель подкатегории документа
@@ -85,12 +66,8 @@ class DocumentSubcategory(Base):
 # Маппинг категорий на отделы
 # ===================================
 CATEGORY_DEPARTMENT_MAP = {
-    DocumentCategory.GENERAL: None,  # Доступно всем
-    DocumentCategory.ACCOUNTING: "Бухгалтерия",
-    DocumentCategory.SAFETY: "Охрана труда",
-    DocumentCategory.TECHNICAL: "Технический отдел",
-    DocumentCategory.LEGAL: "Юридический",
-    DocumentCategory.HR: "Отдел кадров",
+    cat: dept.value if dept else None 
+    for cat, dept in CATEGORY_TO_DEPARTMENT.items()
 }
 
 
@@ -156,7 +133,8 @@ class Document(Base):
     
     def __repr__(self):
         return f"<Document id={self.id} title={self.title}>"
-    
+
+
     @property
     def is_deleted(self) -> bool:
         return self.deleted_at is not None
@@ -164,22 +142,24 @@ class Document(Base):
     def can_access(self, user) -> bool:
         """
         Проверить, может ли пользователь видеть этот документ
+        с учетом прав доступа к объекту и разделам
         """
-        # Общие документы — доступны всем с доступом к объекту
-        if self.category == DocumentCategory.GENERAL:
-            return True
-        
-        # Документы отдела — только для пользователей этого отдела
-        required_department = CATEGORY_DEPARTMENT_MAP.get(self.category)
-        if required_department and user.department_id == required_department:
-            return True
-        
-        # Админы видят всё
+        # 1. Админы видят всё
         if user.role == "admin":
             return True
-        
-        # Создатель документа видит всё
+
+        # 2. Создатель документа видит всё
         if self.created_by == user.id:
             return True
-        
+
+        # 3. Общие документы доступны всем, у кого есть доступ к объекту
+        if self.category == DocumentCategory.GENERAL:
+            return True
+
+        # 4. Проверка по отделу
+        required_department_name = CATEGORY_DEPARTMENT_MAP.get(self.category)
+        if required_department_name and user.department_rel:
+            if user.department_rel.name == required_department_name:
+                return True
+
         return False

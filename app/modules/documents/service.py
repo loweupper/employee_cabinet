@@ -2,16 +2,16 @@ from fastapi import HTTPException, status, UploadFile
 from sqlalchemy.orm import Session
 from typing import List, Optional
 import logging
-import os
 from pathlib import Path
 
 from modules.documents.models import Document, DocumentCategory, CATEGORY_DEPARTMENT_MAP
 from modules.documents.schemas import DocumentCreate
 from modules.auth.models import User
-from modules.objects.models import ObjectAccess
 from core.validators import sanitize_filename
 import uuid
-import shutil
+from modules.objects.models import Object, ObjectAccess
+from modules.auth.models import UserRole
+
 
 logger = logging.getLogger("app")
 
@@ -114,28 +114,58 @@ class DocumentService:
         category: Optional[DocumentCategory] = None
     ) -> List[Document]:
         """
-        Получить список документов объекта (с учетом прав доступа)
+        Получить список документов объекта (с учетом прав доступа к разделам)
         """
-        # Базовый запрос
+     # Базовый запрос
         query = db.query(Document).filter(
             Document.object_id == object_id,
             Document.deleted_at == None,
             Document.is_active == True
         )
-        
+    
         # Фильтр по категории
         if category:
             query = query.filter(Document.category == category)
-        
+    
         # Получаем все документы
         all_documents = query.order_by(Document.created_at.desc()).all()
+    
+        # Получаем объект для проверки владельца
+        obj = db.query(Object).filter(Object.id == object_id).first()
+    
+        # Админ и владелец объекта видят всё
+        if user.role == "admin" or (obj and obj.created_by == user.id):
+            return all_documents
+    
+        # Получаем доступ пользователя к объекту
+        access = db.query(ObjectAccess).filter(
+            ObjectAccess.object_id == object_id,
+            ObjectAccess.user_id == user.id
+        ).first()
+    
+        if not access:
+            return []  # Нет доступа - нет документов
+    
+        # ✅ ФИЛЬТРАЦИЯ ПО РАЗДЕЛАМ ДОСТУПА
+        accessible_documents = []
+    
+        for doc in all_documents:
+            # Общие документы доступны всем, у кого есть доступ к объекту
+            if doc.category == DocumentCategory.GENERAL:
+                accessible_documents.append(doc)
+                continue
         
-        # Фильтруем по правам доступа
-        accessible_documents = [
-            doc for doc in all_documents 
-            if doc.can_access(user)
-        ]
+            # Проверяем, есть ли у пользователя доступ к категории документа
+            if access.has_section_access(doc.category.value):
+                accessible_documents.append(doc)
+                continue
         
+            # Проверка по отделу (как запасной вариант)
+            required_department = CATEGORY_DEPARTMENT_MAP.get(doc.category)
+            if required_department and user.department_id == required_department:
+                accessible_documents.append(doc)
+                continue
+    
         return accessible_documents
     
     @staticmethod
@@ -160,4 +190,31 @@ class DocumentService:
         
         return result
     
+    @staticmethod
+    def sync_user_access_by_role(user: User, db: Session):
+        """
+        Синхронизировать доступ пользователя к документам на основе его роли
+        """
+        # Маппинг роли на раздел документов
+        role_to_section = {
+            UserRole.ENGINEER: "technical",
+            UserRole.ACCOUNTANT: "accounting",
+            UserRole.LAWYER: "legal",
+            UserRole.HR: "hr",
+        }
     
+        # Получаем все доступы пользователя к объектам
+        accesses = db.query(ObjectAccess).filter(ObjectAccess.user_id == user.id).all()
+    
+        for access in accesses:
+            current_sections = access.sections_access or ["general"]
+        
+            # Добавляем раздел на основе роли
+            if user.role in role_to_section:
+                section = role_to_section[user.role]
+                if section not in current_sections:
+                    current_sections.append(section)
+        
+            access.sections_access = current_sections
+    
+        db.commit()

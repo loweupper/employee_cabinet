@@ -76,7 +76,7 @@ class DatabaseLogHandler(logging.Handler):
                     http_status = None
                     duration_ms = None
                     trace_id = None
-                    extra_data = extra_data or None
+                    extra_data = {}
                 
                 # ✅ Получаем или создаём User-Agent
                 user_agent_id = None
@@ -110,7 +110,7 @@ class DatabaseLogHandler(logging.Handler):
                 db.commit()
             except Exception as e:
                 import sys
-                print(f"Failed to write log to database: {e}", file=sys.stderr)
+                print(f"Ошибка записи в базу данных: {e}", file=sys.stderr)
                 try:
                     db.rollback()
                 except:
@@ -124,6 +124,7 @@ class DatabaseLogHandler(logging.Handler):
     def _get_or_create_user_agent(self, db: Session, user_agent_str: str) -> int:
         """Получить или создать User-Agent в кеше"""
         from modules.admin.models import UserAgentCache
+        from sqlalchemy import update
         
         # Ограничиваем длину до 1000 символов
         user_agent_str = user_agent_str[:1000]
@@ -135,11 +136,18 @@ class DatabaseLogHandler(logging.Handler):
         
         if ua:
             # Увеличиваем счётчик
-            ua.usage_count += 1
-            ua.last_seen = datetime.utcnow()
+            db.execute(
+                update(UserAgentCache)
+                .where(UserAgentCache.id == ua.id)
+                .values(
+                    usage_count=UserAgentCache.usage_count + 1,
+                    last_seen=datetime.utcnow()
+                )
+            )
+            db.commit()
             return ua.id
-        else:
-            # Создаём новый
-            new_ua = UserAgentCache(user_agent=user_agent_str)
-            db.add(new_ua)
-            return new_ua.id
+        
+        new_ua = UserAgentCache(user_agent=user_agent_str)
+        db.add(new_ua)
+        db.commit()
+        return new_ua.id

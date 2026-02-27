@@ -6,6 +6,7 @@ import logging
 
 from core.database import get_db
 from core.config import settings
+from core.constants import UserRole  # ✅ импорт Enum
 from modules.auth.models import User
 from modules.auth.utils import decode_token, get_error_id
 
@@ -195,7 +196,10 @@ def require_role(*roles: str):
             ...
     """
     async def check_role(user: User = Depends(get_current_user)) -> User:
-        if user.role.value not in roles:
+        # Получаем значение роли пользователя (если это Enum)
+        user_role = user.role.value if hasattr(user.role, 'value') else user.role
+        
+        if user_role not in roles:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=f"Доступ запрещён. Требуемые роли: {', '.join(roles)}"
@@ -213,13 +217,14 @@ def require_role_web(*roles: str):
     Декоратор для проверки роли пользователя (для веб-страниц).
     """
     async def check_role(user: User = Depends(get_current_user_from_cookie)) -> User:
-        if user.role not in roles:  # role может быть строкой или Enum
-            role_value = user.role.value if hasattr(user.role, 'value') else user.role
-            if role_value not in roles:
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail=f"Доступ запрещён. Требуемые роли: {', '.join(roles)}"
-                )
+        # Получаем значение роли пользователя (если это Enum)
+        user_role = user.role.value if hasattr(user.role, 'value') else user.role
+        
+        if user_role not in roles:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Доступ запрещён. Требуемые роли: {', '.join(roles)}"
+            )
         return user
     
     return check_role
@@ -228,11 +233,11 @@ def require_role_web(*roles: str):
 # ===================================
 # Зависимость для проверки admin-а
 # ===================================
-async def require_admin(user: User = Depends(require_role("admin"))) -> User:
+async def require_admin(user: User = Depends(require_role(UserRole.ADMIN.value))) -> User:
     """Проверка что пользователь admin (для API)"""
     return user
 
 
-async def require_admin_web(user: User = Depends(require_role_web("admin"))) -> User:
+async def require_admin_web(user: User = Depends(require_role_web(UserRole.ADMIN.value))) -> User:
     """Проверка что пользователь admin (для веб-страниц)"""
     return user

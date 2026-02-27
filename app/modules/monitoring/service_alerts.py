@@ -1,10 +1,13 @@
 from typing import Optional
 from sqlalchemy.orm import Session
-from modules.monitoring.models import Alert, AlertSeverity, AlertType
-from modules.monitoring.repository import AlertRepository
 from sqlalchemy import func, case
 
+from modules.monitoring.models import Alert, AlertSeverity, AlertType
+from modules.monitoring.repository import AlertRepository
+
+
 class AlertService:
+    """Service for creating and retrieving monitoring alerts."""
 
     @staticmethod
     def create_alert(
@@ -12,17 +15,20 @@ class AlertService:
         severity: AlertSeverity,
         type: AlertType,
         message: str,
-        user_id=None,
-        ip_address=None,
-        details=None
+        user_id: Optional[int] = None,
+        ip_address: Optional[str] = None,
+        details: Optional[dict] = None,
     ) -> Alert:
+        """Create a new alert entry."""
+        details = details or {}
+
         alert = Alert(
             severity=severity,
             type=type,
             message=message,
             user_id=user_id,
             ip_address=ip_address,
-            details=details
+            details=details,
         )
         return AlertRepository.create(db, alert)
 
@@ -34,9 +40,9 @@ class AlertService:
         severity: Optional[AlertSeverity] = None,
         alert_type: Optional[AlertType] = None,
         resolved: Optional[bool] = None,
-        hours: Optional[int] = None
+        hours: Optional[int] = None,
     ):
-        
+        """Retrieve alerts with filtering and pagination."""
         query = db.query(Alert)
 
         if severity:
@@ -57,28 +63,26 @@ class AlertService:
 
         alerts = (
             query.order_by(Alert.timestamp.desc())
-                .offset((page - 1) * limit)
-                .limit(limit)
-                .all()
+            .offset((page - 1) * limit)
+            .limit(limit)
+            .all()
         )
 
         return alerts, total
 
     @staticmethod
-    def resolve_alert(db: Session, alert_id: int, resolved_by: int | None):
+    def resolve_alert(db: Session, alert_id: int, resolved_by: Optional[int]):
+        """Mark alert as resolved."""
         return AlertRepository.resolve(db, alert_id, resolved_by)
-    
-    
-    from sqlalchemy import case, func
-    from sqlalchemy.orm import Session
 
     @staticmethod
     def get_alert_counts(db: Session):
+        """Return aggregated alert statistics."""
         counts = db.query(
             func.count(Alert.id).label("total"),
             func.sum(
                 case(
-                    (Alert.resolved == False, 1),
+                    (Alert.resolved.is_(False), 1),
                     else_=0,
                 )
             ).label("unresolved"),
@@ -116,4 +120,3 @@ class AlertService:
             "high": counts.high,
             "critical": counts.critical,
         }
-
