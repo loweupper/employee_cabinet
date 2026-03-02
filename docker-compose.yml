@@ -28,6 +28,6 @@ services:
       - redis
     volumes:
       - ./app:/app
-      - ./files:/files
       - ./logs:/app/logs
+      - /volume11/projects/employe_cabinet/files:/app/files
 
