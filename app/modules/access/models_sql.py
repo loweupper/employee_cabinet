@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Enum, ForeignKey, Text
+from sqlalchemy import Column, Integer, String, Enum, ForeignKey, Text, DateTime
 from sqlalchemy.orm import relationship
 from core.database import Base
 import enum
@@ -34,8 +34,11 @@ class ACL(Base):
     effect = Column(Enum(ACLEffect), nullable=False, default=ACLEffect.ALLOW)
     
     created_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    granted_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    expires_at = Column(DateTime(timezone=True), nullable=True)
     description = Column(Text, nullable=True)
     
     # Relationships
     user = relationship("User", foreign_keys=[user_id])
     creator = relationship("User", foreign_keys=[created_by])
+    granter = relationship("User", foreign_keys=[granted_by])

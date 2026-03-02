@@ -2,8 +2,10 @@ import logging
 from redis import Redis
 from fastapi import HTTPException, status
 from modules.auth.utils import get_error_id
+from core.config import settings
 
 logger = logging.getLogger(__name__)
+security_logger = logging.getLogger("security")
 
 
 class BruteForceProtection:
@@ -28,8 +30,8 @@ class BruteForceProtection:
         Проверить есть ли блокировка на логин.
         
         Ключ: login_attempts:{email}:{ip}
-        Лимит: 5 попыток за 15 минут
-        Блокировка: 15 минут
+        Лимит: ACCOUNT_LOCKOUT_THRESHOLD попыток за ACCOUNT_LOCKOUT_DURATION_MINUTES минут
+        Блокировка: ACCOUNT_LOCKOUT_DURATION_MINUTES минут
         
         Returns:
             bool: True если блокирован, False если разрешено
@@ -37,7 +39,11 @@ class BruteForceProtection:
         key = self._build_key("login", email, ip_address)
         attempts = self.redis.get(key)
         
-        if attempts and int(attempts) >= 5:
+        if attempts and int(attempts) >= settings.ACCOUNT_LOCKOUT_THRESHOLD:
+            security_logger.warning(
+                f"Account lockout active for {email} from {ip_address or 'unknown'} "
+                f"(attempts: {int(attempts)}/{settings.ACCOUNT_LOCKOUT_THRESHOLD})"
+            )
             return True
         return False
 
@@ -45,13 +51,21 @@ class BruteForceProtection:
         """Записать неудачную попытку логина"""
         key = self._build_key("login", email, ip_address)
         self.redis.incr(key)
-        self.redis.expire(key, 900)  # 15 минут
+        lockout_seconds = settings.ACCOUNT_LOCKOUT_DURATION_MINUTES * 60
+        self.redis.expire(key, lockout_seconds)
         
         attempts = int(self.redis.get(key))
         logger.warning(
             f"Failed login attempt for {email} from {ip_address or 'unknown'} "
-            f"(attempt {attempts}/5)"
+            f"(attempt {attempts}/{settings.ACCOUNT_LOCKOUT_THRESHOLD})"
         )
+        
+        if attempts >= settings.ACCOUNT_LOCKOUT_THRESHOLD:
+            security_logger.warning(
+                f"Account locked out: {email} from {ip_address or 'unknown'} "
+                f"after {attempts} failed attempts for "
+                f"{settings.ACCOUNT_LOCKOUT_DURATION_MINUTES} minutes"
+            )
 
     def clear_login_attempts(self, email: str, ip_address: str = None):
         """Сбросить счётчик при успешном логине"""
@@ -66,8 +80,8 @@ class BruteForceProtection:
         Проверить есть ли блокировка на OTP верификацию.
         
         Ключ: otp_verify_attempts:{email}:{purpose}
-        Лимит: 5 попыток за 15 минут
-        Блокировка: 15 минут
+        Лимит: ACCOUNT_LOCKOUT_THRESHOLD попыток за ACCOUNT_LOCKOUT_DURATION_MINUTES минут
+        Блокировка: ACCOUNT_LOCKOUT_DURATION_MINUTES минут
         
         Returns:
             bool: True если блокирован, False если разрешено
@@ -75,7 +89,7 @@ class BruteForceProtection:
         key = self._build_key("otp_verify", email, purpose)
         attempts = self.redis.get(key)
         
-        if attempts and int(attempts) >= 5:
+        if attempts and int(attempts) >= settings.ACCOUNT_LOCKOUT_THRESHOLD:
             return True
         return False
 
@@ -83,12 +97,13 @@ class BruteForceProtection:
         """Записать неудачную попытку ввода OTP"""
         key = self._build_key("otp_verify", email, purpose)
         self.redis.incr(key)
-        self.redis.expire(key, 900)  # 15 минут
+        lockout_seconds = settings.ACCOUNT_LOCKOUT_DURATION_MINUTES * 60
+        self.redis.expire(key, lockout_seconds)  # ACCOUNT_LOCKOUT_DURATION_MINUTES минут
         
         attempts = int(self.redis.get(key))
         logger.warning(
             f"Failed OTP verification for {email} (purpose: {purpose}) "
-            f"(attempt {attempts}/5)"
+            f"(attempt {attempts}/{settings.ACCOUNT_LOCKOUT_THRESHOLD})"
         )
 
     def clear_otp_attempts(self, email: str, purpose: str):

@@ -8,6 +8,7 @@ from modules.documents.models import Document, DocumentCategory, CATEGORY_DEPART
 from modules.documents.schemas import DocumentCreate
 from modules.auth.models import User
 from core.validators import sanitize_filename
+from core.config import settings
 import uuid
 from modules.objects.models import Object, ObjectAccess
 from modules.auth.models import UserRole
@@ -26,7 +27,7 @@ class DocumentService:
         Возвращает путь к сохранённому файлу
         """
         # Создаём папку для загрузок если её нет
-        upload_dir = Path(f"files/objects/{object_id}")
+        upload_dir = Path(settings.FILES_PATH) / "objects" / str(object_id)
         upload_dir.mkdir(parents=True, exist_ok=True)
         
         # Sanitize the filename
@@ -69,7 +70,7 @@ class DocumentService:
             )
         
         # Создаем директорию для файлов объекта
-        upload_dir = Path(f"files/objects/{data.object_id}")
+        upload_dir = Path(settings.FILES_PATH) / "objects" / str(data.object_id)
         upload_dir.mkdir(parents=True, exist_ok=True)
         
         # Сохраняем файл

@@ -93,7 +93,7 @@ class Settings(BaseSettings):
     REDIS_URL: Optional[str] = None
 
     # Files
-    FILES_PATH: str = "/files"
+    FILES_PATH: str = "/app/files"
     MAX_FILE_SIZE: int = 10485760  # 10MB in bytes (10 * 1024 * 1024)
 
     # ===== JWT Configuration =====
