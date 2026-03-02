@@ -6,6 +6,38 @@ from modules.access.models_sql import ACL, ACLEffect, PermissionType
 from modules.auth.models import User, UserRole
 import redis
 import json
+from datetime import datetime, timezone
+
+
+def can_access(
+    user: "User",
+    resource_type: str,
+    resource_id: int,
+    permission: "PermissionType",
+    db: Session,
+    redis_client: Optional[redis.Redis] = None,
+) -> bool:
+    """
+    Shared helper to check whether *user* can perform *permission* on
+    *resource_type*/*resource_id*.
+
+    Checks (in order):
+    1. Admin role → always True.
+    2. ACL DENY rules (expired entries are ignored).
+    3. ACL ALLOW rules (expired entries are ignored).
+    Respects user/role/department/position/location/object_id and
+    ``expires_at`` on every ACL entry.
+    """
+    if user.role == UserRole.ADMIN:
+        return True
+    return AccessService.has_access(
+        user=user,
+        resource_type=resource_type,
+        resource_id=resource_id,
+        permission=permission,
+        db=db,
+        redis_client=redis_client,
+    )
 
 
 class AccessService:
@@ -76,6 +108,7 @@ class AccessService:
         Порядок проверки:
         1. DENY правила (если есть — сразу False)
         2. ALLOW правила по иерархии (User → Role → Attributes)
+        Expired ACL entries (expires_at < now) are ignored.
         """
         
         service = AccessService(redis_client)
@@ -86,6 +119,21 @@ class AccessService:
         if cached_result is not None:
             return cached_result
         
+        now = datetime.now(timezone.utc)
+        
+        # Base subject filter (shared for DENY and ALLOW queries)
+        subject_filter = or_(
+            ACL.user_id == user.id,
+            ACL.role.in_([r.value for r in service.ROLE_HIERARCHY.get(user.role, [user.role])]),
+            ACL.department == getattr(user, 'department', None),
+            ACL.position == getattr(user, 'position', None),
+            ACL.location == getattr(user, 'location', None),
+            ACL.object_id == getattr(user, 'object_id', None),
+        )
+        
+        # Expires_at filter: entry is valid when expires_at is NULL or in the future
+        not_expired = or_(ACL.expires_at.is_(None), ACL.expires_at > now)
+        
         # Проверяем DENY правила в первую очередь
         deny_rule = db.query(ACL).filter(
             and_(
@@ -93,14 +141,8 @@ class AccessService:
                 ACL.resource_id == resource_id,
                 ACL.permission == permission,
                 ACL.effect == ACLEffect.DENY,
-                or_(
-                    ACL.user_id == user.id,
-                    ACL.role.in_([r.value for r in service.ROLE_HIERARCHY.get(user.role, [user.role])]),
-                    ACL.department == getattr(user, 'department', None),
-                    ACL.position == getattr(user, 'position', None),
-                    ACL.location == getattr(user, 'location', None),
-                    ACL.object_id == getattr(user, 'object_id', None),
-                )
+                not_expired,
+                subject_filter,
             )
         ).first()
         
@@ -115,17 +157,8 @@ class AccessService:
                 ACL.resource_id == resource_id,
                 ACL.permission == permission,
                 ACL.effect == ACLEffect.ALLOW,
-                or_(
-                    # 1. Конкретный пользователь
-                    ACL.user_id == user.id,
-                    # 2. Роль с учетом иерархии
-                    ACL.role.in_([r.value for r in service.ROLE_HIERARCHY.get(user.role, [user.role])]),
-                    # 3. ABAC атрибуты
-                    ACL.department == getattr(user, 'department', None),
-                    ACL.position == getattr(user, 'position', None),
-                    ACL.location == getattr(user, 'location', None),
-                    ACL.object_id == getattr(user, 'object_id', None),
-                )
+                not_expired,
+                subject_filter,
             )
         ).first()
         

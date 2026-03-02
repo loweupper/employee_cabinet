@@ -23,6 +23,7 @@ from modules.auth.service import AuthService
 # Initialize rate limiter
 limiter = Limiter(key_func=get_remote_address)
 
+# TODO(cleanup): duplicate router definition below — this line is unused (overridden on line 32) and should be removed
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 from fastapi.templating import Jinja2Templates

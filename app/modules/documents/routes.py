@@ -323,6 +323,8 @@ async def delete_document(
 # ===================================
 # Скачивание документа
 # ===================================
+# TODO(cleanup): this route is mounted at /documents, so the full path becomes
+# /documents/documents/{document_id}/download — consider flattening to /{document_id}/download
 @router.get("/documents/{document_id}/download")
 async def download_document(
     document_id: int,
