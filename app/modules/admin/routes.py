@@ -1433,6 +1433,7 @@ async def category_mappings_page(
         {
             "request": request,
             "user": user,
+            "current_user": user,
             "mappings": mappings,
             "departments": departments,
             "pending_users_count": pending_users,

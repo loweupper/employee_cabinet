@@ -86,7 +86,7 @@ class AuthService:
             middle_name=data.middle_name,
             phone_number=data.phone_number,
             avatar_url=data.avatar_url,
-            department=data.department,
+            department_id=data.department_id,
             position=data.position,
             location=data.location,
             object_id=data.object_id,
