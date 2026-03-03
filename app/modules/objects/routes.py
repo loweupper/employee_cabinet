@@ -372,9 +372,9 @@ async def object_detail(
             if not user_obj:
                 continue
             
-            # ✅ Проверяем access_departments
-            if access.access_departments:
-                for dept in access.access_departments:
+            # ✅ Проверяем sections_access
+            if access.sections_access:
+                for dept in access.sections_access:
                     if dept not in department_stats:
                         department_stats[dept] = []
                     if user_obj not in department_stats[dept]:

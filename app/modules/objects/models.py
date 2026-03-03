@@ -1,4 +1,4 @@
-from sqlalchemy import Column, BigInteger, String, DateTime, ForeignKey, Enum as SqlEnum, func, Index, Text, Boolean, ARRAY
+from sqlalchemy import Column, BigInteger, String, DateTime, ForeignKey, Enum as SqlEnum, func, Index, Text, Boolean
 from sqlalchemy.orm import relationship
 from sqlalchemy.dialects.postgresql import JSONB
 from enum import Enum
@@ -60,7 +60,6 @@ class ObjectAccess(Base):
     # Связи
     object_id = Column(BigInteger, ForeignKey("objects.id", ondelete="CASCADE"), nullable=False)
     user_id = Column(BigInteger, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
-    access_departments = Column(ARRAY(String), default=[], nullable=True)
     
     # Роль доступа
     role = Column(
