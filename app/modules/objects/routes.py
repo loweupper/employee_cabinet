@@ -104,7 +104,8 @@ async def create_object_page(
         "web/objects/create.html",
         {
             "request": request,
-            "user": user
+            "user": user,
+            "current_user": user
         }
     )
 
@@ -197,6 +198,7 @@ async def edit_object_page(
             {
                 "request": request,
                 "user": user,
+                "current_user": user,
                 "object": obj
             }
         )
