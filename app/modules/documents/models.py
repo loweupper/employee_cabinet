@@ -139,11 +139,13 @@ class Document(Base):
     def is_deleted(self) -> bool:
         return self.deleted_at is not None
     
-    def can_access(self, user) -> bool:
+    def can_access(self, user, db) -> bool:
         """
         Проверить, может ли пользователь видеть этот документ
-        с учетом прав доступа к объекту и разделам
+        с учетом прав доступа к объекту и разделам (sections_access)
         """
+        from modules.objects.models import ObjectAccess
+
         # 1. Админы видят всё
         if user.role == "admin":
             return True
@@ -152,14 +154,18 @@ class Document(Base):
         if self.created_by == user.id:
             return True
 
-        # 3. Общие документы доступны всем, у кого есть доступ к объекту
-        if self.category == DocumentCategory.GENERAL:
-            return True
+        # 3. Проверяем доступ к объекту один раз
+        access = db.query(ObjectAccess).filter(
+            ObjectAccess.object_id == self.object_id,
+            ObjectAccess.user_id == user.id
+        ).first()
 
-        # 4. Проверка по отделу
-        required_department_name = CATEGORY_DEPARTMENT_MAP.get(self.category)
-        if required_department_name and user.department_rel:
-            if user.department_rel.name == required_department_name:
-                return True
+        # 4. Общие документы доступны всем, у кого есть доступ к объекту
+        if self.category == DocumentCategory.GENERAL:
+            return access is not None
+
+        # 5. Проверка доступа через ObjectAccess.sections_access
+        if access and access.has_section_access(self.category.value):
+            return True
 
         return False
