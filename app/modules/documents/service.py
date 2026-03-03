@@ -4,7 +4,7 @@ from typing import List, Optional
 import logging
 from pathlib import Path
 
-from modules.documents.models import Document, DocumentCategory, CATEGORY_DEPARTMENT_MAP
+from modules.documents.models import Document, DocumentCategory
 from modules.documents.schemas import DocumentCreate
 from modules.auth.models import User
 from core.validators import sanitize_filename
@@ -151,21 +151,9 @@ class DocumentService:
         accessible_documents = []
     
         for doc in all_documents:
-            # Общие документы доступны всем, у кого есть доступ к объекту
-            if doc.category == DocumentCategory.GENERAL:
-                accessible_documents.append(doc)
-                continue
-        
             # Проверяем, есть ли у пользователя доступ к категории документа
             if access.has_section_access(doc.category.value):
                 accessible_documents.append(doc)
-                continue
-        
-            # Проверка по отделу (как запасной вариант)
-            required_department = CATEGORY_DEPARTMENT_MAP.get(doc.category)
-            if required_department and user.department_id == required_department:
-                accessible_documents.append(doc)
-                continue
     
         return accessible_documents
     

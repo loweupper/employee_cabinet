@@ -102,12 +102,12 @@ class ObjectAccess(Base):
         """
         if not self.sections_access:
             return section == "general"
-        
+
         # Владелец и админ объекта имеют доступ ко всем разделам
         if self.role in [ObjectAccessRole.OWNER, ObjectAccessRole.ADMIN]:
             return True
-        
-        return section in self.sections_access
+
+        return section in self.sections_access or "general" in self.sections_access
 
 
 # ===================================
