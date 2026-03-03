@@ -1406,22 +1406,6 @@ async def revoke_other_sessions(
         "message": f"Завершено сессий: {updated}"
     }
 
-
-
-
-
-# @router.get("/test-logs")
-# async def test_logs(request: Request):
-#     user = None
-
-#     log_admin_action("admin_test_event", admin=user, request=request)
-#     log_user_action("user_test_event", user=user, request=request)
-#     log_system_event("system_test_event", {"info": "system ok"})
-#     await log_security_event("security_test_event", request=request)
-
-#     return {"status": "ok"}
-
-
 # ===================================
 # Управление маппингами категорий документов
 # ===================================
