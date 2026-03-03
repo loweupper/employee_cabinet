@@ -92,6 +92,8 @@ class User(Base):
     )
 
     department_rel = relationship("Department", back_populates="users")
+    user_permissions = relationship("UserPermission", back_populates="user")
+    subsection_accesses = relationship("UserSubsectionAccess", back_populates="user")
 
     __table_args__ = (Index("ix_users_email_lower", func.lower(email), unique=True),)
 
