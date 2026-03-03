@@ -20,11 +20,42 @@ from modules.objects.schemas import ObjectAccessCreate, ObjectAccessRoleEnum
 from core.template_helpers import get_sidebar_context
 from modules.access.service import AccessService
 from modules.access.models_sql import PermissionType
+from modules.permissions.models import UserPermission, RolePermission, Permission
 
 
 logger = logging.getLogger("app")
 
 router = APIRouter(tags=["objects"])
+
+
+def user_has_permission(user: User, permission_key: str, db: Session) -> bool:
+    """
+    Проверить имеет ли пользователь разрешение
+
+    Args:
+        user: объект пользователя
+        permission_key: ключ разрешения (can_create_objects, etc)
+        db: сессия БД
+
+    Returns:
+        True если пользователь имеет разрешение, иначе False
+    """
+    # Проверяем явное разрешение пользователю
+    user_perm = db.query(UserPermission).join(Permission).filter(
+        UserPermission.user_id == user.id,
+        Permission.key == permission_key
+    ).first()
+
+    if user_perm:
+        return True
+
+    # Проверяем разрешение через роль
+    role_perm = db.query(RolePermission).join(Permission).filter(
+        RolePermission.role_name == user.role,
+        Permission.key == permission_key
+    ).first()
+
+    return bool(role_perm)
 
 from fastapi.templating import Jinja2Templates
 templates = Jinja2Templates(directory="templates")
@@ -95,11 +126,18 @@ async def objects_list(
 @router.get("/create", response_class=HTMLResponse)
 async def create_object_page(
     request: Request,
-    user: User = Depends(get_current_user_from_cookie)
+    user: User = Depends(get_current_user_from_cookie),
+    db: Session = Depends(get_db)
 ):
     """
     Страница создания объекта
     """
+    if not user_has_permission(user, "can_create_objects", db):
+        return RedirectResponse(
+            url="/objects?error=У вас нет разрешения на создание объектов",
+            status_code=303
+        )
+
     return templates.TemplateResponse(
         "web/objects/create.html",
         {
@@ -128,6 +166,12 @@ async def create_object(
     """
     Создание нового объекта
     """
+    if not user_has_permission(user, "can_create_objects", db):
+        return RedirectResponse(
+            url="/objects?error=У вас нет разрешения на создание объектов",
+            status_code=303
+        )
+
     try:
         # Валидация
         data = ObjectCreate(
@@ -192,7 +236,14 @@ async def edit_object_page(
                 url=f"/objects/{object_id}?error=Недостаточно прав для редактирования",
                 status_code=303
             )
-        
+
+        # Проверяем разрешение
+        if not user_has_permission(user, "can_edit_objects", db):
+            return RedirectResponse(
+                url=f"/objects/{object_id}?error=У вас нет разрешения на редактирование объектов",
+                status_code=303
+            )
+
         return templates.TemplateResponse(
             "web/objects/edit.html",
             {
@@ -229,6 +280,12 @@ async def update_object(
     """
     Обновление объекта
     """
+    if not user_has_permission(user, "can_edit_objects", db):
+        return RedirectResponse(
+            url=f"/objects/{object_id}?error=У вас нет разрешения на редактирование объектов",
+            status_code=303
+        )
+
     try:
         # Валидация
         data = ObjectUpdate(
@@ -450,6 +507,12 @@ async def delete_object(
     """
     Удаление объекта (soft delete)
     """
+    if not user_has_permission(user, "can_delete_objects", db):
+        return RedirectResponse(
+            url=f"/objects/{object_id}?error=У вас нет разрешения на удаление объектов",
+            status_code=303
+        )
+
     try:
         ObjectService.delete_object(object_id, user, db)
         
