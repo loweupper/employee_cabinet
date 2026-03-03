@@ -139,6 +139,12 @@ async def users_list(
     
     # Get all departments for dropdown
     departments = department_service.get_departments(db)
+
+    from modules.permissions.models import Permission, UserSubsectionAccess
+    permissions = db.query(Permission).all()
+    # user_subsections is empty here since subsection access is loaded per-user
+    # via AJAX when the edit modal opens (see GET /admin/users/{user_id}/permissions)
+    user_subsections = []
     
     return templates.TemplateResponse(
         "web/admin/users.html",
@@ -155,7 +161,9 @@ async def users_list(
             "deleted_users": deleted_users,
             "pending_users_count": pending_users, 
             "current_status": status or "all",
-            "search_query": search or ""
+            "search_query": search or "",
+            "permissions": permissions,
+            "user_subsections": user_subsections,
         }
     )
 
