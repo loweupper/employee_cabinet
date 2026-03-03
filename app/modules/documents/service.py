@@ -6,6 +6,7 @@ from pathlib import Path
 
 from modules.documents.models import Document, DocumentCategory, CATEGORY_DEPARTMENT_MAP
 from modules.documents.schemas import DocumentCreate
+from modules.documents.service_mappings import CategoryMappingService
 from modules.auth.models import User
 from core.validators import sanitize_filename
 from core.config import settings
@@ -149,7 +150,8 @@ class DocumentService:
     
         # ✅ ФИЛЬТРАЦИЯ ПО РАЗДЕЛАМ ДОСТУПА
         accessible_documents = []
-    
+        mapping_dict = CategoryMappingService.get_mapping_dict(db)
+
         for doc in all_documents:
             # Общие документы доступны всем, у кого есть доступ к объекту
             if doc.category == DocumentCategory.GENERAL:
@@ -161,9 +163,9 @@ class DocumentService:
                 accessible_documents.append(doc)
                 continue
         
-            # Проверка по отделу (как запасной вариант)
-            required_department = CATEGORY_DEPARTMENT_MAP.get(doc.category)
-            if required_department and user.department_id == required_department:
+            # Проверка по отделу через БД (с fallback на статический маппинг)
+            required_dept_id = mapping_dict.get(doc.category.value)
+            if required_dept_id and user.department_id == required_dept_id:
                 accessible_documents.append(doc)
                 continue
     

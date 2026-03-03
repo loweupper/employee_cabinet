@@ -340,7 +340,7 @@ async def download_document(
         raise HTTPException(status_code=404, detail="Документ не найден")
     
     # Проверяем доступ
-    if not document.can_access(user):
+    if not document.can_access(user, db):
         raise HTTPException(status_code=403, detail="Нет доступа к этому документу")
     
     logger.info({

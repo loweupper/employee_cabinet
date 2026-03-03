@@ -8,6 +8,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import relationship
 from core.database import Base
 from core.constants import DocumentCategory, DepartmentName, CATEGORY_TO_DEPARTMENT, CATEGORY_DISPLAY
+from sqlalchemy.orm import Session as OrmSession
 
 
 # ===================================
@@ -63,12 +64,31 @@ class DocumentSubcategory(Base):
         return f"<DocumentSubcategory id={self.id} name={self.name} category={self.category}>"
 
 # ===================================
-# Маппинг категорий на отделы
+# Маппинг категорий на отделы (статический fallback)
 # ===================================
 CATEGORY_DEPARTMENT_MAP = {
     cat: dept.value if dept else None 
     for cat, dept in CATEGORY_TO_DEPARTMENT.items()
 }
+
+
+# ===================================
+# Модель маппинга категорий документов на отделы
+# ===================================
+class DocumentCategoryMapping(Base):
+    __tablename__ = "document_category_mappings"
+
+    id = Column(Integer, primary_key=True)
+    category = Column(String(50), unique=True, nullable=False, index=True)
+    department_id = Column(BigInteger, ForeignKey("departments.id"), nullable=True)
+    description = Column(String(500))
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
+    updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    department = relationship("Department", backref="category_mappings")
+
+    def __repr__(self):
+        return f"<DocumentCategoryMapping category={self.category} dept={self.department_id}>"
 
 
 # ===================================
@@ -139,7 +159,7 @@ class Document(Base):
     def is_deleted(self) -> bool:
         return self.deleted_at is not None
     
-    def can_access(self, user) -> bool:
+    def can_access(self, user, db: OrmSession = None) -> bool:
         """
         Проверить, может ли пользователь видеть этот документ
         с учетом прав доступа к объекту и разделам
@@ -156,10 +176,18 @@ class Document(Base):
         if self.category == DocumentCategory.GENERAL:
             return True
 
-        # 4. Проверка по отделу
-        required_department_name = CATEGORY_DEPARTMENT_MAP.get(self.category)
-        if required_department_name and user.department_rel:
-            if user.department_rel.name == required_department_name:
-                return True
+        # 4. Проверка по отделу через БД (если передана сессия)
+        if db is not None:
+            from modules.documents.service_mappings import CategoryMappingService
+            mapping = CategoryMappingService.get_mapping(db, self.category.value)
+            if mapping and mapping.department_id and user.department_rel:
+                if user.department_rel.id == mapping.department_id:
+                    return True
+        else:
+            # Fallback на статический маппинг
+            required_department_name = CATEGORY_DEPARTMENT_MAP.get(self.category)
+            if required_department_name and user.department_rel:
+                if user.department_rel.name == required_department_name:
+                    return True
 
         return False

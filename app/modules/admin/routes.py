@@ -27,6 +27,7 @@ from core.logging.actions import (
     log_system_event,
     log_security_event
 ) # Унифицированное логирование действий администратора
+from modules.documents.service_mappings import CategoryMappingService
 
 logger = logging.getLogger("app")
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -1419,4 +1420,87 @@ async def revoke_other_sessions(
 #     await log_security_event("security_test_event", request=request)
 
 #     return {"status": "ok"}
+
+
+# ===================================
+# Управление маппингами категорий документов
+# ===================================
+
+@router.get("/category-mappings", response_class=HTMLResponse)
+async def category_mappings_page(
+    request: Request,
+    user: User = Depends(get_current_user_from_cookie),
+    db: Session = Depends(get_db)
+):
+    """Страница управления маппингами категорий"""
+    if user.role != UserRole.ADMIN:
+        raise HTTPException(status_code=403, detail="Доступ запрещён")
+
+    mappings = CategoryMappingService.get_all_mappings(db)
+    departments = db.query(Department).all()
+    pending_users = db.query(User).filter(
+        User.is_active == False,
+        User.activated_at == None,
+        User.deleted_at == None
+    ).count()
+
+    return templates.TemplateResponse(
+        "web/admin/category_mappings.html",
+        {
+            "request": request,
+            "user": user,
+            "mappings": mappings,
+            "departments": departments,
+            "pending_users_count": pending_users,
+        }
+    )
+
+
+@router.put("/category-mappings/{category}")
+async def update_category_mapping(
+    category: str,
+    request: Request,
+    user: User = Depends(get_current_user_from_cookie),
+    db: Session = Depends(get_db)
+):
+    """Обновить маппинг категории"""
+    if user.role != UserRole.ADMIN:
+        raise HTTPException(status_code=403, detail="Доступ запрещён")
+
+    data = await request.json()
+    department_id = data.get("department_id")
+    # Convert empty string to None
+    if department_id == "":
+        department_id = None
+    elif department_id is not None:
+        try:
+            department_id = int(department_id)
+        except (ValueError, TypeError):
+            department_id = None
+
+    mapping = CategoryMappingService.update_mapping(
+        db,
+        category=category,
+        department_id=department_id,
+        description=data.get("description")
+    )
+
+    if not mapping:
+        raise HTTPException(status_code=404, detail="Маппинг не найден")
+
+    log_admin_action(
+        event="category_mapping_updated",
+        admin=user,
+        extra={"category": category, "department_id": department_id}
+    )
+
+    return {
+        "success": True,
+        "mapping": {
+            "category": mapping.category,
+            "department_id": mapping.department_id,
+            "description": mapping.description,
+        }
+    }
+
 
