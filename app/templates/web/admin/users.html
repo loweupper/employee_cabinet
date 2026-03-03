@@ -405,18 +405,8 @@
                 <!-- ========== РАЗРЕШЕНИЯ ========== -->
                 <div class="border-t pt-4 mt-4">
                     <h4 class="text-lg font-semibold text-gray-800 mb-4">🔐 Разрешения</h4>
-                    <div class="space-y-3">
-                        {% for permission in permissions %}
-                        <label class="flex items-center gap-3 p-3 bg-gray-50 rounded-lg hover:bg-gray-100 cursor-pointer transition">
-                            <input type="checkbox" name="permissions" value="{{ permission.id }}" 
-                                   class="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500"
-                                   data-user-id="{{ u.id }}" data-permission-id="{{ permission.id }}">
-                            <div class="flex-1">
-                                <p class="font-medium text-gray-800">{{ permission.description }}</p>
-                                <p class="text-xs text-gray-500">{{ permission.key }}</p>
-                            </div>
-                        </label>
-                        {% endfor %}
+                    <div id="permissions-list" class="space-y-3 min-h-[100px] flex items-center justify-center text-gray-500">
+                        <p>Загрузка разрешений...</p>
                     </div>
                 </div>
 
@@ -424,39 +414,8 @@
                 <div class="border-t pt-4 mt-4">
                     <h4 class="text-lg font-semibold text-gray-800 mb-4">📊 Доступ к подразделам</h4>
                     <p class="text-sm text-gray-600 mb-4">Управление доступом пользователя к подразделам его отдела</p>
-                    <div class="overflow-x-auto">
-                        <table class="w-full text-sm">
-                            <thead class="bg-gray-100 border-b">
-                                <tr>
-                                    <th class="px-4 py-2 text-left text-gray-700">Подраздел</th>
-                                    <th class="px-4 py-2 text-center text-gray-700">Читать</th>
-                                    <th class="px-4 py-2 text-center text-gray-700">Редактировать</th>
-                                    <th class="px-4 py-2 text-center text-gray-700">Удалять</th>
-                                </tr>
-                            </thead>
-                            <tbody class="divide-y">
-                                {% for subsection in user_subsections %}
-                                <tr class="hover:bg-gray-50">
-                                    <td class="px-4 py-3 text-gray-800 font-medium">{{ subsection.name }}</td>
-                                    <td class="px-4 py-3 text-center">
-                                        <input type="checkbox" name="subsection_read_{{ subsection.id }}" 
-                                               class="w-4 h-4 text-green-600 rounded focus:ring-green-500"
-                                               {{ 'checked' if subsection.can_read else '' }}>
-                                    </td>
-                                    <td class="px-4 py-3 text-center">
-                                        <input type="checkbox" name="subsection_write_{{ subsection.id }}" 
-                                               class="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
-                                               {{ 'checked' if subsection.can_write else '' }}>
-                                    </td>
-                                    <td class="px-4 py-3 text-center">
-                                        <input type="checkbox" name="subsection_delete_{{ subsection.id }}" 
-                                               class="w-4 h-4 text-red-600 rounded focus:ring-red-500"
-                                               {{ 'checked' if subsection.can_delete else '' }}>
-                                    </td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
+                    <div id="subsections-list" class="overflow-x-auto min-h-[100px] flex items-center justify-center text-gray-500">
+                        <p>Загрузка подразделов...</p>
                     </div>
                 </div>
 
@@ -717,7 +676,118 @@
                 document.getElementById('edit_role').value = role;
             }
 
+            // Загрузить разрешения и доступ к подразделам
+            loadUserPermissionsAndAccess(userId);
+
             document.getElementById('editModal').classList.remove('hidden');
+        }
+
+        // ===================================
+        // РАЗРЕШЕНИЯ И ДОСТУП К ПОДРАЗДЕЛАМ
+        // ===================================
+        async function loadUserPermissionsAndAccess(userId) {
+            console.log('📡 Loading permissions and subsection access for user:', userId);
+
+            document.getElementById('permissions-list').innerHTML = '<p>Загрузка разрешений...</p>';
+            document.getElementById('subsections-list').innerHTML = '<p>Загрузка подразделов...</p>';
+
+            try {
+                const [allPermsResp, userPermsResp, subsecResp] = await Promise.all([
+                    fetch('/admin/permissions', { credentials: 'include' }),
+                    fetch(`/admin/users/${userId}/permissions`, { credentials: 'include' }),
+                    fetch(`/admin/users/${userId}/subsection-access`, { credentials: 'include' })
+                ]);
+
+                if (!allPermsResp.ok || !userPermsResp.ok || !subsecResp.ok) {
+                    throw new Error(`HTTP error: ${allPermsResp.status} / ${userPermsResp.status} / ${subsecResp.status}`);
+                }
+
+                const allPermissions = await allPermsResp.json();
+                const userPermissions = await userPermsResp.json();
+                const subsections = await subsecResp.json();
+
+                console.log('📥 All permissions:', allPermissions);
+                console.log('📥 User permissions:', userPermissions);
+                console.log('📥 Subsection access:', subsections);
+
+                renderPermissions(userPermissions, allPermissions);
+                renderSubsectionAccess(subsections);
+            } catch (error) {
+                console.error('❌ Error loading permissions:', error);
+                document.getElementById('permissions-list').innerHTML = '<p class="text-red-600">Ошибка загрузки разрешений</p>';
+                document.getElementById('subsections-list').innerHTML = '<p class="text-red-600">Ошибка загрузки подразделов</p>';
+            }
+        }
+
+        function renderPermissions(userPermissions, allPermissions) {
+            const container = document.getElementById('permissions-list');
+            const userPermissionIds = userPermissions.map(p => p.id);
+
+            if (!allPermissions.length) {
+                container.innerHTML = '<p class="text-gray-500">Нет разрешений</p>';
+                return;
+            }
+
+            container.className = 'space-y-3';
+            container.innerHTML = allPermissions.map(perm => {
+                const isChecked = userPermissionIds.includes(perm.id);
+                return `
+                    <label class="flex items-center gap-3 p-3 bg-gray-50 rounded-lg hover:bg-gray-100 cursor-pointer transition">
+                        <input type="checkbox" name="permissions" value="${perm.id}"
+                               class="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500"
+                               ${isChecked ? 'checked' : ''}>
+                        <div class="flex-1">
+                            <p class="font-medium text-gray-800">${perm.description}</p>
+                            <p class="text-xs text-gray-500">${perm.key}</p>
+                        </div>
+                    </label>
+                `;
+            }).join('');
+        }
+
+        function renderSubsectionAccess(subsections) {
+            const container = document.getElementById('subsections-list');
+
+            if (!subsections.length) {
+                container.innerHTML = '<p class="text-gray-500">Нет подразделов для этого отдела</p>';
+                return;
+            }
+
+            container.className = 'overflow-x-auto';
+            container.innerHTML = `
+                <table class="w-full text-sm">
+                    <thead class="bg-gray-100 border-b">
+                        <tr>
+                            <th class="px-4 py-2 text-left text-gray-700">Подраздел</th>
+                            <th class="px-4 py-2 text-center text-gray-700">Читать</th>
+                            <th class="px-4 py-2 text-center text-gray-700">Редактировать</th>
+                            <th class="px-4 py-2 text-center text-gray-700">Удалять</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y">
+                        ${subsections.map(sub => `
+                            <tr class="hover:bg-gray-50">
+                                <td class="px-4 py-3 text-gray-800 font-medium">${sub.subsection_name || 'Без названия'}</td>
+                                <td class="px-4 py-3 text-center">
+                                    <input type="checkbox" name="subsection_read_${sub.subsection_id}"
+                                           class="w-4 h-4 text-green-600 rounded focus:ring-green-500"
+                                           ${sub.can_read ? 'checked' : ''}>
+                                </td>
+                                <td class="px-4 py-3 text-center">
+                                    <input type="checkbox" name="subsection_write_${sub.subsection_id}"
+                                           class="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+                                           ${sub.can_write ? 'checked' : ''}>
+                                </td>
+                                <td class="px-4 py-3 text-center">
+                                    <input type="checkbox" name="subsection_delete_${sub.subsection_id}"
+                                           class="w-4 h-4 text-red-600 rounded focus:ring-red-500"
+                                           ${sub.can_delete ? 'checked' : ''}>
+                                </td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            `;
         }
 
         function closeEditModal() {
