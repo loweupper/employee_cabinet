@@ -18,6 +18,7 @@ from modules.admin.models import AuditLog, LogLevel, UserAgentCache
 from modules.documents.models import DocumentCategory, Document, DocumentSubcategory, DocumentCategoryMapping
 from modules.objects.models import Object, ObjectAccess, ObjectAccessRole
 from modules.monitoring.models import Alert
+from modules.permissions.models import Permission, RolePermission, UserPermission, Subsection, UserSubsectionAccess
 
 
 # this is the Alembic Config object, which provides

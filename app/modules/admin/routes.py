@@ -1489,3 +1489,249 @@ async def update_category_mapping(
     }
 
 
+# ===================================
+# Permissions API
+# ===================================
+
+@router.get("/permissions")
+async def get_permissions(
+    user: User = Depends(get_current_user_from_cookie),
+    db: Session = Depends(get_db)
+):
+    """Получить все разрешения"""
+    if user.role != UserRole.ADMIN:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    from modules.permissions.models import Permission
+    permissions = db.query(Permission).order_by(Permission.category, Permission.key).all()
+    return [
+        {
+            "id": p.id,
+            "key": p.key,
+            "description": p.description,
+            "category": p.category,
+        }
+        for p in permissions
+    ]
+
+
+@router.get("/users/{user_id}/permissions")
+async def get_user_permissions(
+    user_id: int,
+    user: User = Depends(get_current_user_from_cookie),
+    db: Session = Depends(get_db)
+):
+    """Получить разрешения пользователя"""
+    if user.role != UserRole.ADMIN:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    target = db.query(User).filter(User.id == user_id).first()
+    if not target:
+        raise HTTPException(status_code=404, detail="Пользователь не найден")
+
+    from modules.permissions.models import Permission, UserPermission
+    user_perms = (
+        db.query(Permission)
+        .join(UserPermission)
+        .filter(UserPermission.user_id == user_id)
+        .all()
+    )
+    return [
+        {"id": p.id, "key": p.key, "description": p.description, "category": p.category}
+        for p in user_perms
+    ]
+
+
+@router.put("/users/{user_id}/permissions")
+async def update_user_permissions(
+    user_id: int,
+    request: Request,
+    user: User = Depends(get_current_user_from_cookie),
+    db: Session = Depends(get_db)
+):
+    """Обновить разрешения пользователя"""
+    if user.role != UserRole.ADMIN:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    target = db.query(User).filter(User.id == user_id).first()
+    if not target:
+        raise HTTPException(status_code=404, detail="Пользователь не найден")
+
+    data = await request.json()
+    permission_ids = data.get("permission_ids", [])
+
+    from modules.permissions.models import Permission, UserPermission
+    # Remove existing permissions
+    db.query(UserPermission).filter(UserPermission.user_id == user_id).delete()
+
+    # Add new permissions
+    for perm_id in permission_ids:
+        perm = db.query(Permission).filter(Permission.id == perm_id).first()
+        if perm:
+            db.add(UserPermission(user_id=user_id, permission_id=perm_id))
+
+    db.commit()
+
+    log_admin_action(
+        event="user_permissions_updated",
+        admin=user,
+        extra={"user_id": user_id, "permission_ids": permission_ids}
+    )
+
+    return {"success": True, "permission_ids": permission_ids}
+
+
+@router.get("/users/{user_id}/subsection-access")
+async def get_user_subsection_access(
+    user_id: int,
+    user: User = Depends(get_current_user_from_cookie),
+    db: Session = Depends(get_db)
+):
+    """Получить доступ пользователя к подразделам"""
+    if user.role != UserRole.ADMIN:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    target = db.query(User).filter(User.id == user_id).first()
+    if not target:
+        raise HTTPException(status_code=404, detail="Пользователь не найден")
+
+    from modules.permissions.models import UserSubsectionAccess, Subsection
+    accesses = (
+        db.query(UserSubsectionAccess)
+        .filter(UserSubsectionAccess.user_id == user_id)
+        .all()
+    )
+    return [
+        {
+            "id": a.id,
+            "subsection_id": a.subsection_id,
+            "subsection_name": a.subsection.name if a.subsection else None,
+            "can_read": a.can_read,
+            "can_write": a.can_write,
+            "can_delete": a.can_delete,
+        }
+        for a in accesses
+    ]
+
+
+@router.put("/users/{user_id}/subsection-access/{subsection_id}")
+async def update_user_subsection_access(
+    user_id: int,
+    subsection_id: int,
+    request: Request,
+    user: User = Depends(get_current_user_from_cookie),
+    db: Session = Depends(get_db)
+):
+    """Обновить доступ к подразделу"""
+    if user.role != UserRole.ADMIN:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    target = db.query(User).filter(User.id == user_id).first()
+    if not target:
+        raise HTTPException(status_code=404, detail="Пользователь не найден")
+
+    from modules.permissions.models import UserSubsectionAccess, Subsection
+    subsection = db.query(Subsection).filter(Subsection.id == subsection_id).first()
+    if not subsection:
+        raise HTTPException(status_code=404, detail="Подраздел не найден")
+
+    data = await request.json()
+    access = (
+        db.query(UserSubsectionAccess)
+        .filter(
+            UserSubsectionAccess.user_id == user_id,
+            UserSubsectionAccess.subsection_id == subsection_id,
+        )
+        .first()
+    )
+    if access:
+        access.can_read = data.get("can_read", access.can_read)
+        access.can_write = data.get("can_write", access.can_write)
+        access.can_delete = data.get("can_delete", access.can_delete)
+    else:
+        access = UserSubsectionAccess(
+            user_id=user_id,
+            subsection_id=subsection_id,
+            can_read=data.get("can_read", True),
+            can_write=data.get("can_write", False),
+            can_delete=data.get("can_delete", False),
+        )
+        db.add(access)
+
+    db.commit()
+    db.refresh(access)
+
+    log_admin_action(
+        event="user_subsection_access_updated",
+        admin=user,
+        extra={
+            "user_id": user_id,
+            "subsection_id": subsection_id,
+            "can_read": access.can_read,
+            "can_write": access.can_write,
+            "can_delete": access.can_delete,
+        }
+    )
+
+    return {
+        "success": True,
+        "subsection_id": subsection_id,
+        "can_read": access.can_read,
+        "can_write": access.can_write,
+        "can_delete": access.can_delete,
+    }
+
+
+@router.get("/subsections")
+async def get_subsections(
+    user: User = Depends(get_current_user_from_cookie),
+    db: Session = Depends(get_db)
+):
+    """Получить все подразделы"""
+    if user.role != UserRole.ADMIN:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    from modules.permissions.models import Subsection
+    subsections = db.query(Subsection).order_by(Subsection.section_id, Subsection.order).all()
+    return [
+        {
+            "id": s.id,
+            "name": s.name,
+            "section_id": s.section_id,
+            "description": s.description,
+            "icon": s.icon,
+            "order": s.order,
+        }
+        for s in subsections
+    ]
+
+
+@router.get("/sections/{section_id}/subsections")
+async def get_section_subsections(
+    section_id: int,
+    user: User = Depends(get_current_user_from_cookie),
+    db: Session = Depends(get_db)
+):
+    """Получить подразделы раздела"""
+    if user.role != UserRole.ADMIN:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    from modules.permissions.models import Subsection
+    subsections = (
+        db.query(Subsection)
+        .filter(Subsection.section_id == section_id)
+        .order_by(Subsection.order)
+        .all()
+    )
+    return [
+        {
+            "id": s.id,
+            "name": s.name,
+            "section_id": s.section_id,
+            "description": s.description,
+            "icon": s.icon,
+            "order": s.order,
+        }
+        for s in subsections
+    ]
+

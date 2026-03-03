@@ -625,5 +625,61 @@ class AuthService:
         # ✅ СИНХРОНИЗАЦИЯ ДОСТУПОВ КО ВСЕМ ОБЪЕКТАМ
         from modules.objects.service import ObjectService
         ObjectService.sync_user_access_by_role(user, db)
-    
-        db.commit()
+
+    @staticmethod
+    def user_has_permission(user: User, permission_key: str, db: Session) -> bool:
+        """Проверить имеет ли пользователь разрешение (через личное или через роль)."""
+        from modules.permissions.models import Permission, UserPermission, RolePermission
+
+        # Проверяем явное разрешение пользователю
+        user_perm = (
+            db.query(UserPermission)
+            .join(Permission)
+            .filter(
+                UserPermission.user_id == user.id,
+                Permission.key == permission_key,
+            )
+            .first()
+        )
+        if user_perm:
+            return True
+
+        # Проверяем разрешение через роль
+        role_perm = (
+            db.query(RolePermission)
+            .join(Permission)
+            .filter(
+                RolePermission.role_name == user.role.value,
+                Permission.key == permission_key,
+            )
+            .first()
+        )
+        return bool(role_perm)
+
+    @staticmethod
+    def user_can_access_subsection(user: User, subsection, action: str, db: Session) -> bool:
+        """Проверить может ли пользователь получить доступ к подразделу."""
+        from modules.permissions.models import UserSubsectionAccess
+
+        # Проверяем явный доступ
+        access = (
+            db.query(UserSubsectionAccess)
+            .filter(
+                UserSubsectionAccess.user_id == user.id,
+                UserSubsectionAccess.subsection_id == subsection.id,
+            )
+            .first()
+        )
+        if access:
+            if action == "read":
+                return access.can_read
+            elif action == "write":
+                return access.can_write
+            elif action == "delete":
+                return access.can_delete
+
+        # Если нет явного доступа и это его отдел — разрешаем по умолчанию
+        if subsection.section_id == user.department_id:
+            return action in ["read", "write"]  # write по умолчанию, delete нет
+
+        return False
