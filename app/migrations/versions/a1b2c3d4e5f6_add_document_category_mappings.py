@@ -39,8 +39,7 @@ def upgrade() -> None:
     )
 
     # Начальные данные
-    connection = op.get_bind()
-    connection.execute(sa.text("""
+    op.execute(sa.text("""
         INSERT INTO document_category_mappings (category, department_id, description, created_at, updated_at)
         VALUES
             ('general',    NULL,                                                                        'Общие документы - доступны всем',    NOW(), NOW()),
