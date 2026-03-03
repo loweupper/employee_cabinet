@@ -1,10 +1,10 @@
 from sqlalchemy import Column, BigInteger, String, Text, DateTime, Index, Enum as SqlEnum, ForeignKey, Boolean, Integer
-from sqlalchemy.sql import func
+from sqlalchemy.sql import func, text as sa_text
 from sqlalchemy.orm import relationship
 from core.database import Base
 from datetime import datetime
 import enum
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import JSONB, ARRAY
 
 
 
@@ -101,3 +101,20 @@ class AuditLog(Base):
 
     def __repr__(self):
         return f"<AuditLog id={self.id} level={self.level} event={self.event} request_id={self.request_id}>"
+
+
+# ===================================
+# Маппинг категорий на отделы
+# ===================================
+class CategoryDepartmentMapping(Base):
+    """Маппинг категорий документов на отделы (хранится в БД)"""
+    __tablename__ = "category_department_mappings"
+
+    id = Column(Integer, primary_key=True, index=True)
+    category = Column(String, unique=True, nullable=False, index=True)
+    departments = Column(ARRAY(String), server_default=sa_text("'{}'"), nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    def __repr__(self):
+        return f"<CategoryDepartmentMapping category={self.category} departments={self.departments}>"
