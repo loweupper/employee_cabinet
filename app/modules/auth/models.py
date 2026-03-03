@@ -186,3 +186,8 @@ class LoginAttempt(Base):
 
     def __repr__(self):
         return f"<LoginAttempt id={self.id} email={self.email} ip={self.ip_address} success={self.success}>"
+
+
+# Импортируем модели разрешений ПОСЛЕ определения User
+# чтобы избежать циклических импортов
+from modules.permissions.models import UserPermission, UserSubsectionAccess, RolePermission  # noqa: E402, F401
