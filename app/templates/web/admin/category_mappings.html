@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="ru">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Управление маппингами категорий</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+</head>
+
+<body class="bg-gray-50">
+
+    <div class="flex min-h-screen">
+
+        <!-- SIDEBAR -->
+        {% include "components/sidebar.html" %}
+
+        <!-- MAIN CONTENT -->
+        <main class="flex-1">
+
+            <!-- Header -->
+            <header class="bg-white shadow-sm px-8 py-4 flex justify-between items-center">
+                <h2 class="text-2xl font-semibold text-gray-800">🗂️ Маппинги категорий документов</h2>
+                <div class="flex items-center gap-4">
+                    <span class="text-sm text-gray-600">{{ user.email }}</span>
+                    <div class="w-10 h-10 bg-indigo-600 text-white rounded-full flex items-center justify-center font-bold">
+                        {{ user.first_name[0] if user.first_name else user.email[0]|upper }}
+                    </div>
+                </div>
+            </header>
+
+            <!-- Content -->
+            <div class="p-8">
+
+                <!-- Info -->
+                <div class="bg-blue-50 border-l-4 border-blue-500 text-blue-700 p-4 mb-6 rounded-lg">
+                    <p class="font-semibold">ℹ️ Управление маппингами категорий</p>
+                    <p class="text-sm mt-1">Здесь можно настроить, какой отдел соответствует каждой категории документов. Изменения вступают в силу сразу без перезагрузки приложения.</p>
+                </div>
+
+                <!-- Notification area -->
+                <div id="notification" class="hidden mb-6 p-4 rounded-lg"></div>
+
+                <!-- Table -->
+                <div class="bg-white rounded-xl shadow-md overflow-hidden">
+                    <table class="w-full">
+                        <thead class="bg-gray-50 border-b border-gray-200">
+                            <tr>
+                                <th class="text-left px-6 py-4 text-sm font-semibold text-gray-600">Категория</th>
+                                <th class="text-left px-6 py-4 text-sm font-semibold text-gray-600">Описание</th>
+                                <th class="text-left px-6 py-4 text-sm font-semibold text-gray-600">Отдел</th>
+                                <th class="text-left px-6 py-4 text-sm font-semibold text-gray-600">Действия</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-100">
+                            {% for mapping in mappings %}
+                            <tr class="hover:bg-gray-50 transition" id="row-{{ mapping.category }}">
+                                <td class="px-6 py-4">
+                                    <span class="font-mono text-sm bg-gray-100 px-2 py-1 rounded">{{ mapping.category }}</span>
+                                </td>
+                                <td class="px-6 py-4">
+                                    <input
+                                        type="text"
+                                        id="desc-{{ mapping.category }}"
+                                        value="{{ mapping.description or '' }}"
+                                        class="w-full px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-indigo-400"
+                                        placeholder="Описание категории"
+                                    >
+                                </td>
+                                <td class="px-6 py-4">
+                                    <select
+                                        id="dept-{{ mapping.category }}"
+                                        class="w-full px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-indigo-400"
+                                    >
+                                        <option value="">— Без отдела (общий доступ) —</option>
+                                        {% for dept in departments %}
+                                        <option value="{{ dept.id }}" {% if mapping.department_id == dept.id %}selected{% endif %}>
+                                            {{ dept.name }}
+                                        </option>
+                                        {% endfor %}
+                                    </select>
+                                </td>
+                                <td class="px-6 py-4">
+                                    <button
+                                        onclick="saveMapping('{{ mapping.category }}')"
+                                        class="px-4 py-2 bg-indigo-600 text-white text-sm rounded-lg hover:bg-indigo-700 transition"
+                                    >
+                                        💾 Сохранить
+                                    </button>
+                                </td>
+                            </tr>
+                            {% else %}
+                            <tr>
+                                <td colspan="4" class="px-6 py-8 text-center text-gray-400">
+                                    Маппинги не найдены. Убедитесь, что миграция базы данных выполнена.
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+
+            </div>
+        </main>
+    </div>
+
+    <script>
+        async function saveMapping(category) {
+            const deptSelect = document.getElementById('dept-' + category);
+            const descInput = document.getElementById('desc-' + category);
+
+            const departmentId = deptSelect.value === '' ? null : deptSelect.value;
+            const description = descInput.value || null;
+
+            try {
+                const response = await fetch('/admin/category-mappings/' + encodeURIComponent(category), {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        department_id: departmentId,
+                        description: description
+                    })
+                });
+
+                const data = await response.json();
+                const notif = document.getElementById('notification');
+
+                if (response.ok && data.success) {
+                    notif.className = 'mb-6 p-4 rounded-lg bg-green-50 border-l-4 border-green-500 text-green-700';
+                    notif.textContent = '✅ Маппинг для категории «' + category + '» успешно обновлён.';
+                } else {
+                    notif.className = 'mb-6 p-4 rounded-lg bg-red-50 border-l-4 border-red-500 text-red-700';
+                    notif.textContent = '❌ Ошибка: ' + (data.detail || 'Неизвестная ошибка');
+                }
+
+                notif.classList.remove('hidden');
+                setTimeout(() => notif.classList.add('hidden'), 4000);
+
+            } catch (err) {
+                const notif = document.getElementById('notification');
+                notif.className = 'mb-6 p-4 rounded-lg bg-red-50 border-l-4 border-red-500 text-red-700';
+                notif.textContent = '❌ Ошибка сети: ' + err.message;
+                notif.classList.remove('hidden');
+            }
+        }
+    </script>
+
+</body>
+</html>

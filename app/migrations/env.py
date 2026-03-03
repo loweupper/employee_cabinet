@@ -15,7 +15,7 @@ from core.config import settings
 # Import all models so they are registered with Base
 from modules.auth.models import User, Session, OTP, UserRole, OTPPurpose, Department
 from modules.admin.models import AuditLog, LogLevel, UserAgentCache
-from modules.documents.models import DocumentCategory, Document, DocumentSubcategory
+from modules.documents.models import DocumentCategory, Document, DocumentSubcategory, DocumentCategoryMapping
 from modules.objects.models import Object, ObjectAccess, ObjectAccessRole
 from modules.monitoring.models import Alert
 
