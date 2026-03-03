@@ -161,6 +161,7 @@
                     <!-- Изменение пароля -->
                     <div class="bg-white rounded-xl shadow-md p-6 fade-in" style="animation-delay: 0.3s">
                         <h4 class="text-lg font-semibold text-gray-800 mb-4">🔒 Изменить пароль</h4>
+
                         
                         <form method="post" action="/profile/change-password" class="space-y-4">
                             
@@ -187,6 +188,77 @@
                                 Изменить пароль
                             </button>
                         </form>
+                    </div>
+
+                    <!-- Мои разрешения -->
+                    <div class="bg-white rounded-xl shadow-md p-6 fade-in" style="animation-delay: 0.4s">
+                        <h4 class="text-lg font-semibold text-gray-800 mb-4">🔐 Мои разрешения</h4>
+                        
+                        <div class="space-y-2">
+                            {% if user_permissions %}
+                                {% for permission in user_permissions %}
+                                <div class="flex items-center gap-3 p-3 bg-indigo-50 rounded-lg border border-indigo-200">
+                                    <span class="text-lg">✓</span>
+                                    <div>
+                                        <p class="font-medium text-gray-800">{{ permission.description }}</p>
+                                        <p class="text-xs text-gray-500">{{ permission.key }}</p>
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            {% else %}
+                            <p class="text-sm text-gray-500 text-center py-4">Нет дополнительных разрешений</p>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <!-- Мой доступ к подразделам -->
+                    <div class="bg-white rounded-xl shadow-md p-6 fade-in" style="animation-delay: 0.5s">
+                        <h4 class="text-lg font-semibold text-gray-800 mb-4">📊 Мой доступ к подразделам</h4>
+                        
+                        {% if user_subsection_access %}
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-sm">
+                                <thead class="bg-gray-100 border-b">
+                                    <tr>
+                                        <th class="px-4 py-2 text-left text-gray-700">Подраздел</th>
+                                        <th class="px-4 py-2 text-center text-gray-700">Читать</th>
+                                        <th class="px-4 py-2 text-center text-gray-700">Редактировать</th>
+                                        <th class="px-4 py-2 text-center text-gray-700">Удалять</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y">
+                                    {% for access in user_subsection_access %}
+                                    <tr class="hover:bg-gray-50">
+                                        <td class="px-4 py-3 text-gray-800 font-medium">{{ access.subsection.name }}</td>
+                                        <td class="px-4 py-3 text-center">
+                                            {% if access.can_read %}
+                                            <span class="text-green-600 font-bold">✓</span>
+                                            {% else %}
+                                            <span class="text-gray-300">✗</span>
+                                            {% endif %}
+                                        </td>
+                                        <td class="px-4 py-3 text-center">
+                                            {% if access.can_write %}
+                                            <span class="text-blue-600 font-bold">✓</span>
+                                            {% else %}
+                                            <span class="text-gray-300">✗</span>
+                                            {% endif %}
+                                        </td>
+                                        <td class="px-4 py-3 text-center">
+                                            {% if access.can_delete %}
+                                            <span class="text-red-600 font-bold">✓</span>
+                                            {% else %}
+                                            <span class="text-gray-300">✗</span>
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                        {% else %}
+                        <p class="text-sm text-gray-500 text-center py-4">Нет доступа к подразделам</p>
+                        {% endif %}
                     </div>
 
                 </div>

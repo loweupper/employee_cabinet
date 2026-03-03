@@ -51,7 +51,20 @@ async def profile_page(
     })
 
     sidebar_context = get_sidebar_context(user, db)
-    
+
+    from modules.permissions.models import Permission, UserPermission, UserSubsectionAccess
+    user_permissions = (
+        db.query(Permission)
+        .join(UserPermission)
+        .filter(UserPermission.user_id == user.id)
+        .all()
+    )
+    user_subsection_access = (
+        db.query(UserSubsectionAccess)
+        .filter(UserSubsectionAccess.user_id == user.id)
+        .all()
+    )
+
     return templates.TemplateResponse(
         "web/profile/index.html",
         {
@@ -59,6 +72,8 @@ async def profile_page(
             "user": user,
             "success": success,
             "error": error,
+            "user_permissions": user_permissions,
+            "user_subsection_access": user_subsection_access,
             **sidebar_context
         }
     )
