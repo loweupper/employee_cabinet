@@ -162,8 +162,10 @@ class Document(Base):
     def can_access(self, user, db: OrmSession = None) -> bool:
         """
         Проверить, может ли пользователь видеть этот документ
-        с учетом прав доступа к объекту и разделам
+        с учетом прав доступа к объекту и разделам (sections_access)
         """
+        from modules.objects.models import ObjectAccess
+
         # 1. Админы видят всё
         if user.role == "admin":
             return True
@@ -172,9 +174,15 @@ class Document(Base):
         if self.created_by == user.id:
             return True
 
-        # 3. Общие документы доступны всем, у кого есть доступ к объекту
+        # 3. Проверяем доступ к объекту один раз
+        access = db.query(ObjectAccess).filter(
+            ObjectAccess.object_id == self.object_id,
+            ObjectAccess.user_id == user.id
+        ).first()
+
+        # 4. Общие документы доступны всем, у кого есть доступ к объекту
         if self.category == DocumentCategory.GENERAL:
-            return True
+            return access is not None
 
         # 4. Проверка по отделу через БД (если передана сессия)
         if db is not None:

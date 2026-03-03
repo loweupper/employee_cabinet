@@ -4,7 +4,7 @@ from typing import List, Optional
 import logging
 from pathlib import Path
 
-from modules.documents.models import Document, DocumentCategory, CATEGORY_DEPARTMENT_MAP
+from modules.documents.models import Document, DocumentCategory
 from modules.documents.schemas import DocumentCreate
 from modules.documents.service_mappings import CategoryMappingService
 from modules.auth.models import User
