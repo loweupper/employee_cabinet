@@ -372,13 +372,13 @@ async def object_detail(
             if not user_obj:
                 continue
             
-            # ✅ Проверяем access_departments
-            if access.access_departments:
-                for dept in access.access_departments:
-                    if dept not in department_stats:
-                        department_stats[dept] = []
-                    if user_obj not in department_stats[dept]:
-                        department_stats[dept].append(user_obj)
+            # ✅ Проверяем sections_access
+            if access.sections_access:
+                for section in access.sections_access:
+                    if section not in department_stats:
+                        department_stats[section] = []
+                    if user_obj not in department_stats[section]:
+                        department_stats[section].append(user_obj)
             
             # ✅ ВАЖНО: Также учитываем роль пользователя
             if user_obj.role in role_to_department:
@@ -829,6 +829,13 @@ async def grant_department_access(
         
         granted_count = 0
         
+        role_to_section = {
+            UserRole.ENGINEER: 'technical',
+            UserRole.LAWYER: 'legal',
+            UserRole.ACCOUNTANT: 'accounting',
+            UserRole.HR: 'hr'
+        }
+
         for target_user in users_in_department:
             # Проверяем, нет ли уже доступа
             existing = db.query(ObjectAccess).filter(
@@ -837,9 +844,15 @@ async def grant_department_access(
             ).first()
             
             if not existing:
+                # Формируем sections на основе роли пользователя
+                sections = ["general"]
+                if target_user.role in role_to_section:
+                    sections.append(role_to_section[target_user.role])
+
                 access_data = ObjectAccessCreate(
                     user_id=target_user.id,
-                    role=ObjectAccessRoleEnum(role)
+                    role=ObjectAccessRoleEnum(role),
+                    sections_access=sections
                 )
                 
                 ObjectService.grant_access(object_id, access_data, current_user, db)
