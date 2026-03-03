@@ -407,17 +407,17 @@ async def documents_list(
         # Формируем список разрешённых категорий
         allowed_categories = [DocumentCategory.GENERAL]  # Общие документы доступны всем
         
-        # ✅ Добавляем категории на основе access_departments
-        if access and access.access_departments:
+        # ✅ Добавляем категории на основе sections_access
+        if access and access.sections_access:
             dept_mapping = {
                 'safety': DocumentCategory.SAFETY,
-                'hr': DocumentCategory.HR, 
+                'hr': DocumentCategory.HR,
                 'accounting': DocumentCategory.ACCOUNTING,
                 'technical': DocumentCategory.TECHNICAL,
                 'legal': DocumentCategory.LEGAL
             }
-            
-            for dept in access.access_departments:
+
+            for dept in access.sections_access:
                 if dept in dept_mapping:
                     cat = dept_mapping[dept]
                     if cat not in allowed_categories:

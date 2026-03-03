@@ -1,4 +1,4 @@
-from sqlalchemy import Column, BigInteger, String, DateTime, ForeignKey, Enum as SqlEnum, func, Index, Text, Boolean, ARRAY
+from sqlalchemy import Column, BigInteger, String, DateTime, ForeignKey, Enum as SqlEnum, func, Index, Text, Boolean
 from sqlalchemy.orm import relationship
 from sqlalchemy.dialects.postgresql import JSONB
 from enum import Enum
@@ -56,30 +56,30 @@ class ObjectAccess(Base):
     __tablename__ = "object_accesses"
 
     id = Column(BigInteger, primary_key=True, index=True, autoincrement=True)
-    
+
     # Связи
     object_id = Column(BigInteger, ForeignKey("objects.id", ondelete="CASCADE"), nullable=False)
     user_id = Column(BigInteger, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
-    access_departments = Column(ARRAY(String), default=[], nullable=True)
-    
+
     # Роль доступа
     role = Column(
         SqlEnum(ObjectAccessRole, native_enum=False),
         default=ObjectAccessRole.VIEWER,
         nullable=False
     )
-    
-    # ✅ НОВОЕ: Доступ к разделам документов
+
+    # ✅ Единое поле для управления доступом к разделам
     sections_access = Column(
         JSONB,
         default=["general"],
         nullable=False,
-        comment="Список разделов документов, к которым есть доступ"
+        comment="Список разделов документов, к которым есть доступ (general всегда включен)"
     )
-    
+
     # Метаданные
     granted_by = Column(BigInteger, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
     expires_at = Column(DateTime(timezone=True), nullable=True)
     
     # Связи
