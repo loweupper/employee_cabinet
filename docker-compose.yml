@@ -27,7 +27,13 @@ services:
     depends_on:
       - redis
     volumes:
-      - ./app:/app
+      - ./app/main.py:/app/main.py
+      - ./app/core:/app/core
+      - ./app/modules:/app/modules
+      - ./app/services:/app/services
+      - ./app/static:/app/static
+      - ./app/templates:/app/templates
+      - ./app/workers:/app/workers
       - ./logs:/app/logs
       - /volume11/projects/employe_cabinet/files:/app/files
 
