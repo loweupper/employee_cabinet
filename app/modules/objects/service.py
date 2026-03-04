@@ -306,15 +306,26 @@ class ObjectService:
                 detail="Пользователь не найден"
             )
         
-        # Добавляем автоматический доступ к разделу по отделу
+        # Добавляем автоматический доступ по роли пользователя
         sections = list(data.sections_access)
-        
-        if target_user.department_rel and target_user.department_rel.name:
-            from modules.objects.models import DEPARTMENT_SECTION_MAP
-            # ✅ Используем название отдела, а не ID
-            auto_section = DEPARTMENT_SECTION_MAP.get(target_user.department_rel.name)
-            if auto_section and auto_section.value not in sections:
-                sections.append(auto_section.value)
+
+        from modules.objects.models import DocumentSection
+
+        role_section_map = {
+            UserRole.ENGINEER: DocumentSection.TECHNICAL.value,
+            UserRole.ACCOUNTANT: DocumentSection.ACCOUNTING.value,
+            UserRole.LAWYER: DocumentSection.LEGAL.value,
+            UserRole.HR: DocumentSection.HR.value,
+        }
+
+        if target_user.role in role_section_map:
+            auto_section = role_section_map[target_user.role]
+            if auto_section not in sections:
+                sections.append(auto_section)
+
+        # Всегда включаем general
+        if "general" not in sections:
+            sections.append("general")
         
         # Создаём доступ
         access = ObjectAccess(
@@ -416,13 +427,8 @@ class ObjectService:
         """
         Отозвать доступ пользователя к объекту
         """
-        access = db.query(ObjectAccess).filter(
-            ObjectAccess.object_id == object_id,
-            ObjectAccess.user_id == current_user.id,
-            ObjectAccess.role.in_([ObjectAccessRole.ADMIN, ObjectAccessRole.OWNER])
-        ).first()
-        
-        if not access and current_user.role != UserRole.ADMIN:  # ✅ используем Enum
+        # ✅ Проверить права на управление объектом
+        if not ObjectService.can_manage_access(current_user, object_id, db):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Недостаточно прав для управления доступом"
