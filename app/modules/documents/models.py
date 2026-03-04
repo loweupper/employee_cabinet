@@ -114,7 +114,9 @@ class Document(Base):
     # ✅ Подкатегория (связь с подкатегорией)
     subcategory_id = Column(BigInteger, ForeignKey("document_subcategories.id", ondelete="SET NULL"), nullable=True)
     
-    # Файл
+    # Файл - ОТНОСИТЕЛЬНЫЙ путь для удобства миграции
+    # Пример: "2026/01/15/uuid-abc123.pdf"
+    # Полный путь: Path(settings.FILES_PATH) / file_path
     file_path = Column(String(500), nullable=False)
     file_name = Column(String(255), nullable=False)
     file_size = Column(BigInteger, nullable=False)
