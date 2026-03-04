@@ -92,6 +92,11 @@ function deleteSubcategory(objectId, subcategoryId, subcategoryName) {
         const form = document.createElement('form');
         form.method = 'POST';
         form.action = `/objects/${objectId}/subcategories/${subcategoryId}/delete`;
+        const csrfInput = document.createElement('input');
+        csrfInput.type = 'hidden';
+        csrfInput.name = 'csrf_token';
+        csrfInput.value = getCsrfToken();
+        form.appendChild(csrfInput);
         document.body.appendChild(form);
         form.submit();
     }
@@ -118,6 +123,16 @@ function closeEditSubcategoryModal() {
     if (modal) {
         modal.classList.add('hidden');
     }
+}
+
+// ===================================
+// CSRF TOKEN HELPER
+// ===================================
+
+function getCsrfToken() {
+    const cookie = document.cookie.split('; ').find(row => row.startsWith('csrftoken='));
+    return (cookie ? cookie.split('=').slice(1).join('=') : '') ||
+           document.querySelector('input[name="csrf_token"]')?.value || '';
 }
 
 // ===================================
@@ -244,7 +259,10 @@ function uploadFilesImmediately(files) {
 
     fetch(`/documents/objects/${objectId}/upload`, {
         method: 'POST',
-        body: formData
+        body: formData,
+        headers: {
+            'X-CSRFToken': getCsrfToken()
+        }
     })
         .then(response => {
             console.log('📊 Статус:', response.status);
@@ -591,6 +609,11 @@ function deleteDocument(objectId, documentId, fileName) {
         const form = document.createElement('form');
         form.method = 'POST';
         form.action = `/documents/objects/${objectId}/${documentId}/delete`;
+        const csrfInput = document.createElement('input');
+        csrfInput.type = 'hidden';
+        csrfInput.name = 'csrf_token';
+        csrfInput.value = getCsrfToken();
+        form.appendChild(csrfInput);
         document.body.appendChild(form);
         form.submit();
     }
