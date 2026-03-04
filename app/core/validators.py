@@ -104,6 +104,29 @@ def validate_file_extension(filename: str, allowed_extensions: set) -> bool:
     return file_ext in allowed_extensions
 
 
+def get_file_extension(filename: str) -> str:
+    """
+    Extract file extension safely, handling filenames with multiple dots
+    (e.g. 'Report.v2.xlsx' or 'Иванов Р.Б..xlsx').
+
+    Args:
+        filename: Name of the file
+
+    Returns:
+        File extension including the leading dot (e.g. '.xlsx'), or '' if none found
+
+    Examples:
+        >>> get_file_extension("document.xlsx")
+        '.xlsx'
+        >>> get_file_extension("Иванов Р.Б..xlsx")
+        '.xlsx'
+        >>> get_file_extension("archive.tar.gz")
+        '.gz'
+    """
+    match = re.search(r'(\.[a-zA-Z0-9]+)$', filename)
+    return match.group(1) if match else ''
+
+
 def get_safe_file_extension(filename: str) -> str:
     """
     Extract file extension safely
