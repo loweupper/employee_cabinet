@@ -49,6 +49,8 @@
                     
                     <form method="post" action="/objects/create" enctype="multipart/form-data" class="space-y-6">
                         
+                        <input type="hidden" name="csrf_token" value="{{ request.scope.get('csrf_token', '') }}">
+
                         <!-- Название -->
                         <div>
                             <label class="block text-gray-700 font-medium mb-2">Название объекта *</label>

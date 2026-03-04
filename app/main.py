@@ -353,6 +353,8 @@ app.add_middleware(
         re.compile(r"^/admin/.*"),
 
         # ✅ ВАШИ ВЕБ-ЭНДПОИНТЫ ДЛЯ ОБЪЕКТОВ
+        re.compile(r"^/objects/create$"),
+        re.compile(r"^/objects/\d+/edit$"),
         re.compile(r"^/objects/\d+/access/grant$"),
         re.compile(r"^/objects/\d+/access/\d+/revoke$"),
         re.compile(r"^/objects/\d+/access/grant-department$"),
