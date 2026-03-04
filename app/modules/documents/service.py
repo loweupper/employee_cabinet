@@ -9,7 +9,7 @@ from modules.documents.models import Document, DocumentCategory
 from modules.documents.schemas import DocumentCreate
 from modules.documents.service_mappings import CategoryMappingService
 from modules.auth.models import User
-from core.validators import sanitize_filename
+from core.validators import sanitize_filename, get_file_extension
 from core.config import settings
 import uuid
 from modules.objects.models import Object, ObjectAccess
@@ -43,7 +43,7 @@ class DocumentService:
         safe_name = sanitize_filename(file.filename) if file.filename else "unnamed_file"
 
         # Генерируем уникальное имя файла с оригинальным расширением
-        file_extension = Path(safe_name).suffix
+        file_extension = get_file_extension(safe_name)
         unique_filename = f"{uuid.uuid4().hex[:12]}{file_extension}"
         file_path = upload_dir / unique_filename
 
@@ -88,8 +88,8 @@ class DocumentService:
         # Сохраняем файл
         file_contents = await file.read()
         safe_name = sanitize_filename(file.filename) if file.filename else "unnamed_file"
-        file_extension = Path(safe_name).suffix
-        unique_filename = f"{uuid.uuid4()}{file_extension}"
+        file_extension = get_file_extension(safe_name)
+        unique_filename = f"{uuid.uuid4().hex[:12]}{file_extension}"
         file_path = upload_dir / unique_filename
 
         with open(file_path, "wb") as f:
