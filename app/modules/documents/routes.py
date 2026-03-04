@@ -9,7 +9,8 @@ from core.validators import (
 )
 from modules.objects.models import Object, ObjectAccess
 from fastapi import APIRouter, Depends, Request, Form, HTTPException
-from fastapi.responses import HTMLResponse, RedirectResponse, FileResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, FileResponse, JSONResponse
+from pathlib import Path
 from sqlalchemy.orm import Session
 import logging
 from typing import Optional
@@ -33,6 +34,14 @@ router = APIRouter(tags=["documents"])
 
 from fastapi.templating import Jinja2Templates
 templates = Jinja2Templates(directory="templates")
+
+
+def _is_ajax_request(request: Request) -> bool:
+    """Detect if the request was made via AJAX/fetch expecting a JSON response."""
+    return (
+        request.headers.get("X-Requested-With") == "XMLHttpRequest"
+        or "application/json" in request.headers.get("Accept", "")
+    )
 
 
 # ===================================
@@ -78,6 +87,11 @@ async def upload_documents(
         })
 
         if not files:
+            if _is_ajax_request(request):
+                return JSONResponse(
+                    status_code=400,
+                    content={"detail": "Файлы не выбраны"}
+                )
             return RedirectResponse(
                 url=f"/objects/{object_id}?error=Файлы не выбраны",
                 status_code=303
@@ -191,6 +205,11 @@ async def upload_documents(
             "error": str(e)
         })
 
+        if _is_ajax_request(request):
+            return JSONResponse(
+                status_code=500,
+                content={"detail": f"Ошибка загрузки: {str(e)}"}
+            )
         return RedirectResponse(
             url=f"/objects/{object_id}?error=Ошибка загрузки: {str(e)}",
             status_code=303
@@ -203,6 +222,7 @@ async def upload_documents(
 async def update_document(
     object_id: int,
     document_id: int,
+    request: Request,
     title: str = Form(...),
     category: str = Form(...),
     subcategory_id: Optional[int] = Form(None),
@@ -215,18 +235,22 @@ async def update_document(
     try:
         # Получаем документ
         document = db.query(Document).filter(Document.id == document_id).first()
-        
+
         if not document:
+            if _is_ajax_request(request):
+                return JSONResponse(status_code=404, content={"detail": "Документ не найден"})
             return RedirectResponse(
                 url=f"/objects/{object_id}?error=Документ не найден",
                 status_code=303
             )
-        
+
         # Проверяем доступ (только владелец объекта или админ)
         from modules.objects.service import ObjectService
         obj = ObjectService.get_object(object_id, user, db)
-        
+
         if obj.created_by != user.id and user.role != UserRole.ADMIN:  # ✅ исправлено
+            if _is_ajax_request(request):
+                return JSONResponse(status_code=403, content={"detail": "Нет прав для редактирования"})
             return RedirectResponse(
                 url=f"/objects/{object_id}?error=Нет прав для редактирования",
                 status_code=303
@@ -268,6 +292,7 @@ async def update_document(
 async def delete_document(
     object_id: int,
     document_id: int,
+    request: Request,
     user: User = Depends(get_current_user_from_cookie),
     db: Session = Depends(get_db)
 ):
@@ -277,18 +302,22 @@ async def delete_document(
     try:
         # Получаем документ
         document = db.query(Document).filter(Document.id == document_id).first()
-        
+
         if not document:
+            if _is_ajax_request(request):
+                return JSONResponse(status_code=404, content={"detail": "Документ не найден"})
             return RedirectResponse(
                 url=f"/objects/{object_id}?error=Документ не найден",
                 status_code=303
             )
-        
+
         # Проверяем доступ (только владелец объекта или админ)
         from modules.objects.service import ObjectService
         obj = ObjectService.get_object(object_id, user, db)
-        
+
         if obj.created_by != user.id and user.role != UserRole.ADMIN:  # ✅ исправлено
+            if _is_ajax_request(request):
+                return JSONResponse(status_code=403, content={"detail": "Нет прав для удаления"})
             return RedirectResponse(
                 url=f"/objects/{object_id}?error=Нет прав для удаления",
                 status_code=303
@@ -335,22 +364,33 @@ async def download_document(
     Скачать документ
     """
     document = db.query(Document).filter(Document.id == document_id).first()
-    
+
     if not document:
         raise HTTPException(status_code=404, detail="Документ не найден")
-    
+
     # Проверяем доступ
     if not document.can_access(user, db):
         raise HTTPException(status_code=403, detail="Нет доступа к этому документу")
-    
+
+    # Полный путь = FILES_PATH + relative_path_from_db
+    files_base = Path(settings.FILES_PATH).resolve()
+    file_path = (files_base / document.file_path).resolve()
+
+    # Защита от path traversal: убедиться, что путь находится внутри FILES_PATH
+    if not str(file_path).startswith(str(files_base)):
+        raise HTTPException(status_code=400, detail="Недопустимый путь к файлу")
+
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="Файл не найден на диске")
+
     logger.info({
         "event": "document_downloaded",
         "document_id": document_id,
         "user_id": user.id
     })
-    
+
     return FileResponse(
-        path=document.file_path,
+        path=file_path,
         filename=document.file_name,
         media_type=document.file_type
     )

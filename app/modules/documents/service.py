@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from typing import List, Optional
 import logging
 from pathlib import Path
+from datetime import datetime
 
 from modules.documents.models import Document, DocumentCategory
 from modules.documents.schemas import DocumentCreate
@@ -24,29 +25,37 @@ class DocumentService:
     @staticmethod
     async def save_file(file: UploadFile, object_id: int) -> str:
         """
-        Сохранить загруженный файл на диск
-        Возвращает путь к сохранённому файлу
+        Сохранить загруженный файл на диск с структурой: YYYY/MM/ObjectID/uuid-filename
+        Возвращает относительный путь для сохранения в БД
         """
-        # Создаём папку для загрузок если её нет
-        upload_dir = Path(settings.FILES_PATH) / "objects" / str(object_id)
+        now = datetime.now()
+        year = f"{now.year}"
+        month = f"{now.month:02d}"
+
+        # Относительный путь в БД
+        relative_path = f"{year}/{month}/{object_id}"
+
+        # Полный путь на диске
+        upload_dir = Path(settings.FILES_PATH) / relative_path
         upload_dir.mkdir(parents=True, exist_ok=True)
-        
+
         # Sanitize the filename
         safe_name = sanitize_filename(file.filename) if file.filename else "unnamed_file"
-        
+
         # Генерируем уникальное имя файла с оригинальным расширением
         file_extension = Path(safe_name).suffix
         unique_filename = f"{uuid.uuid4()}{file_extension}"
         file_path = upload_dir / unique_filename
-        
+
         # Сохраняем файл
         file_contents = await file.read()
         with open(file_path, "wb") as f:
             f.write(file_contents)
-        
+
         logger.info(f"✅ Файл сохранён: {file_path}")
-        
-        return str(file_path)
+
+        # Возвращаем относительный путь для сохранения в БД
+        return f"{relative_path}/{unique_filename}"
 
     @staticmethod
     async def create_document(
@@ -70,25 +79,30 @@ class DocumentService:
                 detail="Нет доступа к этому объекту"
             )
         
-        # Создаем директорию для файлов объекта
-        upload_dir = Path(settings.FILES_PATH) / "objects" / str(data.object_id)
+        # Создаем директорию для файлов объекта (YYYY/MM/ObjectID)
+        now = datetime.now()
+        relative_path = f"{now.year}/{now.month:02d}/{data.object_id}"
+        upload_dir = Path(settings.FILES_PATH) / relative_path
         upload_dir.mkdir(parents=True, exist_ok=True)
-        
+
         # Сохраняем файл
         file_contents = await file.read()
-        file_path = upload_dir / file.filename
-        
+        safe_name = sanitize_filename(file.filename) if file.filename else "unnamed_file"
+        file_extension = Path(safe_name).suffix
+        unique_filename = f"{uuid.uuid4()}{file_extension}"
+        file_path = upload_dir / unique_filename
+
         with open(file_path, "wb") as f:
             f.write(file_contents)
-        
-        # Создаем запись в БД
+
+        # Создаем запись в БД (сохраняем относительный путь)
         document = Document(
             title=data.title,
             description=data.description,
             category=data.category,
             object_id=data.object_id,
-            file_path=str(file_path),
-            file_name=file.filename,
+            file_path=f"{relative_path}/{unique_filename}",
+            file_name=safe_name,
             file_size=len(file_contents),
             file_type=file.content_type,
             created_by=user.id

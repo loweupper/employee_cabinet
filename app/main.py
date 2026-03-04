@@ -368,6 +368,11 @@ app.add_middleware(
         re.compile(r"^/objects/\d+/subcategories/create$"),
         re.compile(r"^/objects/\d+/subcategories/\d+/update$"),
         re.compile(r"^/objects/\d+/subcategories/\d+/delete$"),
+
+        # ✅ ДОКУМЕНТЫ
+        re.compile(r"^/objects/\d+/documents/upload$"),
+        re.compile(r"^/objects/\d+/documents/\d+/update$"),
+        re.compile(r"^/objects/\d+/documents/\d+/delete$"),
     ],
 )
 
