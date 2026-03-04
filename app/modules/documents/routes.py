@@ -47,7 +47,7 @@ def _is_ajax_request(request: Request) -> bool:
 # ===================================
 # Загрузка документов к объекту (множественная загрузка)
 # ===================================
-@router.post("/objects/{object_id}/documents/upload")
+@router.post("/objects/{object_id}/upload")
 @limiter.limit("10/hour")
 async def upload_documents(
     object_id: int,
@@ -218,7 +218,7 @@ async def upload_documents(
 # ===================================
 # Обновление документа
 # ===================================
-@router.post("/objects/{object_id}/documents/{document_id}/update")
+@router.post("/objects/{object_id}/{document_id}/update")
 async def update_document(
     object_id: int,
     document_id: int,
@@ -288,7 +288,7 @@ async def update_document(
 # ===================================
 # Удаление документа
 # ===================================
-@router.post("/objects/{object_id}/documents/{document_id}/delete")
+@router.post("/objects/{object_id}/{document_id}/delete")
 async def delete_document(
     object_id: int,
     document_id: int,
@@ -361,9 +361,7 @@ async def delete_document(
 # ===================================
 # Скачивание документа
 # ===================================
-# TODO(cleanup): this route is mounted at /documents, so the full path becomes
-# /documents/documents/{document_id}/download — consider flattening to /{document_id}/download
-@router.get("/documents/{document_id}/download")
+@router.get("/{document_id}/download")
 async def download_document(
     document_id: int,
     user: User = Depends(get_current_user_from_cookie),
@@ -407,7 +405,7 @@ async def download_document(
 # ===================================
 # Просмотр списка документов объекта с фильтрацией по категориям
 # ===================================
-@router.get("", response_class=HTMLResponse)
+@router.get("/objects", response_class=HTMLResponse)
 async def documents_list(
     request: Request,
     object_id: int,

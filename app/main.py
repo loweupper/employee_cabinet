@@ -395,7 +395,7 @@ app.add_middleware(RequestIDMiddleware)
 app.include_router(auth_router, prefix="/api/v1")
 app.include_router(profile_router, prefix="/profile")
 app.include_router(object_router, prefix="/objects")
-app.include_router(documents_router)
+app.include_router(documents_router, prefix="/documents")
 app.include_router(admin_router)
 
 # Monitoring routes (admin only)
