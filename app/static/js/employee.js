@@ -242,7 +242,7 @@ function uploadFilesImmediately(files) {
     const objectId = window.location.pathname.split('/').pop();
     console.log('📁 Загружаем файлы для объекта ID:', objectId);
 
-    fetch(`/objects/${objectId}/documents/upload`, {
+    fetch(`/documents/objects/${objectId}/upload`, {
         method: 'POST',
         body: formData
     })
@@ -538,7 +538,7 @@ function openEditDocumentModal(docId, title, category, subcategoryId) {
     if (!modal || !form) return;
 
     const objectId = window.location.pathname.split('/').pop();
-    form.action = `/objects/${objectId}/documents/${docId}/update`;
+    form.action = `/documents/objects/${objectId}/${docId}/update`;
 
     document.getElementById('editDocTitle').value = title;
     document.getElementById('editDocCategory').value = category;
@@ -590,7 +590,7 @@ function deleteDocument(objectId, documentId, fileName) {
     if (confirm(`Удалить документ "${fileName}"?`)) {
         const form = document.createElement('form');
         form.method = 'POST';
-        form.action = `/objects/${objectId}/documents/${documentId}/delete`;
+        form.action = `/documents/objects/${objectId}/${documentId}/delete`;
         document.body.appendChild(form);
         form.submit();
     }
