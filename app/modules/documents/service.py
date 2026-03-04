@@ -44,7 +44,7 @@ class DocumentService:
 
         # Генерируем уникальное имя файла с оригинальным расширением
         file_extension = Path(safe_name).suffix
-        unique_filename = f"{uuid.uuid4()}{file_extension}"
+        unique_filename = f"{uuid.uuid4().hex[:12]}{file_extension}"
         file_path = upload_dir / unique_filename
 
         # Сохраняем файл
@@ -52,7 +52,7 @@ class DocumentService:
         with open(file_path, "wb") as f:
             f.write(file_contents)
 
-        logger.info(f"✅ Файл сохранён: {file_path}")
+        logger.info(f"✅ File saved: {file_path}")
 
         # Возвращаем относительный путь для сохранения в БД
         return f"{relative_path}/{unique_filename}"

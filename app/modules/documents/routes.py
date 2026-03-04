@@ -182,13 +182,13 @@ async def upload_documents(
         # Формируем сообщение
         message = f"Загружено {uploaded_count} документов"
         if errors:
-            message += f". Ошибки: {', '.join(errors)}"
+            message += f". Ошибки: {', '.join(errors[:3])}"  # Показываем максимум 3 ошибки
 
         logger.info({
             "event": "documents_uploaded",
             "object_id": object_id,
             "uploaded": uploaded_count,
-            "errors": errors,
+            "error_count": len(errors),
             "user_id": user.id
         })
 
@@ -322,6 +322,15 @@ async def delete_document(
                 url=f"/objects/{object_id}?error=Нет прав для удаления",
                 status_code=303
             )
+        
+        # ✅ Удаляем файл с диска
+        file_path = Path(settings.FILES_PATH) / document.file_path
+        if file_path.exists():
+            try:
+                file_path.unlink()
+                logger.info(f"✅ File deleted: {file_path}")
+            except Exception as e:
+                logger.error(f"Could not delete file {file_path}: {e}")
         
         # Мягкое удаление
         document.deleted_at = datetime.utcnow()
