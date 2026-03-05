@@ -3,7 +3,6 @@ from core.template_helpers import get_sidebar_context
 from core.config import settings
 from core.constants import UserRole  # ✅ импорт из constants
 from core.validators import (
-    sanitize_filename,
     validate_file_extension,
     ALLOWED_DOCUMENT_EXTENSIONS
 )
@@ -13,6 +12,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse, FileResponse, JSON
 from pathlib import Path
 from sqlalchemy.orm import Session
 import logging
+import os
 from typing import Optional
 from datetime import datetime
 from slowapi import Limiter
@@ -134,17 +134,16 @@ async def upload_documents(
                     errors.append(f"{file.filename} (недопустимый тип файла)")
                     continue
                 
-                # 3. Sanitize filename to prevent directory traversal
-                safe_filename = sanitize_filename(file.filename) if file.filename else "unnamed_file"
-                
                 # ===== End Security Validation =====
                 
                 # Сохраняем файл (service also does sanitization)
                 file_path = await DocumentService.save_file(file, object_id)
 
-                # Название документа - используем os.path.splitext для надежности
-                import os
-                doc_title, _ = os.path.splitext(safe_filename)
+                # Используем ОРИГИНАЛЬНОЕ имя для БД
+                original_filename = file.filename if file.filename else "unnamed_file"
+
+                # Название документа из оригинального имени
+                doc_title, _ = os.path.splitext(original_filename)
                 if not doc_title:
                     doc_title = "Документ"
 
@@ -155,7 +154,7 @@ async def upload_documents(
                     category=DocumentCategory(category),
                     subcategory_id=subcategory_id,
                     file_path=file_path,
-                    file_name=safe_filename,  # Use sanitized filename
+                    file_name=original_filename,  # Use original filename for display/download
                     file_size=actual_size,  # Use actual validated size
                     file_type=file.content_type,
                     object_id=object_id,
