@@ -130,9 +130,31 @@ function closeEditSubcategoryModal() {
 // ===================================
 
 function getCsrfToken() {
+    // Способ 1: Из мета-тега (самый надежный)
+    const meta = document.querySelector('meta[name="csrf-token"]');
+    if (meta) {
+        const token = meta.getAttribute('content');
+        console.log('✅ CSRF из мета-тега: длина=' + token.length);
+        return token;
+    }
+
+    // Способ 2: Из cookies
     const cookie = document.cookie.split('; ').find(row => row.startsWith('csrftoken='));
-    return (cookie ? cookie.split('=').slice(1).join('=') : '') ||
-           document.querySelector('input[name="csrf_token"]')?.value || '';
+    if (cookie) {
+        const token = cookie.split('=').slice(1).join('=');
+        console.log('✅ CSRF из cookies: длина=' + token.length);
+        return token;
+    }
+
+    // Способ 3: Из hidden input в форме
+    const input = document.querySelector('input[name="csrf_token"]');
+    if (input && input.value) {
+        console.log('✅ CSRF из input: длина=' + input.value.length);
+        return input.value;
+    }
+
+    console.warn('❌ CSRF токен не найден! Доступные способы не сработали.');
+    return '';
 }
 
 // ===================================

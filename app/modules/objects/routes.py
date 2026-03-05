@@ -480,6 +480,7 @@ async def object_detail(
                 "subcategories_legal": subcategories_legal_data,
                 "subcategories_hr": subcategories_hr_data,
                 "all_users": all_users,
+                "csrf_token": request.scope.get("csrf_token", ""),
                 "success": success,
                 "error": error,
                 **sidebar_context
