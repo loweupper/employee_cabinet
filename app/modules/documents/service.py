@@ -39,11 +39,11 @@ class DocumentService:
         upload_dir = Path(settings.FILES_PATH) / relative_path
         upload_dir.mkdir(parents=True, exist_ok=True)
 
-        # Sanitize the filename
-        safe_name = sanitize_filename(file.filename) if file.filename else "unnamed_file"
+        # Определяем расширение из оригинального имени (ДО sanitize)
+        original_filename = file.filename if file.filename else "unnamed_file"
+        file_extension = get_file_extension(original_filename)
 
-        # Генерируем уникальное имя файла с оригинальным расширением
-        file_extension = get_file_extension(safe_name)
+        # Генерируем уникальное имя файла с правильным расширением
         unique_filename = f"{uuid.uuid4().hex[:12]}{file_extension}"
         file_path = upload_dir / unique_filename
 
@@ -87,8 +87,9 @@ class DocumentService:
 
         # Сохраняем файл
         file_contents = await file.read()
-        safe_name = sanitize_filename(file.filename) if file.filename else "unnamed_file"
-        file_extension = get_file_extension(safe_name)
+        # Определяем расширение из оригинального имени (ДО sanitize)
+        original_filename = file.filename if file.filename else "unnamed_file"
+        file_extension = get_file_extension(original_filename)
         unique_filename = f"{uuid.uuid4().hex[:12]}{file_extension}"
         file_path = upload_dir / unique_filename
 
@@ -102,7 +103,7 @@ class DocumentService:
             category=data.category,
             object_id=data.object_id,
             file_path=f"{relative_path}/{unique_filename}",
-            file_name=safe_name,
+            file_name=original_filename,
             file_size=len(file_contents),
             file_type=file.content_type,
             created_by=user.id
