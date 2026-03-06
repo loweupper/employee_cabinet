@@ -8,11 +8,13 @@ from core.validators import (
 )
 from modules.objects.models import Object, ObjectAccess
 from fastapi import APIRouter, Depends, Request, Form, HTTPException
-from fastapi.responses import HTMLResponse, RedirectResponse, FileResponse, JSONResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, FileResponse, JSONResponse, StreamingResponse
 from pathlib import Path
 from sqlalchemy.orm import Session
+import io
 import logging
 import os
+import zipfile
 from typing import Optional
 from datetime import datetime
 from slowapi import Limiter
@@ -61,12 +63,15 @@ async def upload_documents(
     Загрузить множество документов к объекту
     """
 
+    # ✅ Сохраняем user.id до try-блока, чтобы избежать PendingRollbackError
+    user_id = user.id
+
     logger.info({
         "event": "upload_documents_start",
         "object_id": object_id,
         "category": category,
         "subcategory_id": subcategory_id,
-        "user_id": user.id
+        "user_id": user_id
     })
 
     try:
@@ -83,7 +88,7 @@ async def upload_documents(
             "event": "upload_documents_received_files",
             "count": len(files),
             "object_id": object_id,
-            "user_id": user.id
+            "user_id": user_id
         })
 
         if not files:
@@ -115,7 +120,7 @@ async def upload_documents(
                         "size": actual_size,
                         "max_size": settings.MAX_FILE_SIZE,
                         "object_id": object_id,
-                        "user_id": user.id
+                        "user_id": user_id
                     })
                     errors.append(f"{file.filename} (слишком большой файл)")
                     continue
@@ -129,7 +134,7 @@ async def upload_documents(
                         "event": "file_upload_rejected_extension",
                         "filename": file.filename,
                         "object_id": object_id,
-                        "user_id": user.id
+                        "user_id": user_id
                     })
                     errors.append(f"{file.filename} (недопустимый тип файла)")
                     continue
@@ -158,7 +163,7 @@ async def upload_documents(
                     file_size=actual_size,  # Use actual validated size
                     file_type=file.content_type,
                     object_id=object_id,
-                    created_by=user.id
+                    created_by=user_id
                 )
 
                 db.add(document)
@@ -169,7 +174,7 @@ async def upload_documents(
                     "event": "ошибка_загрузки_документа",
                     "file": file.filename,
                     "object_id": object_id,
-                    "user_id": user.id,
+                    "user_id": user_id,
                     "error": str(e)
                 })
                 errors.append(file.filename)
@@ -188,7 +193,7 @@ async def upload_documents(
             "object_id": object_id,
             "uploaded": uploaded_count,
             "error_count": len(errors),
-            "user_id": user.id
+            "user_id": user_id
         })
 
         return RedirectResponse(
@@ -200,9 +205,12 @@ async def upload_documents(
         logger.error({
             "event": "upload_documents_fatal_error",
             "object_id": object_id,
-            "user_id": user.id,
+            "user_id": user_id,
             "error": str(e)
         })
+
+        # ✅ Откатываем сессию при ошибке
+        db.rollback()
 
         if _is_ajax_request(request):
             return JSONResponse(
@@ -676,4 +684,85 @@ async def batch_delete_documents(
 
     except Exception as e:
         logger.error(f"Ошибка массового удаления: {str(e)}")
+        return JSONResponse(status_code=500, content={"detail": str(e)})
+
+
+# ===================================
+# Скачивание нескольких документов как ZIP
+# ===================================
+@router.post("/batch-download")
+async def batch_download_documents(
+    request: Request,
+    user: User = Depends(get_current_user_from_cookie),
+    db: Session = Depends(get_db)
+):
+    """Скачать несколько документов как ZIP архив"""
+    try:
+        data = await request.json()
+    except Exception:
+        return JSONResponse(status_code=400, content={"detail": "Некорректный JSON"})
+
+    document_ids = data.get("document_ids", [])
+
+    if not document_ids:
+        return JSONResponse(status_code=400, content={"detail": "Не указаны документы"})
+
+    try:
+        zip_buffer = io.BytesIO()
+
+        with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+            for doc_id in document_ids:
+                doc = db.query(Document).filter(Document.id == doc_id).first()
+
+                if not doc or not doc.can_access(user, db):
+                    logger.warning({
+                        "event": "batch_download_document_skipped",
+                        "doc_id": doc_id,
+                        "reason": "not found or no access",
+                        "user_id": user.id
+                    })
+                    continue
+
+                files_base = Path(settings.FILES_PATH).resolve()
+                file_path = (files_base / doc.file_path).resolve()
+
+                # Защита от path traversal
+                if not str(file_path).startswith(str(files_base)):
+                    logger.warning({
+                        "event": "batch_download_path_traversal",
+                        "doc_id": doc_id,
+                        "user_id": user.id
+                    })
+                    continue
+
+                if not file_path.exists():
+                    logger.warning({
+                        "event": "batch_download_file_missing",
+                        "doc_id": doc_id,
+                        "file_path": str(file_path),
+                        "user_id": user.id
+                    })
+                    continue
+
+                # Префикс doc_id предотвращает коллизии имён файлов
+                archive_name = f"{doc.id}_{doc.file_name}"
+                with open(file_path, 'rb') as f:
+                    zip_file.writestr(archive_name, f.read())
+
+        zip_buffer.seek(0)
+
+        logger.info({
+            "event": "documents_batch_downloaded",
+            "count": len(document_ids),
+            "user_id": user.id
+        })
+
+        return StreamingResponse(
+            iter([zip_buffer.getvalue()]),
+            media_type="application/zip",
+            headers={"Content-Disposition": "attachment; filename=documents.zip"}
+        )
+
+    except Exception as e:
+        logger.error(f"Ошибка скачивания: {str(e)}")
         return JSONResponse(status_code=500, content={"detail": str(e)})
