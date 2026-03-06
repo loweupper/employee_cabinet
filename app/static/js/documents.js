@@ -1,5 +1,10 @@
 // ===================================
 // documents.js - AJAX-функции для работы с документами
+//
+// Зависимости:
+//   - getCsrfToken()       определена в employee.js (загружается через sidebar.html ДО этого скрипта)
+//   - subcategoriesData    определена в employee.js
+//   - openEditDocumentModal() переопределяется в этом файле (добавляет поддержку версионирования)
 // ===================================
 
 // ===================================
@@ -11,7 +16,7 @@ async function createSubcategoryViaAjax(e) {
     e.preventDefault();
 
     const nameInput = document.getElementById('subcategoryName');
-    const categoryInput = document.getElementById('subcategoryCategory');
+    const categoryInput = document.getElementById('subcatCategory');
 
     if (!nameInput || !categoryInput) {
         console.error('Поля формы не найдены');
@@ -150,12 +155,8 @@ async function confirmBatchDelete() {
 // Хранит ID текущего редактируемого документа
 let currentEditDocumentId = null;
 
-// Расширенная функция открытия модалки редактирования
-// (переопределяет функцию из employee.js чтобы запомнить document ID)
-const _origOpenEditDocumentModal = typeof openEditDocumentModal === 'function'
-    ? openEditDocumentModal
-    : null;
-
+// Переопределяем openEditDocumentModal из employee.js, добавляя поддержку версионирования файлов.
+// documents.js загружается ПОСЛЕ employee.js (через sidebar.html), поэтому переопределение корректно.
 function openEditDocumentModal(docId, title, category, subcategoryId) {
     currentEditDocumentId = docId;
 
@@ -263,45 +264,6 @@ function showNotification(message, type) {
         notification.style.opacity = '0';
         setTimeout(() => notification.remove(), 300);
     }, 3000);
-}
-
-// ===================================
-// Обновление поля категории в модалке подкатегории
-// при изменении раздела в форме загрузки
-// ===================================
-
-// Переопределяем updateSubcategories из employee.js чтобы также обновлять поле категории
-const _origUpdateSubcategories = typeof updateSubcategories === 'function'
-    ? updateSubcategories
-    : null;
-
-function updateSubcategories() {
-    // Вызываем оригинальную функцию если она была определена до нас
-    if (_origUpdateSubcategories) {
-        _origUpdateSubcategories();
-    }
-
-    // Обновляем скрытое поле и отображение категории в модалке создания подкатегории
-    const category = document.getElementById('uploadCategory')?.value || '';
-    const categoryInput = document.getElementById('subcategoryCategory');
-    const categoryDisplay = document.getElementById('subcatCategoryDisplay');
-
-    if (categoryInput) {
-        categoryInput.value = category;
-    }
-
-    const categoryNames = {
-        'general': '📋 Общие',
-        'technical': '📐 Технические',
-        'accounting': '💰 Бухгалтерия',
-        'safety': '👷 Охрана труда',
-        'legal': '⚖️ Юридические',
-        'hr': '👔 Кадровые'
-    };
-
-    if (categoryDisplay) {
-        categoryDisplay.textContent = categoryNames[category] || 'Выберите раздел в форме загрузки выше';
-    }
 }
 
 console.log('documents.js загружен');

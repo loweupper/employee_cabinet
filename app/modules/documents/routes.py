@@ -547,8 +547,8 @@ async def update_document_file(
     """Обновить содержимое документа (новая версия)"""
     document = db.query(Document).filter(
         Document.id == document_id,
-        Document.is_active == True,
-        Document.deleted_at == None
+        Document.is_active.is_(True),
+        Document.deleted_at.is_(None)
     ).first()
 
     if not document:
@@ -640,8 +640,8 @@ async def batch_delete_documents(
         for doc_id in document_ids:
             doc = db.query(Document).filter(
                 Document.id == doc_id,
-                Document.is_active == True,
-                Document.deleted_at == None
+                Document.is_active.is_(True),
+                Document.deleted_at.is_(None)
             ).first()
 
             if not doc:
