@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, Request, Form, UploadFile, File, HTTPException, Query, status
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from sqlalchemy.orm import Session
 from pydantic import ValidationError
 import logging
@@ -1015,33 +1015,70 @@ async def get_object_subcategories(
 @router.post("/{object_id}/subcategories/create")
 async def create_subcategory(
     object_id: int,
-    name: str = Form(...),
-    description: Optional[str] = Form(None),
-    category: str = Form(...),
+    request: Request,
     current_user: User = Depends(get_current_user_from_cookie),
     db: Session = Depends(get_db)
 ):
     """
-    Создать подкатегорию для объекта
+    Создать подкатегорию для объекта.
+    Поддерживает как обычные form-запросы, так и AJAX (application/json).
     """
+    # Определяем тип запроса и парсим данные
+    content_type = request.headers.get("Content-Type", "")
+    is_ajax = "application/json" in content_type
+
+    if is_ajax:
+        try:
+            body = await request.json()
+            name = (body.get("name") or "").strip()
+            description = body.get("description") or None
+            category = (body.get("category") or "").strip()
+        except Exception:
+            return JSONResponse(status_code=400, content={"detail": "Некорректный JSON"})
+    else:
+        form_data = await request.form()
+        name = (form_data.get("name") or "").strip()
+        description = form_data.get("description") or None
+        category = (form_data.get("category") or "").strip()
+
     # Проверяем доступ
     obj = db.query(Object).filter(Object.id == object_id).first()
-    
+
     if not obj:
+        if is_ajax:
+            return JSONResponse(status_code=404, content={"detail": "Объект не найден"})
         return RedirectResponse(
             url=f"/objects/{object_id}?error=Объект не найден",
             status_code=303
         )
-    
+
     if obj.created_by != current_user.id and current_user.role != UserRole.ADMIN:  # ✅ исправлено
+        if is_ajax:
+            return JSONResponse(status_code=403, content={"detail": "Недостаточно прав"})
         return RedirectResponse(
             url=f"/objects/{object_id}?error=Недостаточно прав",
             status_code=303
         )
-    
+
+    if not name:
+        if is_ajax:
+            return JSONResponse(status_code=400, content={"detail": "Введите название подкатегории"})
+        return RedirectResponse(
+            url=f"/objects/{object_id}?error=Введите название подкатегории",
+            status_code=303
+        )
+
+    if not category:
+        if is_ajax:
+            return JSONResponse(status_code=400, content={"detail": "Укажите раздел"})
+        return RedirectResponse(
+            url=f"/objects/{object_id}?error=Укажите раздел",
+            status_code=303
+        )
+
     # Создаём подкатегорию
     from modules.documents.models import DocumentCategory
-    
+
     subcategory = DocumentSubcategory(
         name=name,
         description=description,
@@ -1049,10 +1086,10 @@ async def create_subcategory(
         object_id=object_id,
         created_by=current_user.id
     )
-    
+
     db.add(subcategory)
     db.commit()
-    
+
     logger.info({
         "event": "subcategory_created",
         "object_id": obj.id,
@@ -1063,7 +1100,14 @@ async def create_subcategory(
         "actor_email": current_user.email,
         "timestamp": datetime.utcnow().isoformat()
     })
-    
+
+    if is_ajax:
+        return JSONResponse({
+            "id": subcategory.id,
+            "name": subcategory.name,
+            "category": subcategory.category.value
+        })
+
     return RedirectResponse(
         url=f"/objects/{object_id}?success=Подкатегория '{name}' создана",
         status_code=303

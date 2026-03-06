@@ -532,3 +532,148 @@ async def documents_list(
             **sidebar_context
         }
     )
+
+
+# ===================================
+# Обновление файла документа (версионирование)
+# ===================================
+@router.post("/{document_id}/update")
+async def update_document_file(
+    document_id: int,
+    request: Request,
+    user: User = Depends(get_current_user_from_cookie),
+    db: Session = Depends(get_db)
+):
+    """Обновить содержимое документа (новая версия)"""
+    document = db.query(Document).filter(
+        Document.id == document_id,
+        Document.is_active == True,
+        Document.deleted_at == None
+    ).first()
+
+    if not document:
+        return JSONResponse(status_code=404, content={"detail": "Документ не найден"})
+
+    # Проверяем права
+    if not DocumentService.can_update_document(user, document, db):
+        return JSONResponse(status_code=403, content={"detail": "Нет прав для обновления"})
+
+    try:
+        form = await request.form()
+        file = form.get("file")
+
+        if not file or not file.filename:
+            return JSONResponse(status_code=400, content={"detail": "Файл не выбран"})
+
+        # Валидация расширения
+        if not validate_file_extension(file.filename, ALLOWED_DOCUMENT_EXTENSIONS):
+            return JSONResponse(status_code=400, content={"detail": "Недопустимый тип файла"})
+
+        # Валидация размера
+        file_contents = await file.read()
+        actual_size = len(file_contents)
+        if actual_size > settings.MAX_FILE_SIZE:
+            return JSONResponse(status_code=400, content={"detail": "Файл слишком большой"})
+
+        await file.seek(0)
+
+        # Удаляем старый файл
+        old_file_path = Path(settings.FILES_PATH) / document.file_path
+        if old_file_path.exists():
+            try:
+                old_file_path.unlink()
+            except Exception as e:
+                logger.warning(f"Не удалось удалить старый файл {old_file_path}: {e}")
+
+        # Сохраняем новый файл
+        new_file_path = await DocumentService.save_file(file, document.object_id)
+
+        # Обновляем запись документа
+        original_filename = file.filename if file.filename else document.file_name
+        document.file_path = new_file_path
+        document.file_name = original_filename
+        document.file_size = actual_size
+        document.file_type = file.content_type
+        document.version = (document.version or 1) + 1
+        document.updated_by = user.id
+        document.updated_at = datetime.utcnow()
+
+        db.commit()
+
+        logger.info({
+            "event": "document_file_updated",
+            "document_id": document_id,
+            "version": document.version,
+            "user_id": user.id
+        })
+
+        return JSONResponse({"status": "ok", "version": document.version})
+
+    except Exception as e:
+        logger.error(f"Ошибка обновления файла документа: {str(e)}")
+        return JSONResponse(status_code=500, content={"detail": str(e)})
+
+
+# ===================================
+# Массовое удаление документов
+# ===================================
+@router.post("/batch-delete")
+async def batch_delete_documents(
+    request: Request,
+    user: User = Depends(get_current_user_from_cookie),
+    db: Session = Depends(get_db)
+):
+    """Удалить несколько документов одновременно"""
+    try:
+        data = await request.json()
+    except Exception:
+        return JSONResponse(status_code=400, content={"detail": "Некорректный JSON"})
+
+    document_ids = data.get("document_ids", [])
+
+    if not document_ids:
+        return JSONResponse(status_code=400, content={"detail": "Не указаны документы"})
+
+    try:
+        deleted_count = 0
+
+        for doc_id in document_ids:
+            doc = db.query(Document).filter(
+                Document.id == doc_id,
+                Document.is_active == True,
+                Document.deleted_at == None
+            ).first()
+
+            if not doc:
+                continue
+
+            # Проверяем права
+            if not DocumentService.can_delete_document(user, doc, db):
+                continue
+
+            # Удаляем файл с диска
+            file_path = Path(settings.FILES_PATH) / doc.file_path
+            if file_path.exists():
+                try:
+                    file_path.unlink()
+                except Exception as e:
+                    logger.warning(f"Не удалось удалить файл {file_path}: {e}")
+
+            # Мягкое удаление в БД
+            doc.deleted_at = datetime.utcnow()
+            doc.is_active = False
+            deleted_count += 1
+
+        db.commit()
+
+        logger.info({
+            "event": "documents_batch_deleted",
+            "count": deleted_count,
+            "user_id": user.id
+        })
+
+        return JSONResponse({"status": "ok", "deleted": deleted_count})
+
+    except Exception as e:
+        logger.error(f"Ошибка массового удаления: {str(e)}")
+        return JSONResponse(status_code=500, content={"detail": str(e)})

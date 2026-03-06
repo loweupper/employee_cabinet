@@ -1,0 +1,307 @@
+// ===================================
+// documents.js - AJAX-функции для работы с документами
+// ===================================
+
+// ===================================
+// Создание подкатегории через AJAX
+// (Модалка остаётся открытой для загрузки файлов)
+// ===================================
+
+async function createSubcategoryViaAjax(e) {
+    e.preventDefault();
+
+    const nameInput = document.getElementById('subcategoryName');
+    const categoryInput = document.getElementById('subcategoryCategory');
+
+    if (!nameInput || !categoryInput) {
+        console.error('Поля формы не найдены');
+        return;
+    }
+
+    const name = nameInput.value.trim();
+    const category = categoryInput.value;
+    const objectId = window.location.pathname.split('/').pop();
+
+    if (!name) {
+        alert('Введите имя подкатегории');
+        return;
+    }
+
+    if (!category) {
+        alert('Сначала выберите раздел в форме загрузки');
+        return;
+    }
+
+    try {
+        const response = await fetch(`/objects/${objectId}/subcategories/create`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCsrfToken()
+            },
+            body: JSON.stringify({ name, category })
+        });
+
+        if (response.ok) {
+            const data = await response.json();
+
+            // ✅ Добавляем в dropdown формы загрузки
+            const select = document.getElementById('uploadSubcategory');
+            if (select) {
+                const option = document.createElement('option');
+                option.value = data.id;
+                option.textContent = data.name;
+                select.appendChild(option);
+                select.value = data.id;
+            }
+
+            // ✅ Обновляем локальные данные подкатегорий (для работы фильтров)
+            if (typeof subcategoriesData !== 'undefined' && subcategoriesData[category]) {
+                subcategoriesData[category].push({ id: data.id, name: data.name });
+            }
+
+            // ✅ Очищаем форму
+            nameInput.value = '';
+
+            // ✅ Закрываем модалку создания подкатегории
+            const modal = document.getElementById('createSubcategoryModal');
+            if (modal) {
+                modal.classList.add('hidden');
+            }
+
+            // ✅ Показываем уведомление об успехе
+            showNotification('✅ Подкатегория создана!', 'success');
+        } else {
+            const error = await response.json();
+            alert('Ошибка: ' + (error.detail || 'Неизвестная ошибка'));
+        }
+    } catch (err) {
+        console.error('Ошибка создания подкатегории:', err);
+        alert('Ошибка при создании подкатегории');
+    }
+}
+
+// ===================================
+// Массовое удаление документов
+// ===================================
+
+function openBatchDeleteModal() {
+    const checkboxes = document.querySelectorAll('.document-checkbox:checked');
+
+    if (checkboxes.length === 0) {
+        alert('Выберите документы для удаления');
+        return;
+    }
+
+    // Заполняем счётчик и список
+    document.getElementById('batchDeleteCount').textContent = checkboxes.length;
+
+    const listEl = document.getElementById('batchDeleteList');
+    if (listEl) {
+        listEl.innerHTML = Array.from(checkboxes).map(cb => {
+            const item = cb.closest('.document-item');
+            const title = item ? item.querySelector('.font-medium')?.textContent?.trim() : `Документ #${cb.dataset.docId}`;
+            return `<div class="text-sm text-gray-700 px-2 py-1 bg-red-50 rounded">🗑️ ${title}</div>`;
+        }).join('');
+    }
+
+    document.getElementById('batchDeleteModal').classList.remove('hidden');
+}
+
+async function confirmBatchDelete() {
+    const selected = Array.from(
+        document.querySelectorAll('.document-checkbox:checked')
+    ).map(cb => parseInt(cb.dataset.docId));
+
+    if (selected.length === 0) {
+        return;
+    }
+
+    document.getElementById('batchDeleteModal').classList.add('hidden');
+
+    try {
+        const response = await fetch('/documents/batch-delete', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCsrfToken()
+            },
+            body: JSON.stringify({ document_ids: selected })
+        });
+
+        if (response.ok) {
+            const data = await response.json();
+            showNotification(`✅ Удалено ${data.deleted} файл(ов)!`, 'success');
+            setTimeout(() => location.reload(), 1000);
+        } else {
+            const error = await response.json();
+            alert('Ошибка при удалении файлов: ' + (error.detail || 'Неизвестная ошибка'));
+        }
+    } catch (err) {
+        console.error('Ошибка удаления:', err);
+        alert('Ошибка при удалении файлов');
+    }
+}
+
+// ===================================
+// Обновление файла документа (версионирование)
+// ===================================
+
+// Хранит ID текущего редактируемого документа
+let currentEditDocumentId = null;
+
+// Расширенная функция открытия модалки редактирования
+// (переопределяет функцию из employee.js чтобы запомнить document ID)
+const _origOpenEditDocumentModal = typeof openEditDocumentModal === 'function'
+    ? openEditDocumentModal
+    : null;
+
+function openEditDocumentModal(docId, title, category, subcategoryId) {
+    currentEditDocumentId = docId;
+
+    // Сбрасываем поле загрузки файла
+    const fileInput = document.getElementById('editDocFileInput');
+    const fileInputName = document.getElementById('editDocFileInputName');
+    const updateBtn = document.getElementById('editDocUpdateFileBtn');
+    if (fileInput) fileInput.value = '';
+    if (fileInputName) fileInputName.textContent = 'Файл не выбран';
+    if (updateBtn) updateBtn.classList.add('hidden');
+
+    const modal = document.getElementById('editDocumentModal');
+    const form = document.getElementById('editDocumentForm');
+
+    if (!modal || !form) return;
+
+    const objectId = window.location.pathname.split('/').pop();
+    form.action = `/documents/objects/${objectId}/${docId}/update`;
+
+    document.getElementById('editDocTitle').value = title;
+    document.getElementById('editDocCategory').value = category;
+
+    // Обновляем подкатегории для выбранной категории
+    if (typeof updateEditSubcategories === 'function') {
+        updateEditSubcategories();
+    }
+
+    // Устанавливаем текущую подкатегорию
+    setTimeout(() => {
+        if (subcategoryId) {
+            document.getElementById('editDocSubcategory').value = subcategoryId;
+        }
+    }, 100);
+
+    modal.classList.remove('hidden');
+}
+
+async function updateDocumentFile() {
+    const fileInput = document.getElementById('editDocFileInput');
+    if (!fileInput || !fileInput.files.length) {
+        alert('Выберите новый файл');
+        return;
+    }
+
+    if (!currentEditDocumentId) {
+        alert('Документ не выбран');
+        return;
+    }
+
+    const formData = new FormData();
+    formData.append('file', fileInput.files[0]);
+
+    const btn = document.getElementById('editDocUpdateFileBtn');
+    if (btn) {
+        btn.disabled = true;
+        btn.textContent = '⏳ Загрузка...';
+    }
+
+    try {
+        const response = await fetch(`/documents/${currentEditDocumentId}/update`, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': getCsrfToken()
+            },
+            body: formData
+        });
+
+        if (response.ok) {
+            const data = await response.json();
+            showNotification(`✅ Файл обновлён (версия ${data.version})`, 'success');
+
+            // Закрываем модалку и перезагружаем страницу
+            const modal = document.getElementById('editDocumentModal');
+            if (modal) modal.classList.add('hidden');
+            setTimeout(() => location.reload(), 1000);
+        } else {
+            const error = await response.json();
+            alert('Ошибка при обновлении файла: ' + (error.detail || 'Неизвестная ошибка'));
+        }
+    } catch (err) {
+        console.error('Ошибка обновления:', err);
+        alert('Ошибка при обновлении файла');
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.textContent = '⬆️ Загрузить новую версию';
+        }
+    }
+}
+
+// ===================================
+// Показать уведомление (toast)
+// ===================================
+
+function showNotification(message, type) {
+    const notification = document.createElement('div');
+    notification.className = [
+        'fixed top-4 right-4 px-6 py-3 rounded-lg text-white z-50 shadow-lg transition-opacity',
+        type === 'success' ? 'bg-green-500' : 'bg-blue-500'
+    ].join(' ');
+    notification.textContent = message;
+    document.body.appendChild(notification);
+
+    setTimeout(() => {
+        notification.style.opacity = '0';
+        setTimeout(() => notification.remove(), 300);
+    }, 3000);
+}
+
+// ===================================
+// Обновление поля категории в модалке подкатегории
+// при изменении раздела в форме загрузки
+// ===================================
+
+// Переопределяем updateSubcategories из employee.js чтобы также обновлять поле категории
+const _origUpdateSubcategories = typeof updateSubcategories === 'function'
+    ? updateSubcategories
+    : null;
+
+function updateSubcategories() {
+    // Вызываем оригинальную функцию если она была определена до нас
+    if (_origUpdateSubcategories) {
+        _origUpdateSubcategories();
+    }
+
+    // Обновляем скрытое поле и отображение категории в модалке создания подкатегории
+    const category = document.getElementById('uploadCategory')?.value || '';
+    const categoryInput = document.getElementById('subcategoryCategory');
+    const categoryDisplay = document.getElementById('subcatCategoryDisplay');
+
+    if (categoryInput) {
+        categoryInput.value = category;
+    }
+
+    const categoryNames = {
+        'general': '📋 Общие',
+        'technical': '📐 Технические',
+        'accounting': '💰 Бухгалтерия',
+        'safety': '👷 Охрана труда',
+        'legal': '⚖️ Юридические',
+        'hr': '👔 Кадровые'
+    };
+
+    if (categoryDisplay) {
+        categoryDisplay.textContent = categoryNames[category] || 'Выберите раздел в форме загрузки выше';
+    }
+}
+
+console.log('documents.js загружен');

@@ -1,0 +1,89 @@
+<!-- ✅ МОДАЛЬНОЕ ОКНО: Загрузка документа (с множественной загрузкой) -->
+<div id="uploadDocModal"
+    class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+    <div class="bg-white rounded-xl shadow-2xl p-8 max-w-lg w-full mx-4 max-h-[90vh] overflow-y-auto">
+        <div class="flex justify-between items-center mb-6">
+            <h3 class="text-xl font-bold text-gray-800">📤 Загрузить документы</h3>
+            <button onclick="closeUploadModal()" class="text-gray-500 hover:text-gray-700 text-2xl">
+                ×
+            </button>
+        </div>
+
+        <div class="space-y-4">
+            <!-- Раздел -->
+            <div>
+                <label class="block text-gray-700 font-medium mb-2">Раздел *</label>
+                <select id="uploadCategory" required onchange="updateSubcategories()"
+                    class="w-full px-4 py-2 rounded-lg border border-gray-300 focus:border-indigo-500">
+                    <option value="">Выберите раздел</option>
+                    <option value="general">📋 Общие (доступно всем)</option>
+                    <option value="technical">📐 Технические</option>
+                    <option value="accounting">💰 Бухгалтерия</option>
+                    <option value="safety">👷 Охрана труда</option>
+                    <option value="legal">⚖️ Юридические</option>
+                    <option value="hr">👔 Кадровые</option>
+                </select>
+            </div>
+
+            <!-- Подкатегория -->
+            <div>
+                <div class="flex justify-between items-center mb-2">
+                    <label class="block text-gray-700 font-medium">Подкатегория</label>
+                    <button type="button" onclick="openCreateSubcategoryModal()"
+                        class="text-xs text-indigo-600 hover:text-indigo-700">
+                        ➕ Новая
+                    </button>
+                </div>
+                <select id="uploadSubcategory"
+                    class="w-full px-4 py-2 rounded-lg border border-gray-300 focus:border-indigo-500">
+                    <option value="">Без подкатегории</option>
+                </select>
+            </div>
+
+            <!-- Выбор файлов (скрытый input) -->
+            <input type="file" id="fileInput" multiple
+                accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg" class="hidden">
+
+            <!-- Зона загрузки -->
+            <div>
+                <label class="block text-gray-700 font-medium mb-2">Добавить файлы</label>
+                <div id="dropZone"
+                    class="border-2 border-dashed border-indigo-300 rounded-lg p-6 text-center cursor-pointer hover:bg-indigo-50 transition">
+                    <div class="text-4xl mb-2">📁</div>
+                    <p class="text-gray-700 font-medium">Нажмите или перетащите файлы</p>
+                    <p class="text-xs text-gray-500 mt-1">
+                        PDF, DOCX, XLSX, PNG, JPG (макс. 50 МБ каждый)
+                    </p>
+                </div>
+            </div>
+
+            <!-- ✅ СПИСОК ЗАГРУЖЕННЫХ ФАЙЛОВ -->
+            <div id="uploadedFilesList" class="hidden">
+                <label class="block text-gray-700 font-medium mb-2">📁 Загруженные файлы</label>
+                <div id="uploadedFilesPreview"
+                    class="space-y-2 bg-green-50 p-4 rounded-lg border border-green-200">
+                </div>
+            </div>
+
+            <!-- Прогресс загрузки -->
+            <div id="uploadProgress" class="hidden">
+                <div class="flex items-center gap-2">
+                    <div class="animate-spin">⏳</div>
+                    <p class="text-sm text-gray-700" id="progressText">Загрузка файлов...</p>
+                </div>
+            </div>
+
+            <!-- Кнопки -->
+            <div class="flex gap-4 pt-4">
+                <button type="button" onclick="openFileDialog()"
+                    class="flex-1 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition">
+                    ➕ Добавить файлы
+                </button>
+                <button type="button" onclick="closeUploadModal()"
+                    class="flex-1 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition">
+                    ✓ Готово
+                </button>
+            </div>
+        </div>
+    </div>
+</div>

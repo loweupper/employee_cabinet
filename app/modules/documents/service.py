@@ -209,6 +209,75 @@ class DocumentService:
         return result
     
     @staticmethod
+    def can_upload_document(user: User, obj: Object, db: Session) -> bool:
+        """
+        Проверить может ли пользователь загружать документы в объект.
+
+        Может загружать ЕСЛИ:
+        - Админ системы ИЛИ
+        - Создал объект ИЛИ
+        - Добавлен в объект с правом редактирования ИЛИ
+        - Бухгалтер в категории "Бухгалтерия" (через отдел)
+        """
+        # 1. Админ системы
+        if user.role == UserRole.ADMIN:
+            return True
+
+        # 2. Создатель объекта
+        if obj.created_by == user.id:
+            return True
+
+        # 3. Добавлен в объект с правом редактирования
+        access = db.query(ObjectAccess).filter(
+            ObjectAccess.object_id == obj.id,
+            ObjectAccess.user_id == user.id,
+            ObjectAccess.role.in_(['admin', 'editor'])
+        ).first()
+
+        if access:
+            return True
+
+        # 4. Бухгалтер в категории "Бухгалтерия" через отдел
+        if user.role == UserRole.ACCOUNTANT:
+            mapping = CategoryMappingService.get_mapping_dict(db)
+            if mapping.get('accounting') == user.department_id:
+                return True
+
+        return False
+
+    @staticmethod
+    def can_update_document(user: User, document: "Document", db: Session) -> bool:
+        """
+        Проверить может ли пользователь обновить документ.
+
+        Может обновить ЕСЛИ:
+        - Создал документ ИЛИ
+        - Владелец объекта ИЛИ
+        - Админ системы
+        """
+        # Админ системы
+        if user.role == UserRole.ADMIN:
+            return True
+
+        # Создатель документа
+        if document.created_by == user.id:
+            return True
+
+        # Владелец объекта
+        if document.object and document.object.created_by == user.id:
+            return True
+
+        return False
+
+    @staticmethod
+    def can_delete_document(user: User, document: "Document", db: Session) -> bool:
+        """
+        Проверить может ли пользователь удалить документ
+        (такие же права как и обновление)
+        """
+        return DocumentService.can_update_document(user, document, db)
+
+    @staticmethod
     def sync_user_access_by_role(user: User, db: Session):
         """
         Синхронизировать доступ пользователя к документам на основе его роли
