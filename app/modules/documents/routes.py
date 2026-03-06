@@ -8,11 +8,13 @@ from core.validators import (
 )
 from modules.objects.models import Object, ObjectAccess
 from fastapi import APIRouter, Depends, Request, Form, HTTPException
-from fastapi.responses import HTMLResponse, RedirectResponse, FileResponse, JSONResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, FileResponse, JSONResponse, StreamingResponse
 from pathlib import Path
 from sqlalchemy.orm import Session
+import io
 import logging
 import os
+import zipfile
 from typing import Optional
 from datetime import datetime
 from slowapi import Limiter
@@ -61,12 +63,15 @@ async def upload_documents(
     Загрузить множество документов к объекту
     """
 
+    # ✅ Сохраняем user.id до try-блока, чтобы избежать PendingRollbackError
+    user_id = user.id
+
     logger.info({
         "event": "upload_documents_start",
         "object_id": object_id,
         "category": category,
         "subcategory_id": subcategory_id,
-        "user_id": user.id
+        "user_id": user_id
     })
 
     try:
@@ -83,7 +88,7 @@ async def upload_documents(
             "event": "upload_documents_received_files",
             "count": len(files),
             "object_id": object_id,
-            "user_id": user.id
+            "user_id": user_id
         })
 
         if not files:
@@ -98,6 +103,7 @@ async def upload_documents(
             )
 
         uploaded_count = 0
+        updated_count = 0
         errors = []
 
         for file in files:
@@ -115,7 +121,7 @@ async def upload_documents(
                         "size": actual_size,
                         "max_size": settings.MAX_FILE_SIZE,
                         "object_id": object_id,
-                        "user_id": user.id
+                        "user_id": user_id
                     })
                     errors.append(f"{file.filename} (слишком большой файл)")
                     continue
@@ -129,57 +135,103 @@ async def upload_documents(
                         "event": "file_upload_rejected_extension",
                         "filename": file.filename,
                         "object_id": object_id,
-                        "user_id": user.id
+                        "user_id": user_id
                     })
                     errors.append(f"{file.filename} (недопустимый тип файла)")
                     continue
                 
                 # ===== End Security Validation =====
-                
-                # Сохраняем файл (service also does sanitization)
-                file_path = await DocumentService.save_file(file, object_id)
 
                 # Используем ОРИГИНАЛЬНОЕ имя для БД
                 original_filename = file.filename if file.filename else "unnamed_file"
 
-                # Название документа из оригинального имени
-                doc_title, _ = os.path.splitext(original_filename)
-                if not doc_title:
-                    doc_title = "Документ"
+                # Проверяем, существует ли уже активный документ с таким именем в той же категории
+                existing_doc = db.query(Document).filter(
+                    Document.object_id == object_id,
+                    Document.file_name == original_filename,
+                    Document.category == DocumentCategory(category),
+                    Document.subcategory_id == subcategory_id,
+                    Document.is_active.is_(True),
+                    Document.deleted_at.is_(None),
+                ).first()
 
-                # Создаём документ
-                document = Document(
-                    title=doc_title,
-                    description=None,
-                    category=DocumentCategory(category),
-                    subcategory_id=subcategory_id,
-                    file_path=file_path,
-                    file_name=original_filename,  # Use original filename for display/download
-                    file_size=actual_size,  # Use actual validated size
-                    file_type=file.content_type,
-                    object_id=object_id,
-                    created_by=user.id
-                )
+                # Сохраняем новый файл на диск
+                file_path = await DocumentService.save_file(file, object_id)
 
-                db.add(document)
-                uploaded_count += 1
+                if existing_doc:
+                    # Удаляем старый файл с диска
+                    old_file_path = Path(settings.FILES_PATH) / existing_doc.file_path
+                    if old_file_path.exists():
+                        try:
+                            old_file_path.unlink()
+                        except Exception as del_err:
+                            logger.warning({
+                                "event": "old_file_delete_failed",
+                                "path": str(old_file_path),
+                                "error": str(del_err),
+                                "user_id": user_id,
+                            })
+
+                    # Обновляем запись в БД
+                    existing_doc.file_path = file_path
+                    existing_doc.file_size = actual_size
+                    existing_doc.file_type = file.content_type
+                    existing_doc.updated_by = user_id
+                    existing_doc.updated_at = datetime.utcnow()
+                    existing_doc.version = (existing_doc.version or 1) + 1
+
+                    logger.info({
+                        "event": "document_replaced",
+                        "document_id": existing_doc.id,
+                        "object_id": object_id,
+                        "file_name": original_filename,
+                        "new_version": existing_doc.version,
+                        "user_id": user_id,
+                    })
+                    updated_count += 1
+                else:
+                    # Название документа из оригинального имени
+                    doc_title, _ = os.path.splitext(original_filename)
+                    if not doc_title:
+                        doc_title = "Документ"
+
+                    # Создаём новый документ
+                    document = Document(
+                        title=doc_title,
+                        description=None,
+                        category=DocumentCategory(category),
+                        subcategory_id=subcategory_id,
+                        file_path=file_path,
+                        file_name=original_filename,
+                        file_size=actual_size,
+                        file_type=file.content_type,
+                        object_id=object_id,
+                        created_by=user_id,
+                    )
+                    db.add(document)
+                    uploaded_count += 1
 
             except Exception as e:
                 logger.error({
                     "event": "ошибка_загрузки_документа",
                     "file": file.filename,
                     "object_id": object_id,
-                    "user_id": user.id,
+                    "user_id": user_id,
                     "error": str(e)
                 })
                 errors.append(file.filename)
 
         # Коммитим
-        if uploaded_count > 0:
+        if uploaded_count > 0 or updated_count > 0:
             db.commit()
 
         # Формируем сообщение
-        message = f"Загружено {uploaded_count} документов"
+        parts = []
+        if uploaded_count:
+            parts.append(f"Загружено {uploaded_count} новых")
+        if updated_count:
+            parts.append(f"Обновлено {updated_count} существующих")
+        message = ", ".join(parts) if parts else "Изменений нет"
         if errors:
             message += f". Ошибки: {', '.join(errors[:3])}"  # Показываем максимум 3 ошибки
 
@@ -187,8 +239,9 @@ async def upload_documents(
             "event": "documents_uploaded",
             "object_id": object_id,
             "uploaded": uploaded_count,
+            "updated": updated_count,
             "error_count": len(errors),
-            "user_id": user.id
+            "user_id": user_id
         })
 
         return RedirectResponse(
@@ -200,9 +253,12 @@ async def upload_documents(
         logger.error({
             "event": "upload_documents_fatal_error",
             "object_id": object_id,
-            "user_id": user.id,
+            "user_id": user_id,
             "error": str(e)
         })
+
+        # ✅ Откатываем сессию при ошибке
+        db.rollback()
 
         if _is_ajax_request(request):
             return JSONResponse(
@@ -676,4 +732,85 @@ async def batch_delete_documents(
 
     except Exception as e:
         logger.error(f"Ошибка массового удаления: {str(e)}")
+        return JSONResponse(status_code=500, content={"detail": str(e)})
+
+
+# ===================================
+# Скачивание нескольких документов как ZIP
+# ===================================
+@router.post("/batch-download")
+async def batch_download_documents(
+    request: Request,
+    user: User = Depends(get_current_user_from_cookie),
+    db: Session = Depends(get_db)
+):
+    """Скачать несколько документов как ZIP архив"""
+    try:
+        data = await request.json()
+    except Exception:
+        return JSONResponse(status_code=400, content={"detail": "Некорректный JSON"})
+
+    document_ids = data.get("document_ids", [])
+
+    if not document_ids:
+        return JSONResponse(status_code=400, content={"detail": "Не указаны документы"})
+
+    try:
+        zip_buffer = io.BytesIO()
+
+        with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+            for doc_id in document_ids:
+                doc = db.query(Document).filter(Document.id == doc_id).first()
+
+                if not doc or not doc.can_access(user, db):
+                    logger.warning({
+                        "event": "batch_download_document_skipped",
+                        "doc_id": doc_id,
+                        "reason": "not found or no access",
+                        "user_id": user.id
+                    })
+                    continue
+
+                files_base = Path(settings.FILES_PATH).resolve()
+                file_path = (files_base / doc.file_path).resolve()
+
+                # Защита от path traversal
+                if not str(file_path).startswith(str(files_base)):
+                    logger.warning({
+                        "event": "batch_download_path_traversal",
+                        "doc_id": doc_id,
+                        "user_id": user.id
+                    })
+                    continue
+
+                if not file_path.exists():
+                    logger.warning({
+                        "event": "batch_download_file_missing",
+                        "doc_id": doc_id,
+                        "file_path": str(file_path),
+                        "user_id": user.id
+                    })
+                    continue
+
+                # Префикс doc_id предотвращает коллизии имён файлов
+                archive_name = f"{doc.id}_{doc.file_name}"
+                with open(file_path, 'rb') as f:
+                    zip_file.writestr(archive_name, f.read())
+
+        zip_buffer.seek(0)
+
+        logger.info({
+            "event": "documents_batch_downloaded",
+            "count": len(document_ids),
+            "user_id": user.id
+        })
+
+        return StreamingResponse(
+            iter([zip_buffer.getvalue()]),
+            media_type="application/zip",
+            headers={"Content-Disposition": "attachment; filename=documents.zip"}
+        )
+
+    except Exception as e:
+        logger.error(f"Ошибка скачивания: {str(e)}")
         return JSONResponse(status_code=500, content={"detail": str(e)})

@@ -249,10 +249,15 @@ function setupFileUploadHandlers() {
 
 // ✅ НЕМЕДЛЕННАЯ ЗАГРУЗКА ФАЙЛОВ
 function uploadFilesImmediately(files) {
+    // ✅ Предотвращаем двойную отправку
+    if (window.uploadInProgress) return;
+    window.uploadInProgress = true;
+
     const category = document.getElementById('uploadCategory').value;
     const subcategoryId = document.getElementById('uploadSubcategory').value;
 
     if (!category) {
+        window.uploadInProgress = false;
         alert('Сначала выберите раздел');
         return;
     }
@@ -302,7 +307,7 @@ function uploadFilesImmediately(files) {
                 console.log('✅ Файлы загружены успешно');
                 updateUploadedFilesList();
 
-                // Очищаем input
+                // ✅ Очищаем input
                 document.getElementById('fileInput').value = '';
             } else {
                 return response.json().then(data => {
@@ -317,6 +322,8 @@ function uploadFilesImmediately(files) {
         })
         .finally(() => {
             document.getElementById('uploadProgress').classList.add('hidden');
+            // ✅ Разрешаем новую отправку
+            window.uploadInProgress = false;
         });
 }
 

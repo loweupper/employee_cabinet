@@ -266,4 +266,54 @@ function showNotification(message, type) {
     }, 3000);
 }
 
+// ===================================
+// Скачивание нескольких документов (batch download)
+// ===================================
+
+async function downloadSelectedDocuments() {
+    const selected = Array.from(
+        document.querySelectorAll('.document-checkbox:checked')
+    ).map(cb => parseInt(cb.dataset.docId));
+
+    if (selected.length === 0) {
+        alert('Выберите файлы для скачивания');
+        return;
+    }
+
+    if (selected.length === 1) {
+        // Один файл - обычное скачивание
+        window.location.href = `/documents/${selected[0]}/download`;
+        return;
+    }
+
+    // Несколько файлов - скачиваем архив
+    try {
+        const response = await fetch('/documents/batch-download', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCsrfToken()
+            },
+            body: JSON.stringify({ document_ids: selected })
+        });
+
+        if (response.ok) {
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'documents.zip';
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            a.remove();
+        } else {
+            alert('Ошибка при скачивании');
+        }
+    } catch (err) {
+        console.error('Ошибка:', err);
+        alert('Ошибка при скачивании файлов');
+    }
+}
+
 console.log('documents.js загружен');

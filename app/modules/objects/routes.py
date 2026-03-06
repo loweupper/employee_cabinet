@@ -362,6 +362,9 @@ async def object_detail(
         
         documents = DocumentService.list_documents(object_id, user, db)
         total_documents = len(documents)
+
+        # Получаем доступные для пользователя категории
+        accessible_categories = DocumentService.get_accessible_categories(user, obj, db)
         
         # ✅ ГРУППИРОВКА ПО КАТЕГОРИЯМ И ПОДКАТЕГОРИЯМ
         documents_by_category = {}
@@ -483,6 +486,7 @@ async def object_detail(
                 "csrf_token": request.cookies.get("csrftoken", ""),
                 "success": success,
                 "error": error,
+                "accessible_categories": accessible_categories,
                 **sidebar_context
             }
         )

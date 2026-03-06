@@ -278,6 +278,62 @@ class DocumentService:
         return DocumentService.can_update_document(user, document, db)
 
     @staticmethod
+    def get_accessible_categories(user: User, obj: Object, db: Session) -> list:
+        """
+        Получить список категорий, доступных пользователю для загрузки.
+
+        Доступны ЕСЛИ:
+        - Админ системы - все категории ИЛИ
+        - Владелец объекта - все категории ИЛИ
+        - Есть доступ к объекту и разрешения на раздел ИЛИ
+        - Роль соответствует категории (бухгалтер → бухгалтерия)
+        """
+        all_categories = [
+            DocumentCategory.GENERAL,
+            DocumentCategory.TECHNICAL,
+            DocumentCategory.ACCOUNTING,
+            DocumentCategory.SAFETY,
+            DocumentCategory.LEGAL,
+            DocumentCategory.HR,
+        ]
+
+        # Админ и владелец видят всё
+        if user.role == UserRole.ADMIN or obj.created_by == user.id:
+            return all_categories
+
+        # Получаем доступ к объекту
+        access = db.query(ObjectAccess).filter(
+            ObjectAccess.object_id == obj.id,
+            ObjectAccess.user_id == user.id
+        ).first()
+
+        if not access:
+            return []  # Нет доступа к объекту - нет категорий
+
+        accessible = []
+        mapping = CategoryMappingService.get_mapping_dict(db)
+
+        # Общие документы всегда доступны
+        accessible.append(DocumentCategory.GENERAL)
+
+        # Проверяем доступ к остальным категориям
+        for category in all_categories:
+            if category == DocumentCategory.GENERAL:
+                continue
+
+            # Если у доступа указана категория - добавляем
+            if access.has_section_access(category.value):
+                accessible.append(category)
+                continue
+
+            # Проверяем по отделу (бухгалтер в отделе бухгалтерии → доступ к accounting)
+            required_dept_id = mapping.get(category.value)
+            if required_dept_id and user.department_id == required_dept_id:
+                accessible.append(category)
+
+        return accessible
+
+    @staticmethod
     def sync_user_access_by_role(user: User, db: Session):
         """
         Синхронизировать доступ пользователя к документам на основе его роли
