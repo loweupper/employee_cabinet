@@ -103,6 +103,7 @@ async def upload_documents(
             )
 
         uploaded_count = 0
+        updated_count = 0
         errors = []
 
         for file in files:
@@ -140,34 +141,75 @@ async def upload_documents(
                     continue
                 
                 # ===== End Security Validation =====
-                
-                # Сохраняем файл (service also does sanitization)
-                file_path = await DocumentService.save_file(file, object_id)
 
                 # Используем ОРИГИНАЛЬНОЕ имя для БД
                 original_filename = file.filename if file.filename else "unnamed_file"
 
-                # Название документа из оригинального имени
-                doc_title, _ = os.path.splitext(original_filename)
-                if not doc_title:
-                    doc_title = "Документ"
+                # Проверяем, существует ли уже активный документ с таким именем в той же категории
+                existing_doc = db.query(Document).filter(
+                    Document.object_id == object_id,
+                    Document.file_name == original_filename,
+                    Document.category == DocumentCategory(category),
+                    Document.subcategory_id == subcategory_id,
+                    Document.is_active.is_(True),
+                    Document.deleted_at.is_(None),
+                ).first()
 
-                # Создаём документ
-                document = Document(
-                    title=doc_title,
-                    description=None,
-                    category=DocumentCategory(category),
-                    subcategory_id=subcategory_id,
-                    file_path=file_path,
-                    file_name=original_filename,  # Use original filename for display/download
-                    file_size=actual_size,  # Use actual validated size
-                    file_type=file.content_type,
-                    object_id=object_id,
-                    created_by=user_id
-                )
+                # Сохраняем новый файл на диск
+                file_path = await DocumentService.save_file(file, object_id)
 
-                db.add(document)
-                uploaded_count += 1
+                if existing_doc:
+                    # Удаляем старый файл с диска
+                    old_file_path = Path(settings.FILES_PATH) / existing_doc.file_path
+                    if old_file_path.exists():
+                        try:
+                            old_file_path.unlink()
+                        except Exception as del_err:
+                            logger.warning({
+                                "event": "old_file_delete_failed",
+                                "path": str(old_file_path),
+                                "error": str(del_err),
+                                "user_id": user_id,
+                            })
+
+                    # Обновляем запись в БД
+                    existing_doc.file_path = file_path
+                    existing_doc.file_size = actual_size
+                    existing_doc.file_type = file.content_type
+                    existing_doc.updated_by = user_id
+                    existing_doc.updated_at = datetime.utcnow()
+                    existing_doc.version = (existing_doc.version or 1) + 1
+
+                    logger.info({
+                        "event": "document_replaced",
+                        "document_id": existing_doc.id,
+                        "object_id": object_id,
+                        "file_name": original_filename,
+                        "new_version": existing_doc.version,
+                        "user_id": user_id,
+                    })
+                    updated_count += 1
+                else:
+                    # Название документа из оригинального имени
+                    doc_title, _ = os.path.splitext(original_filename)
+                    if not doc_title:
+                        doc_title = "Документ"
+
+                    # Создаём новый документ
+                    document = Document(
+                        title=doc_title,
+                        description=None,
+                        category=DocumentCategory(category),
+                        subcategory_id=subcategory_id,
+                        file_path=file_path,
+                        file_name=original_filename,
+                        file_size=actual_size,
+                        file_type=file.content_type,
+                        object_id=object_id,
+                        created_by=user_id,
+                    )
+                    db.add(document)
+                    uploaded_count += 1
 
             except Exception as e:
                 logger.error({
@@ -180,11 +222,16 @@ async def upload_documents(
                 errors.append(file.filename)
 
         # Коммитим
-        if uploaded_count > 0:
+        if uploaded_count > 0 or updated_count > 0:
             db.commit()
 
         # Формируем сообщение
-        message = f"Загружено {uploaded_count} документов"
+        parts = []
+        if uploaded_count:
+            parts.append(f"Загружено {uploaded_count} новых")
+        if updated_count:
+            parts.append(f"Обновлено {updated_count} существующих")
+        message = ", ".join(parts) if parts else "Изменений нет"
         if errors:
             message += f". Ошибки: {', '.join(errors[:3])}"  # Показываем максимум 3 ошибки
 
@@ -192,6 +239,7 @@ async def upload_documents(
             "event": "documents_uploaded",
             "object_id": object_id,
             "uploaded": uploaded_count,
+            "updated": updated_count,
             "error_count": len(errors),
             "user_id": user_id
         })
