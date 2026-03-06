@@ -373,6 +373,8 @@ app.add_middleware(
         re.compile(r"^/objects/\d+/documents/upload$"),
         re.compile(r"^/objects/\d+/documents/\d+/update$"),
         re.compile(r"^/objects/\d+/documents/\d+/delete$"),
+        re.compile(r"^/documents/\d+/update$"),
+        re.compile(r"^/documents/batch-delete$"),
     ],
 )
 
