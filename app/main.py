@@ -371,8 +371,8 @@ app.add_middleware(
 
         # ✅ ДОКУМЕНТЫ
         re.compile(r"^/objects/\d+/documents/upload$"),
-        re.compile(r"^/objects/\d+/documents/\d+/update$"),
-        re.compile(r"^/objects/\d+/documents/\d+/delete$"),
+        re.compile(r"^/documents/objects/\d+/\d+/update$"),
+        re.compile(r"^/documents/objects/\d+/\d+/delete$"),
     ],
 )
 
