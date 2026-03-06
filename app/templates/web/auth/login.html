@@ -5,7 +5,7 @@
     <title>Вход в систему</title>
 
     <!-- Tailwind CDN -->
-    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="{{ url_for('static', path='/css/output.css') }}">
 
     <!-- Плавные анимации -->
     <style>
@@ -68,7 +68,7 @@
             <input
                 type="email"
                 name="email"
-                required
+                required autocomplete="username"
                 value="{{ email or '' }}"
                 class="w-full px-4 py-3 rounded-xl border border-gray-300 glow focus:border-indigo-500"
                 placeholder="you@example.com"
@@ -80,7 +80,7 @@
             <input
                 type="password"
                 name="password"
-                required
+                required autocomplete="current-password"
                 class="w-full px-4 py-3 rounded-xl border border-gray-300 glow focus:border-indigo-500"
                 placeholder="••••••••"
             >

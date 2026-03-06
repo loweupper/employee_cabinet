@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <title>Редактировать: {{ object.title }}</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="{{ url_for('static', path='/css/output.css') }}">
     <style>
         .fade-in {
             animation: fadeIn 0.5s ease-out forwards;
