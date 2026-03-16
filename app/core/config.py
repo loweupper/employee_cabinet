@@ -122,6 +122,11 @@ class Settings(BaseSettings):
     # ===== Security =====
     ACCOUNT_LOCKOUT_THRESHOLD: int = 5  # попыток перед блокировкой
     ACCOUNT_LOCKOUT_DURATION_MINUTES: int = 15  # на сколько заблокировать
+    SERVER_HOST: str = Field(default="127.0.0.1")
+    SERVER_PORT: int = Field(default=8001)
+
+
+
     
     # ===== Monitoring =====
     MONITORING_ENABLED: bool = True
@@ -176,8 +181,10 @@ class Settings(BaseSettings):
         weak_patterns = ['change', 'secret', 'password', 'default', 'test', '123']
         if any(pattern in v.lower() for pattern in weak_patterns):
             warnings.warn(
-                f"SECRET_KEY appears to contain weak patterns. "
-                "Use a cryptographically random key in production.",
+                (
+                    "SECRET_KEY appears to contain weak patterns. "
+                    "Use a cryptographically random key in production."
+                ),
                 UserWarning
             )
         
@@ -264,6 +271,25 @@ class Settings(BaseSettings):
                 logger.warning(f"Failed to parse ALERT_EMAIL_RECIPIENTS as JSON: {v}, using empty list")
                 return []
         return v if v else []
+
+    @field_validator("SERVER_HOST", mode="before")
+    @classmethod
+    def set_server_host(cls, v, info: ValidationInfo):
+        """
+        Automatically choose safe host based on environment.
+        - development → 127.0.0.1
+        - production → 0.0.0.0
+        """
+        # Если явно указано в .env — используем как есть
+        if v:
+            return v
+
+        env = info.data.get("ENVIRONMENT", "development")
+
+        if env == "production":
+            return "0.0.0.0"
+
+        return "127.0.0.1"
 
 settings = Settings()
 

@@ -14,6 +14,8 @@ import re
 import asyncio
 from modules.auth.session_cleanup import cleanup_expired_sessions
 from modules.monitoring.models import Alert
+from typing import Annotated
+
 
 
 from slowapi import Limiter, _rate_limit_exceeded_handler
@@ -336,16 +338,7 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 
 # ✅ Добавляем в обратном порядке выполнения:
 
-# 5. CORS
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=settings.CORS_ORIGINS,
-    allow_credentials=settings.CORS_CREDENTIALS,
-    allow_methods=settings.CORS_METHODS,
-    allow_headers=settings.CORS_HEADERS,
-)
-
-# 4. CSRF Protection
+# 5. CSRF Protection
 app.add_middleware(
     CSRFMiddleware,
     secret=settings.SECRET_KEY,
@@ -390,15 +383,24 @@ app.add_middleware(
     ],
 )
 
-# 3. Access Logging
+# 4. Access Logging
 app.add_middleware(AccessLogMiddleware)
 
-# 2. Swagger Security
+# 3. Swagger Security
 if settings.ENABLE_DOCS:
     app.add_middleware(SwaggerSecurityMiddleware, allowed_ips=settings.DOCS_ALLOWED_IPS)
 
-# 1. Request ID
+# 2. Request ID
 app.add_middleware(RequestIDMiddleware)
+
+# 1. CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.CORS_ORIGINS,
+    allow_credentials=settings.CORS_CREDENTIALS,
+    allow_methods=settings.CORS_METHODS,
+    allow_headers=settings.CORS_HEADERS,
+)
 
 # ===================================
 # Подключение роутеров
@@ -451,30 +453,27 @@ async def health(detailed: bool = False):
 @app.get("/dashboard", response_class=HTMLResponse, include_in_schema=False)
 async def dashboard(
     request: Request,
-    user: User = Depends(get_current_user_from_cookie),
-    db: Session = Depends(get_db),
+    user: Annotated[User, Depends(get_current_user_from_cookie)],
+    db: Annotated[Session, Depends(get_db)],
 ):
     """
     Главная страница личного кабинета
     """
     from modules.objects.models import Object, ObjectAccess
 
-    # Базовый запрос: объекты с доступом
     base_query = (
         db.query(Object)
         .join(ObjectAccess)
         .filter(
             ObjectAccess.user_id == user.id,
-            Object.deleted_at == None,  # Исключаем удаленные
+            Object.deleted_at == None,
         )
     )
 
-    # Активные объекты
     active_count = base_query.filter(
         Object.is_active == True, Object.is_archived == False
     ).count()
 
-    # Неактивные (только для владельца/админа)
     if user.role.value == "admin":
         inactive_count = (
             db.query(Object)
@@ -497,26 +496,13 @@ async def dashboard(
             .count()
         )
 
-    # В архиве
     archived_count = base_query.filter(Object.is_archived == True).count()
 
-    # Последние активные объекты (топ-5)
     recent_objects = (
         base_query.filter(Object.is_active == True, Object.is_archived == False)
         .order_by(Object.created_at.desc())
         .limit(5)
         .all()
-    )
-
-    logger.info(
-        {
-            "event": "dashboard_access",
-            "user_id": user.id,
-            "email": user.email,
-            "active_count": active_count,
-            "inactive_count": inactive_count,
-            "archived_count": archived_count,
-        }
     )
 
     sidebar_context = get_sidebar_context(user, db)
@@ -531,7 +517,7 @@ async def dashboard(
             "inactive_count": inactive_count,
             "archived_count": archived_count,
             "recent_objects": recent_objects,
-            **sidebar_context,  # ✅ Распаковываем sidebar context
+            **sidebar_context,
         },
     )
 
@@ -606,14 +592,22 @@ async def periodic_session_cleanup():
         await asyncio.sleep(3600)  # раз в час
 
 
+background_tasks: set[asyncio.Task] = set()
+
 @app.on_event("startup")
 async def startup_event():
-    asyncio.create_task(periodic_session_cleanup())
+    task = asyncio.create_task(periodic_session_cleanup())
+    background_tasks.add(task)
+    task.add_done_callback(background_tasks.discard)
 
 
 if __name__ == "__main__":
     import uvicorn
 
     uvicorn.run(
-        "main:app", host="0.0.0.0", port=8001, reload=settings.DEBUG, log_level="info"
+        "main:app",
+        host=settings.SERVER_HOST,
+        port=settings.SERVER_PORT,
+        reload=settings.DEBUG,
+        log_level="info",
     )
