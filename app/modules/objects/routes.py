@@ -229,10 +229,8 @@ def user_has_permission(user: User, permission_key: str, db: Session) -> bool:
 @router.get("", response_class=HTMLResponse)
 async def objects_list(
     request: Request,
-    user: Annotated[User, Depends(get_current_user_from_cookie)] = Depends(
-        get_current_user_from_cookie
-    ),
-    db: Annotated[Session, Depends(get_db)] = Depends(get_db),
+    user: User = Depends(get_current_user_from_cookie),
+    db: Session = Depends(get_db),
     page: Annotated[int, Query(ge=1)] = 1,
     search: Annotated[Optional[str], Query()] = None,
     department: Annotated[Optional[str], Query()] = None,
@@ -283,10 +281,8 @@ async def objects_list(
 @router.get("/create", response_class=HTMLResponse)
 async def create_object_page(
     request: Request,
-    user: Annotated[User, Depends(get_current_user_from_cookie)] = Depends(
-        get_current_user_from_cookie
-    ),
-    db: Annotated[Session, Depends(get_db)] = Depends(get_db),
+    user: User = Depends(get_current_user_from_cookie),
+    db: Session = Depends(get_db),
 ):
     """
     Страница создания объекта
@@ -315,10 +311,8 @@ async def create_object(
     department: Annotated[Optional[str], Form()] = None,
     location: Annotated[Optional[str], Form()] = None,
     icon: Annotated[Optional[UploadFile], File()] = None,
-    user: Annotated[User, Depends(get_current_user_from_cookie)] = Depends(
-        get_current_user_from_cookie
-    ),
-    db: Annotated[Session, Depends(get_db)] = Depends(get_db),
+    user: User = Depends(get_current_user_from_cookie),
+    db: Session = Depends(get_db),
 ):
     """
     Создание нового объекта
@@ -365,10 +359,8 @@ async def create_object(
 async def edit_object_page(
     object_id: int,
     request: Request,
-    user: Annotated[User, Depends(get_current_user_from_cookie)] = Depends(
-        get_current_user_from_cookie
-    ),
-    db: Annotated[Session, Depends(get_db)] = Depends(get_db),
+    user: User = Depends(get_current_user_from_cookie),
+    db: Session = Depends(get_db),
 ):
     """
     Страница редактирования объекта
@@ -412,10 +404,8 @@ async def update_object(
     department: Annotated[Optional[str], Form()] = None,
     location: Annotated[Optional[str], Form()] = None,
     icon: Annotated[Optional[UploadFile], File()] = None,
-    user: Annotated[User, Depends(get_current_user_from_cookie)] = Depends(
-        get_current_user_from_cookie
-    ),
-    db: Annotated[Session, Depends(get_db)] = Depends(get_db),
+    user: User = Depends(get_current_user_from_cookie),
+    db: Session = Depends(get_db),
 ):
     """
     Обновление объекта
@@ -471,10 +461,8 @@ async def object_detail(
     request: Request,
     success: Optional[str] = None,
     error: Optional[str] = None,
-    user: Annotated[User, Depends(get_current_user_from_cookie)] = Depends(
-        get_current_user_from_cookie
-    ),
-    db: Annotated[Session, Depends(get_db)] = Depends(get_db),
+    user: User = Depends(get_current_user_from_cookie),
+    db: Session = Depends(get_db),
 ):
     """Детальная страница объекта"""
     try:
@@ -584,10 +572,8 @@ async def object_detail(
 async def delete_object(
     object_id: int,
     request: Request,
-    user: Annotated[User, Depends(get_current_user_from_cookie)] = Depends(
-        get_current_user_from_cookie
-    ),
-    db: Annotated[Session, Depends(get_db)] = Depends(get_db),
+    user: User = Depends(get_current_user_from_cookie),
+    db: Session = Depends(get_db),
 ):
     """
     Удаление объекта (soft delete)
@@ -617,10 +603,8 @@ async def delete_object(
 @router.get("/admin/all", response_class=HTMLResponse)
 async def admin_objects_list(
     request: Request,
-    user: Annotated[User, Depends(get_current_user_from_cookie)] = Depends(
-        get_current_user_from_cookie
-    ),
-    db: Annotated[Session, Depends(get_db)] = Depends(get_db),
+    user: User = Depends(get_current_user_from_cookie),
+    db: Session = Depends(get_db),
     page: Annotated[int, Query(ge=1)] = 1,
     search: Annotated[Optional[str], Query()] = None,
     include_deleted: Annotated[bool, Query()] = False,
@@ -674,10 +658,8 @@ async def admin_objects_list(
 async def restore_object(
     object_id: int,
     request: Request,
-    user: Annotated[User, Depends(get_current_user_from_cookie)] = Depends(
-        get_current_user_from_cookie
-    ),
-    db: Annotated[Session, Depends(get_db)] = Depends(get_db),
+    user: User = Depends(get_current_user_from_cookie),
+    db: Session = Depends(get_db),
 ):
     """
     Восстановление удаленного объекта (только админ)
@@ -701,10 +683,8 @@ async def restore_object(
 @router.post("/{object_id}/activate")
 async def activate_object(
     object_id: int,
-    user: Annotated[User, Depends(get_current_user_from_cookie)] = Depends(
-        get_current_user_from_cookie
-    ),
-    db: Annotated[Session, Depends(get_db)] = Depends(get_db),
+    user: User = Depends(get_current_user_from_cookie),
+    db: Session = Depends(get_db),
 ):
     """Активировать объект"""
     obj = db.query(Object).filter(Object.id == object_id).first()
@@ -735,10 +715,8 @@ async def activate_object(
 @router.post("/{object_id}/deactivate")
 async def deactivate_object(
     object_id: int,
-    user: Annotated[User, Depends(get_current_user_from_cookie)] = Depends(
-        get_current_user_from_cookie
-    ),
-    db: Annotated[Session, Depends(get_db)] = Depends(get_db),
+    user: User = Depends(get_current_user_from_cookie),
+    db: Session = Depends(get_db),
 ):
     """Деактивировать объект"""
     obj = db.query(Object).filter(Object.id == object_id).first()
@@ -769,10 +747,8 @@ async def deactivate_object(
 @router.post("/{object_id}/archive")
 async def archive_object(
     object_id: int,
-    user: Annotated[User, Depends(get_current_user_from_cookie)] = Depends(
-        get_current_user_from_cookie
-    ),
-    db: Annotated[Session, Depends(get_db)] = Depends(get_db),
+    user: User = Depends(get_current_user_from_cookie),
+    db: Session = Depends(get_db),
 ):
     """Отправить объект в архив"""
     obj = db.query(Object).filter(Object.id == object_id).first()
@@ -804,10 +780,8 @@ async def archive_object(
 @router.post("/{object_id}/unarchive")
 async def unarchive_object(
     object_id: int,
-    user: Annotated[User, Depends(get_current_user_from_cookie)] = Depends(
-        get_current_user_from_cookie
-    ),
-    db: Annotated[Session, Depends(get_db)] = Depends(get_db),
+    user: User = Depends(get_current_user_from_cookie),
+    db: Session = Depends(get_db),
 ):
     """Вернуть объект из архива"""
     obj = db.query(Object).filter(Object.id == object_id).first()
@@ -842,10 +816,8 @@ async def grant_object_access(
     user_email: Annotated[str, Form(...)],
     role: Annotated[str, Form(...)],
     sections: Annotated[Optional[List[str]], Form()] = None,
-    current_user: Annotated[User, Depends(get_current_user_from_cookie)] = Depends(
-        get_current_user_from_cookie
-    ),
-    db: Annotated[Session, Depends(get_db)] = Depends(get_db),
+    current_user: User = Depends(get_current_user_from_cookie),
+    db: Session = Depends(get_db),
 ):
     """Предоставить доступ пользователю к объекту"""
     try:
@@ -959,10 +931,8 @@ def sync_with_acl(object_id: int, user_id: int, role: ObjectAccessRole, db: Sess
 async def revoke_object_access(
     object_id: int,
     user_id: int,
-    current_user: Annotated[User, Depends(get_current_user_from_cookie)] = Depends(
-        get_current_user_from_cookie
-    ),
-    db: Annotated[Session, Depends(get_db)] = Depends(get_db),
+    current_user: User = Depends(get_current_user_from_cookie),
+    db: Session = Depends(get_db),
 ):
     """
     Отозвать доступ пользователя к объекту
@@ -988,10 +958,8 @@ async def grant_department_access(
     object_id: int,
     department: Annotated[str, Form(...)],
     role: Annotated[str, Form(...)],
-    current_user: Annotated[User, Depends(get_current_user_from_cookie)] = Depends(
-        get_current_user_from_cookie
-    ),
-    db: Annotated[Session, Depends(get_db)] = Depends(get_db),
+    current_user: User = Depends(get_current_user_from_cookie),
+    db: Session = Depends(get_db),
 ):
     """
     Предоставить доступ всему отделу
@@ -1068,10 +1036,8 @@ async def update_object_access(
     user_id: int,
     role: Annotated[str, Form(...)],
     sections: Annotated[Optional[List[str]], Form()] = None,
-    current_user: Annotated[User, Depends(get_current_user_from_cookie)] = Depends(
-        get_current_user_from_cookie
-    ),
-    db: Annotated[Session, Depends(get_db)] = Depends(get_db),
+    current_user: User = Depends(get_current_user_from_cookie),
+    db: Session = Depends(get_db),
 ):
     """
     Обновить доступ пользователя к объекту
@@ -1104,10 +1070,8 @@ async def update_object_access(
 async def get_object_subcategories(
     object_id: int,
     category: Optional[str] = None,
-    current_user: Annotated[User, Depends(get_current_user_from_cookie)] = Depends(
-        get_current_user_from_cookie
-    ),
-    db: Annotated[Session, Depends(get_db)] = Depends(get_db),
+    current_user: User = Depends(get_current_user_from_cookie),
+    db: Session = Depends(get_db),
 ):
     """
     Получить подкатегории для объекта
@@ -1144,10 +1108,8 @@ async def get_object_subcategories(
 async def create_subcategory(
     object_id: int,
     request: Request,
-    current_user: Annotated[User, Depends(get_current_user_from_cookie)] = Depends(
-        get_current_user_from_cookie
-    ),
-    db: Annotated[Session, Depends(get_db)] = Depends(get_db),
+    current_user: User = Depends(get_current_user_from_cookie),
+    db: Session = Depends(get_db),
 ):
     """
     Создать подкатегорию для объекта.
@@ -1229,10 +1191,8 @@ async def create_subcategory(
 async def delete_subcategory(
     object_id: int,
     subcategory_id: int,
-    current_user: Annotated[User, Depends(get_current_user_from_cookie)] = Depends(
-        get_current_user_from_cookie
-    ),
-    db: Annotated[Session, Depends(get_db)] = Depends(get_db),
+    current_user: User = Depends(get_current_user_from_cookie),
+    db: Session = Depends(get_db),
 ):
     """
     Удалить подкатегорию (только создатель/админ/владелец объекта)
@@ -1299,10 +1259,8 @@ async def update_subcategory(
     subcategory_id: int,
     name: Annotated[str, Form(...)],
     description: Annotated[Optional[str], Form()] = None,
-    current_user: Annotated[User, Depends(get_current_user_from_cookie)] = Depends(
-        get_current_user_from_cookie
-    ),
-    db: Annotated[Session, Depends(get_db)] = Depends(get_db),
+    current_user: User = Depends(get_current_user_from_cookie),
+    db: Session = Depends(get_db),
 ):
     """
     Редактировать подкатегорию (только создатель/админ/владелец объекта)
@@ -1353,3 +1311,5 @@ async def update_subcategory(
         return RedirectResponse(
             url=f"/objects/{object_id}?error={e.detail}", status_code=303
         )
+
+

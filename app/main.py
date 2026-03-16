@@ -380,6 +380,8 @@ app.add_middleware(
         re.compile(r"^/documents/\d+/update$"),
         re.compile(r"^/documents/batch-delete$"),
         re.compile(r"^/documents/batch-download$"),
+        # ✅ Профиль
+        re.compile(r"^/profile/update$"),
     ],
 )
 

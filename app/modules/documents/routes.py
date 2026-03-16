@@ -418,11 +418,9 @@ async def upload_documents(
     object_id: int,
     request: Request,
     category: Annotated[str, Form(...)],
-    subcategory_id: Annotated[Optional[int], Form(None)],
-    user: Annotated[User, Depends(get_current_user_from_cookie)] = Depends(
-        get_current_user_from_cookie
-    ),
-    db: Annotated[Session, Depends(get_db)] = Depends(get_db),
+    subcategory_id: Annotated[Optional[int], Form()] = None,
+    user: User = Depends(get_current_user_from_cookie),
+    db: Session = Depends(get_db),
 ):
     """
     Загрузить множество документов к объекту
@@ -530,11 +528,9 @@ async def update_document(
     request: Request,
     title: Annotated[str, Form(...)],
     category: Annotated[str, Form(...)],
-    subcategory_id: Annotated[Optional[int], Form(None)],
-    user: Annotated[User, Depends(get_current_user_from_cookie)] = Depends(
-        get_current_user_from_cookie
-    ),
-    db: Annotated[Session, Depends(get_db)] = Depends(get_db),
+    subcategory_id: Annotated[Optional[int], Form()] = None,
+    user: User = Depends(get_current_user_from_cookie),
+    db: Session = Depends(get_db),
 ):
     """
     Обновить название, категорию и подкатегорию документа
@@ -599,10 +595,8 @@ async def delete_document(
     object_id: int,
     document_id: int,
     request: Request,
-    user: Annotated[User, Depends(get_current_user_from_cookie)] = Depends(
-        get_current_user_from_cookie
-    ),
-    db: Annotated[Session, Depends(get_db)] = Depends(get_db),
+    user: User = Depends(get_current_user_from_cookie),
+    db: Session = Depends(get_db),
 ):
     """
     Удалить документ (мягкое удаление)
@@ -688,10 +682,8 @@ async def delete_document(
 )
 async def download_document(
     document_id: int,
-    user: Annotated[User, Depends(get_current_user_from_cookie)] = Depends(
-        get_current_user_from_cookie
-    ),
-    db: Annotated[Session, Depends(get_db)] = Depends(get_db),
+    user: User = Depends(get_current_user_from_cookie),
+    db: Session = Depends(get_db),
 ):
     """
     Скачать документ
@@ -746,10 +738,8 @@ async def download_document(
 async def documents_list(
     request: Request,
     object_id: int,
-    user: Annotated[User, Depends(get_current_user_from_cookie)] = Depends(
-        get_current_user_from_cookie
-    ),
-    db: Annotated[Session, Depends(get_db)] = Depends(get_db),
+    user: User = Depends(get_current_user_from_cookie),
+    db: Session = Depends(get_db),
     category: Optional[str] = None,
 ):
     """Список документов объекта с фильтрацией по категориям"""
@@ -816,10 +806,8 @@ async def documents_list(
 async def update_document_file(
     document_id: int,
     request: Request,
-    user: Annotated[User, Depends(get_current_user_from_cookie)] = Depends(
-        get_current_user_from_cookie
-    ),
-    db: Annotated[Session, Depends(get_db)] = Depends(get_db),
+    user: User = Depends(get_current_user_from_cookie),
+    db: Session = Depends(get_db),
 ):
     """Обновить содержимое документа (новая версия)"""
     document = (
@@ -925,10 +913,8 @@ async def update_document_file(
 @router.post("/batch-delete")
 async def batch_delete_documents(
     request: Request,
-    user: Annotated[User, Depends(get_current_user_from_cookie)] = Depends(
-        get_current_user_from_cookie
-    ),
-    db: Annotated[Session, Depends(get_db)] = Depends(get_db),
+    user: User = Depends(get_current_user_from_cookie),
+    db: Session = Depends(get_db),
 ):
     """Удалить несколько документов одновременно"""
     try:
@@ -1008,10 +994,8 @@ async def batch_delete_documents(
 @router.post("/batch-download")
 async def batch_download_documents(
     request: Request,
-    user: Annotated[User, Depends(get_current_user_from_cookie)] = Depends(
-        get_current_user_from_cookie
-    ),
-    db: Annotated[Session, Depends(get_db)] = Depends(get_db),
+    user: User = Depends(get_current_user_from_cookie),
+    db: Session = Depends(get_db),
 ):
     """Скачать несколько документов как ZIP архив"""
     try:

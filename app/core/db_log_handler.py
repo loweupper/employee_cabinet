@@ -10,27 +10,27 @@ class DatabaseLogHandler(logging.Handler):
     """
     Обработчик логов для записи в базу данных
     """
-    
+
     # ✅ TTL для разных уровней логов
     TTL_DAYS = {
-        "DEBUG": 7,      # 7 дней
-        "INFO": 30,      # 30 дней
-        "WARNING": 90,   # 3 месяца
-        "ERROR": 180,    # 6 месяцев
-        "CRITICAL": 365, # 1 год
+        "DEBUG": 7,  # 7 дней
+        "INFO": 30,  # 30 дней
+        "WARNING": 90,  # 3 месяца
+        "ERROR": 180,  # 6 месяцев
+        "CRITICAL": 365,  # 1 год
     }
-    
+
     def emit(self, record):
         """Записываем лог в БД"""
         try:
             from modules.admin.models import AuditLog, LogLevel
-            
+
             db: Session = SessionLocal()
-            
+
             try:
                 # ✅ Получаем request_id из context
                 request_id = get_request_id()
-                
+
                 # Парсим сообщение и извлекаем данные
                 if isinstance(record.msg, dict):
                     event = record.msg.get("event", "unknown")
@@ -51,17 +51,34 @@ class DatabaseLogHandler(logging.Handler):
                         http_status = None
                     duration_ms = record.msg.get("duration_ms", None)
                     trace_id = record.msg.get("trace_id", None)
-                    
+
                     # Остальные данные в extra_data
                     extra_data = {}
-                    logger.debug(f"Parsed log record: event={event}, user_id={user_id}, ip={ip_address}, user_agent={user_agent_str}, http_method={http_method}, http_path={http_path}, http_status={http_status}, duration_ms={duration_ms}, trace_id={trace_id}")
+                    logger.debug(
+                        f"Parsed log record: event={event}, user_id={user_id}, ip={ip_address}, user_agent={user_agent_str}, http_method={http_method}, http_path={http_path}, http_status={http_status}, duration_ms={duration_ms}, trace_id={trace_id}"
+                    )
                     # Parse message
                     if isinstance(record.msg, dict):
-                        extra_data = {k: v for k, v in record.msg.items() 
-                                      if k not in ["event", "message", "user_id", "email", "ip", 
-                                                 "user_agent", "method", "path", "status", "duration_ms", 
-                                                 "request_id", "trace_id"]
-                                      and not (k == "status" and isinstance(v, int))}
+                        extra_data = {
+                            k: v
+                            for k, v in record.msg.items()
+                            if k
+                            not in [
+                                "event",
+                                "message",
+                                "user_id",
+                                "email",
+                                "ip",
+                                "user_agent",
+                                "method",
+                                "path",
+                                "status",
+                                "duration_ms",
+                                "request_id",
+                                "trace_id",
+                            ]
+                            and not (k == "status" and isinstance(v, int))
+                        }
                         logger.debug(f"Extracted extra_data for log: {extra_data}")
 
                 else:
@@ -77,16 +94,16 @@ class DatabaseLogHandler(logging.Handler):
                     duration_ms = None
                     trace_id = None
                     extra_data = {}
-                
+
                 # ✅ Получаем или создаём User-Agent
                 user_agent_id = None
                 if user_agent_str:
                     user_agent_id = self._get_or_create_user_agent(db, user_agent_str)
-                
+
                 # ✅ Вычисляем expires_at на основе TTL
                 ttl_days = self.TTL_DAYS.get(record.levelname, 30)
                 expires_at = datetime.utcnow() + timedelta(days=ttl_days)
-                
+
                 # Создаём запись лога
                 log_entry = AuditLog(
                     request_id=request_id,
@@ -105,35 +122,38 @@ class DatabaseLogHandler(logging.Handler):
                     duration_ms=duration_ms,
                     expires_at=expires_at,
                 )
-                
+
                 db.add(log_entry)
                 db.commit()
             except Exception as e:
                 import sys
+
                 print(f"Ошибка записи в базу данных: {e}", file=sys.stderr)
                 try:
                     db.rollback()
                 except:
                     pass
-                finally:
-                    db.close()
-                
+            finally:
+                db.close()
+
         except Exception as e:
             print(f"Ошибка в DatabaseLogHandler: {e}")
-    
+
     def _get_or_create_user_agent(self, db: Session, user_agent_str: str) -> int:
         """Получить или создать User-Agent в кеше"""
         from modules.admin.models import UserAgentCache
         from sqlalchemy import update
-        
+
         # Ограничиваем длину до 1000 символов
         user_agent_str = user_agent_str[:1000]
-        
+
         # Ищем существующий
-        ua = db.query(UserAgentCache).filter(
-            UserAgentCache.user_agent == user_agent_str
-        ).first()
-        
+        ua = (
+            db.query(UserAgentCache)
+            .filter(UserAgentCache.user_agent == user_agent_str)
+            .first()
+        )
+
         if ua:
             # Увеличиваем счётчик
             db.execute(
@@ -141,12 +161,12 @@ class DatabaseLogHandler(logging.Handler):
                 .where(UserAgentCache.id == ua.id)
                 .values(
                     usage_count=UserAgentCache.usage_count + 1,
-                    last_seen=datetime.utcnow()
+                    last_seen=datetime.utcnow(),
                 )
             )
             db.commit()
             return ua.id
-        
+
         new_ua = UserAgentCache(user_agent=user_agent_str)
         db.add(new_ua)
         db.commit()

@@ -101,7 +101,7 @@
                             </div>
                             <div>
                                 <span class="text-gray-500">Отдел:</span>
-                                <p class="font-medium text-gray-800">{{ user.department or "Не указан" }}</p>
+                                <p class="font-medium text-gray-800">{{ user.department_rel.name if user.department_rel else "Не указан" }}</p>
                             </div>
                             <div>
                                 <span class="text-gray-500">Локация:</span>

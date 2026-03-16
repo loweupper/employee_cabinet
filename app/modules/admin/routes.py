@@ -325,10 +325,8 @@ async def users_list(
     request: Request,
     status: str = None,  # all, active, pending, deactivated, deleted
     search: str = None,
-    user: Annotated[User, Depends(get_current_user_from_cookie)] = Depends(
-        get_current_user_from_cookie
-    ),
-    db: Annotated[Session, Depends(get_db)] = Depends(get_db),
+    user: User = Depends(get_current_user_from_cookie),
+    db: Session = Depends(get_db),
 ):
     """Админ-панель: список пользователей"""
 
@@ -421,10 +419,8 @@ async def users_list(
 async def activate_user(
     user_id: int,
     request: Request,
-    admin: Annotated[User, Depends(get_current_user_from_cookie)] = Depends(
-        get_current_user_from_cookie
-    ),
-    db: Annotated[Session, Depends(get_db)] = Depends(get_db),
+    admin: User = Depends(get_current_user_from_cookie),
+    db: Session = Depends(get_db),
 ):
     """Активировать пользователя"""
 
@@ -470,10 +466,8 @@ async def activate_user(
 async def deactivate_user(
     user_id: int,
     request: Request,
-    admin: Annotated[User, Depends(get_current_user_from_cookie)] = Depends(
-        get_current_user_from_cookie
-    ),
-    db: Annotated[Session, Depends(get_db)] = Depends(get_db),
+    admin: User = Depends(get_current_user_from_cookie),
+    db: Session = Depends(get_db),
 ):
     """Деактивировать пользователя"""
 
@@ -521,10 +515,8 @@ async def deactivate_user(
 async def change_user_role(
     user_id: int,
     request: Request,
-    admin: Annotated[User, Depends(get_current_user_from_cookie)] = Depends(
-        get_current_user_from_cookie
-    ),
-    db: Annotated[Session, Depends(get_db)] = Depends(get_db),
+    admin: User = Depends(get_current_user_from_cookie),
+    db: Session = Depends(get_db),
 ):
     """Изменить роль пользователя"""
 
@@ -582,10 +574,8 @@ async def change_user_role(
 async def delete_user(
     user_id: int,
     request: Request,
-    admin: Annotated[User, Depends(get_current_user_from_cookie)] = Depends(
-        get_current_user_from_cookie
-    ),
-    db: Annotated[Session, Depends(get_db)] = Depends(get_db),
+    admin: User = Depends(get_current_user_from_cookie),
+    db: Session = Depends(get_db),
 ):
     """Удалить пользователя (мягкое удаление)"""
 
@@ -663,10 +653,8 @@ async def delete_user(
 async def edit_user(
     user_id: int,
     request: Request,
-    admin: Annotated[User, Depends(get_current_user_from_cookie)] = Depends(
-        get_current_user_from_cookie
-    ),
-    db: Annotated[Session, Depends(get_db)] = Depends(get_db),
+    admin: User = Depends(get_current_user_from_cookie),
+    db: Session = Depends(get_db),
 ):
     """Редактировать данные пользователя"""
 
@@ -739,10 +727,8 @@ async def edit_user(
 async def reset_user_password(
     user_id: int,
     request: Request,
-    admin: Annotated[User, Depends(get_current_user_from_cookie)] = Depends(
-        get_current_user_from_cookie
-    ),
-    db: Annotated[Session, Depends(get_db)] = Depends(get_db),
+    admin: User = Depends(get_current_user_from_cookie),
+    db: Session = Depends(get_db),
 ):
     """Сбросить пароль пользователя (только для админа)"""
 
@@ -833,13 +819,25 @@ def _apply_audit_log_filters(
     return _apply_audit_search_filter(query, search)
 
 
-def _parse_extra_data(extra_data: str):
+def _parse_extra_data(extra_data: object) -> dict:
     if not extra_data:
         return {}
+
+    if isinstance(extra_data, dict):
+        return extra_data
+
+    if isinstance(extra_data, (bytes, bytearray)):
+        extra_data = extra_data.decode("utf-8", errors="ignore")
+
+    if not isinstance(extra_data, str):
+        return {}
+
     try:
-        return json.loads(extra_data)
+        parsed = json.loads(extra_data)
     except json.JSONDecodeError:
         return {}
+
+    return parsed if isinstance(parsed, dict) else {}
 
 
 def _sanitize_log_value(value: object) -> str:
@@ -867,10 +865,8 @@ async def logs_page(
     http_method: str = None,
     page: int = 1,
     per_page: int = 50,
-    user: Annotated[User, Depends(get_current_user_from_cookie)] = Depends(
-        get_current_user_from_cookie
-    ),
-    db: Annotated[Session, Depends(get_db)] = Depends(get_db),
+    user: User = Depends(get_current_user_from_cookie),
+    db: Session = Depends(get_db),
 ):
     """Просмотр логов аудита (только для админов)"""
 
@@ -968,10 +964,8 @@ async def logs_page(
 )
 async def log_detail_api(
     log_id: int,
-    user: Annotated[User, Depends(get_current_user_from_cookie)] = Depends(
-        get_current_user_from_cookie
-    ),
-    db: Annotated[Session, Depends(get_db)] = Depends(get_db),
+    user: User = Depends(get_current_user_from_cookie),
+    db: Session = Depends(get_db),
 ):
     """Получить детали лога по ID (JSON)"""
 
@@ -1001,10 +995,8 @@ async def logs_export_csv(
     date_to: str = None,
     search: str = None,
     http_method: str = None,
-    user: Annotated[User, Depends(get_current_user_from_cookie)] = Depends(
-        get_current_user_from_cookie
-    ),
-    db: Annotated[Session, Depends(get_db)] = Depends(get_db),
+    user: User = Depends(get_current_user_from_cookie),
+    db: Session = Depends(get_db),
 ):
     """Экспорт логов в CSV"""
 
@@ -1102,10 +1094,8 @@ async def logs_export_json(
     date_to: str = None,
     search: str = None,
     http_method: str = None,
-    user: Annotated[User, Depends(get_current_user_from_cookie)] = Depends(
-        get_current_user_from_cookie
-    ),
-    db: Annotated[Session, Depends(get_db)] = Depends(get_db),
+    user: User = Depends(get_current_user_from_cookie),
+    db: Session = Depends(get_db),
 ):
     """Экспорт логов в JSON"""
 
@@ -1151,10 +1141,8 @@ async def logs_export_json(
     responses={403: {"description": "Доступ запрещён"}},
 )
 async def logs_stats(
-    user: Annotated[User, Depends(get_current_user_from_cookie)] = Depends(
-        get_current_user_from_cookie
-    ),
-    db: Annotated[Session, Depends(get_db)] = Depends(get_db),
+    user: User = Depends(get_current_user_from_cookie),
+    db: Session = Depends(get_db),
 ):
     """Получить статистику логов за последние 24 часа"""
 
@@ -1232,10 +1220,8 @@ async def logs_stats(
     responses={403: {"description": "Доступ запрещён"}},
 )
 async def get_departments_list(
-    admin: Annotated[User, Depends(get_current_user_from_cookie)] = Depends(
-        get_current_user_from_cookie
-    ),
-    db: Annotated[Session, Depends(get_db)] = Depends(get_db),
+    admin: User = Depends(get_current_user_from_cookie),
+    db: Session = Depends(get_db),
 ):
     """Get list of all departments"""
     if admin.role != UserRole.ADMIN:
@@ -1262,10 +1248,8 @@ async def get_departments_list(
 @router.post("/departments")
 async def create_department(
     request: Request,
-    admin: Annotated[User, Depends(get_current_user_from_cookie)] = Depends(
-        get_current_user_from_cookie
-    ),
-    db: Annotated[Session, Depends(get_db)] = Depends(get_db),
+    admin: User = Depends(get_current_user_from_cookie),
+    db: Session = Depends(get_db),
 ):
     """Create a new department"""
     if admin.role != UserRole.ADMIN:
@@ -1328,10 +1312,8 @@ async def create_department(
 async def update_department(
     department_id: int,
     request: Request,
-    admin: Annotated[User, Depends(get_current_user_from_cookie)] = Depends(
-        get_current_user_from_cookie
-    ),
-    db: Annotated[Session, Depends(get_db)] = Depends(get_db),
+    admin: User = Depends(get_current_user_from_cookie),
+    db: Session = Depends(get_db),
 ):
     """Update a department"""
     if admin.role != UserRole.ADMIN:
@@ -1392,10 +1374,8 @@ async def update_department(
 @router.delete("/departments/{department_id}")
 async def delete_department(
     department_id: int,
-    admin: Annotated[User, Depends(get_current_user_from_cookie)] = Depends(
-        get_current_user_from_cookie
-    ),
-    db: Annotated[Session, Depends(get_db)] = Depends(get_db),
+    admin: User = Depends(get_current_user_from_cookie),
+    db: Session = Depends(get_db),
 ):
     """Delete a department"""
     if admin.role != UserRole.ADMIN:
@@ -1447,10 +1427,8 @@ async def user_sessions_page(
     request: Request,
     page: int = 1,  # номер страницы для пагинации
     per_page: int = 20,  # количество сессий на странице
-    admin: Annotated[User, Depends(get_current_user_from_cookie)] = Depends(
-        get_current_user_from_cookie
-    ),
-    db: Annotated[Session, Depends(get_db)] = Depends(get_db),
+    admin: User = Depends(get_current_user_from_cookie),
+    db: Session = Depends(get_db),
 ):
     # Только админ
     if admin.role != UserRole.ADMIN:
@@ -1519,10 +1497,8 @@ async def user_sessions_page(
 async def revoke_session(
     session_id: int,
     request: Request,
-    admin: Annotated[User, Depends(get_current_user_from_cookie)] = Depends(
-        get_current_user_from_cookie
-    ),
-    db: Annotated[Session, Depends(get_db)] = Depends(get_db),
+    admin: User = Depends(get_current_user_from_cookie),
+    db: Session = Depends(get_db),
 ):
     # Только админ
     if admin.role != UserRole.ADMIN:
@@ -1568,10 +1544,8 @@ async def revoke_session(
 async def revoke_all_sessions(
     user_id: int,
     request: Request,
-    admin: Annotated[User, Depends(get_current_user_from_cookie)] = Depends(
-        get_current_user_from_cookie
-    ),
-    db: Annotated[Session, Depends(get_db)] = Depends(get_db),
+    admin: User = Depends(get_current_user_from_cookie),
+    db: Session = Depends(get_db),
 ):
     # Только админ
     if admin.role != UserRole.ADMIN:
@@ -1627,10 +1601,8 @@ async def revoke_all_sessions(
 async def revoke_other_sessions(
     user_id: int,
     request: Request,
-    admin: Annotated[User, Depends(get_current_user_from_cookie)] = Depends(
-        get_current_user_from_cookie
-    ),
-    db: Annotated[Session, Depends(get_db)] = Depends(get_db),
+    admin: User = Depends(get_current_user_from_cookie),
+    db: Session = Depends(get_db),
 ):
     if admin.role != UserRole.ADMIN:
         raise HTTPException(status_code=403, detail=ERROR_ACCESS_DENIED_RU)
@@ -1683,10 +1655,8 @@ async def revoke_other_sessions(
 )
 async def category_mappings_page(
     request: Request,
-    user: Annotated[User, Depends(get_current_user_from_cookie)] = Depends(
-        get_current_user_from_cookie
-    ),
-    db: Annotated[Session, Depends(get_db)] = Depends(get_db),
+    user: User = Depends(get_current_user_from_cookie),
+    db: Session = Depends(get_db),
 ):
     """Страница управления маппингами категорий"""
     if user.role != UserRole.ADMIN:
@@ -1727,10 +1697,8 @@ async def category_mappings_page(
 async def update_category_mapping(
     category: str,
     request: Request,
-    user: Annotated[User, Depends(get_current_user_from_cookie)] = Depends(
-        get_current_user_from_cookie
-    ),
-    db: Annotated[Session, Depends(get_db)] = Depends(get_db),
+    user: User = Depends(get_current_user_from_cookie),
+    db: Session = Depends(get_db),
 ):
     """Обновить маппинг категории"""
     if user.role != UserRole.ADMIN:
@@ -1783,10 +1751,8 @@ async def update_category_mapping(
     responses={403: {"description": "Access denied"}},
 )
 async def get_permissions(
-    user: Annotated[User, Depends(get_current_user_from_cookie)] = Depends(
-        get_current_user_from_cookie
-    ),
-    db: Annotated[Session, Depends(get_db)] = Depends(get_db),
+    user: User = Depends(get_current_user_from_cookie),
+    db: Session = Depends(get_db),
 ):
     """Получить все разрешения"""
     if user.role != UserRole.ADMIN:
@@ -1817,10 +1783,8 @@ async def get_permissions(
 )
 async def get_user_permissions(
     user_id: int,
-    user: Annotated[User, Depends(get_current_user_from_cookie)] = Depends(
-        get_current_user_from_cookie
-    ),
-    db: Annotated[Session, Depends(get_db)] = Depends(get_db),
+    user: User = Depends(get_current_user_from_cookie),
+    db: Session = Depends(get_db),
 ):
     """Получить разрешения пользователя"""
     if user.role != UserRole.ADMIN:
@@ -1854,10 +1818,8 @@ async def get_user_permissions(
 async def update_user_permissions(
     user_id: int,
     request: Request,
-    user: Annotated[User, Depends(get_current_user_from_cookie)] = Depends(
-        get_current_user_from_cookie
-    ),
-    db: Annotated[Session, Depends(get_db)] = Depends(get_db),
+    user: User = Depends(get_current_user_from_cookie),
+    db: Session = Depends(get_db),
 ):
     """Обновить разрешения пользователя"""
     if user.role != UserRole.ADMIN:
@@ -1901,10 +1863,8 @@ async def update_user_permissions(
 )
 async def get_user_subsection_access(
     user_id: int,
-    user: Annotated[User, Depends(get_current_user_from_cookie)] = Depends(
-        get_current_user_from_cookie
-    ),
-    db: Annotated[Session, Depends(get_db)] = Depends(get_db),
+    user: User = Depends(get_current_user_from_cookie),
+    db: Session = Depends(get_db),
 ):
     """Получить доступ пользователя к подразделам"""
     if user.role != UserRole.ADMIN:
@@ -1945,10 +1905,8 @@ async def update_user_subsection_access(
     user_id: int,
     subsection_id: int,
     request: Request,
-    user: Annotated[User, Depends(get_current_user_from_cookie)] = Depends(
-        get_current_user_from_cookie
-    ),
-    db: Annotated[Session, Depends(get_db)] = Depends(get_db),
+    user: User = Depends(get_current_user_from_cookie),
+    db: Session = Depends(get_db),
 ):
     """Обновить доступ к подразделу"""
     if user.role != UserRole.ADMIN:
@@ -2016,10 +1974,8 @@ async def update_user_subsection_access(
     responses={403: {"description": "Access denied"}},
 )
 async def get_subsections(
-    user: Annotated[User, Depends(get_current_user_from_cookie)] = Depends(
-        get_current_user_from_cookie
-    ),
-    db: Annotated[Session, Depends(get_db)] = Depends(get_db),
+    user: User = Depends(get_current_user_from_cookie),
+    db: Session = Depends(get_db),
 ):
     """Получить все подразделы"""
     if user.role != UserRole.ADMIN:
@@ -2049,10 +2005,8 @@ async def get_subsections(
 )
 async def get_section_subsections(
     section_id: int,
-    user: Annotated[User, Depends(get_current_user_from_cookie)] = Depends(
-        get_current_user_from_cookie
-    ),
-    db: Annotated[Session, Depends(get_db)] = Depends(get_db),
+    user: User = Depends(get_current_user_from_cookie),
+    db: Session = Depends(get_db),
 ):
     """Получить подразделы раздела"""
     if user.role != UserRole.ADMIN:

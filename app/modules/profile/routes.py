@@ -83,6 +83,7 @@ async def profile_page(
         {
             "request": request,
             "user": user,
+            "current_user": user,
             "success": success,
             "error": error,
             "user_permissions": user_permissions,
