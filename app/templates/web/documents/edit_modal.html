@@ -10,6 +10,7 @@
 
         <!-- Редактирование метаданных -->
         <form id="editDocumentForm" method="post" class="space-y-4">
+            <input type="hidden" name="csrf_token" value="{{ request.scope.get('csrf_token', '') }}">
             <div>
                 <label class="block text-gray-700 font-medium mb-2">Название *</label>
                 <input type="text" id="editDocTitle" name="title" required

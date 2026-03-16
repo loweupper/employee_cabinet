@@ -242,6 +242,10 @@
                                 <h4 class="text-lg font-semibold text-gray-800">📁 Документы объекта</h4>
 
                                 <div class="flex gap-2 items-center">
+                                    <span class="text-sm text-gray-600 whitespace-nowrap">
+                                        Выбрано файлов: <span id="selectedDocumentsCount" class="font-semibold">0</span>
+                                    </span>
+
                                     <!-- ✅ Кнопка batch delete (только для владельца/админа) -->
                                     {% if (object.created_by == user.id or user.role == "admin") and not object.is_archived %}
                                     <button onclick="openBatchDeleteModal()"
@@ -773,7 +777,7 @@
         });
     </script>
 
-    <script src="{{ url_for('static', path='/js/documents.js') }}"></script>
+    <script src="{{ url_for('static', path='/js/documents.js') }}?v=20260316-1"></script>
 
 </body>
 

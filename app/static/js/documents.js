@@ -25,7 +25,7 @@ async function createSubcategoryViaAjax(e) {
 
     const name = nameInput.value.trim();
     const category = categoryInput.value;
-    const objectId = window.location.pathname.split('/').pop();
+    const objectId = globalThis.location.pathname.split('/').pop();
 
     if (!name) {
         alert('Введите имя подкатегории');
@@ -116,7 +116,7 @@ function openBatchDeleteModal() {
 async function confirmBatchDelete() {
     const selected = Array.from(
         document.querySelectorAll('.document-checkbox:checked')
-    ).map(cb => parseInt(cb.dataset.docId));
+    ).map(cb => Number.parseInt(cb.dataset.docId, 10));
 
     if (selected.length === 0) {
         return;
@@ -173,7 +173,7 @@ function openEditDocumentModal(docId, title, category, subcategoryId) {
 
     if (!modal || !form) return;
 
-    const objectId = window.location.pathname.split('/').pop();
+    const objectId = globalThis.location.pathname.split('/').pop();
     form.action = `/documents/objects/${objectId}/${docId}/update`;
 
     document.getElementById('editDocTitle').value = title;
@@ -196,7 +196,7 @@ function openEditDocumentModal(docId, title, category, subcategoryId) {
 
 async function updateDocumentFile() {
     const fileInput = document.getElementById('editDocFileInput');
-    if (!fileInput || !fileInput.files.length) {
+    if (!fileInput?.files.length) {
         alert('Выберите новый файл');
         return;
     }
@@ -270,23 +270,150 @@ function showNotification(message, type) {
 // Скачивание нескольких документов (batch download)
 // ===================================
 
-async function downloadSelectedDocuments() {
-    const selected = Array.from(
+function getSelectedDocumentIds() {
+    return Array.from(
         document.querySelectorAll('.document-checkbox:checked')
-    ).map(cb => parseInt(cb.dataset.docId));
+    ).map((cb) => Number.parseInt(cb.dataset.docId, 10));
+}
+
+function updateDocumentSelectionUI() {
+    const checkedCount = document.querySelectorAll('.document-checkbox:checked').length;
+    const countEl = document.getElementById('selectedDocumentsCount');
+    const downloadButtons = document.querySelectorAll('[data-action="download-selected"]');
+    const categorySections = document.querySelectorAll('.category-section[data-category]');
+    const subcategoryContents = document.querySelectorAll('[id^="subcategory-content-"]');
+
+    if (countEl) {
+        countEl.textContent = String(checkedCount);
+    }
+
+    downloadButtons.forEach((btn) => {
+        btn.disabled = checkedCount === 0;
+    });
+
+    categorySections.forEach((section) => {
+        const category = section.dataset.category;
+        if (!category) {
+            return;
+        }
+
+        const categoryCheckedCount = section.querySelectorAll('.document-checkbox:checked').length;
+        const categoryCountEl = document.querySelector(`[data-selected-count-for="${category}"]`);
+
+        if (categoryCountEl) {
+            categoryCountEl.textContent = String(categoryCheckedCount);
+        }
+    });
+
+    subcategoryContents.forEach((content) => {
+        const key = content.id.replace('subcategory-content-', '');
+        const selectedInSubcategory = content.querySelectorAll('.document-checkbox:checked').length;
+        const subcategoryCountEl = document.querySelector(`[data-selected-count-for-subcategory="${key}"]`);
+        const clearSubcategoryBtn = document.querySelector(`[data-action="clear-subcategory"][data-subcategory-key="${key}"]`);
+
+        if (subcategoryCountEl) {
+            subcategoryCountEl.textContent = String(selectedInSubcategory);
+        }
+
+        if (clearSubcategoryBtn) {
+            clearSubcategoryBtn.disabled = selectedInSubcategory === 0;
+        }
+    });
+}
+
+function clearSelectedDocuments() {
+    const checkboxes = document.querySelectorAll('.document-checkbox:checked');
+    checkboxes.forEach((cb) => {
+        cb.checked = false;
+    });
+    updateDocumentSelectionUI();
+}
+
+function getCategoryCheckboxes(category) {
+    return document.querySelectorAll(`.category-section[data-category="${category}"] .document-checkbox`);
+}
+
+function selectCategoryDocuments(category) {
+    const checkboxes = getCategoryCheckboxes(category);
+
+    if (!checkboxes.length) {
+        return;
+    }
+
+    checkboxes.forEach((cb) => {
+        cb.checked = true;
+    });
+
+    updateDocumentSelectionUI();
+}
+
+function clearCategoryDocuments(category) {
+    const checkboxes = getCategoryCheckboxes(category);
+
+    if (!checkboxes.length) {
+        return;
+    }
+
+    checkboxes.forEach((cb) => {
+        cb.checked = false;
+    });
+
+    updateDocumentSelectionUI();
+}
+
+function getSubcategoryCheckboxes(key) {
+    const content = document.getElementById(`subcategory-content-${key}`);
+    if (!content) {
+        return [];
+    }
+    return content.querySelectorAll('.document-checkbox');
+}
+
+function selectSubcategoryDocuments(key) {
+    const checkboxes = getSubcategoryCheckboxes(key);
+
+    if (!checkboxes.length) {
+        return;
+    }
+
+    checkboxes.forEach((cb) => {
+        cb.checked = true;
+    });
+
+    updateDocumentSelectionUI();
+}
+
+function clearSubcategoryDocuments(key) {
+    const checkboxes = getSubcategoryCheckboxes(key);
+
+    if (!checkboxes.length) {
+        return;
+    }
+
+    checkboxes.forEach((cb) => {
+        cb.checked = false;
+    });
+
+    updateDocumentSelectionUI();
+}
+
+function initDocumentSelectionControls() {
+    const checkboxes = document.querySelectorAll('.document-checkbox');
+    checkboxes.forEach((cb) => {
+        cb.addEventListener('change', updateDocumentSelectionUI);
+    });
+    updateDocumentSelectionUI();
+}
+
+async function downloadSelectedDocuments() {
+    const selected = getSelectedDocumentIds();
 
     if (selected.length === 0) {
         alert('Выберите файлы для скачивания');
         return;
     }
 
-    if (selected.length === 1) {
-        // Один файл - обычное скачивание
-        window.location.href = `/documents/${selected[0]}/download`;
-        return;
-    }
-
-    // Несколько файлов - скачиваем архив
+    // Любое число выбранных файлов скачиваем архивом
     try {
         const response = await fetch('/documents/batch-download', {
             method: 'POST',
@@ -299,21 +426,62 @@ async function downloadSelectedDocuments() {
 
         if (response.ok) {
             const blob = await response.blob();
-            const url = window.URL.createObjectURL(blob);
+            const url = globalThis.URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = 'documents.zip';
+            const timestamp = new Date().toISOString().slice(0, 19).replaceAll('T', '-').replaceAll(':', '-');
+            a.download = `documents-${timestamp}.zip`;
             document.body.appendChild(a);
             a.click();
-            window.URL.revokeObjectURL(url);
+            globalThis.URL.revokeObjectURL(url);
             a.remove();
         } else {
-            alert('Ошибка при скачивании');
+            let errorMessage = 'Ошибка при скачивании';
+            try {
+                const errorData = await response.json();
+                if (errorData?.detail) {
+                    errorMessage = errorData.detail;
+                }
+            } catch {
+                // ignore JSON parsing and fallback to generic text
+            }
+            alert(errorMessage);
         }
     } catch (err) {
         console.error('Ошибка:', err);
         alert('Ошибка при скачивании файлов');
     }
 }
+
+function toggleAllDocumentCheckboxes() {
+    const checkboxes = Array.from(document.querySelectorAll('.document-checkbox'));
+
+    if (!checkboxes.length) {
+        alert('На странице нет документов для выбора');
+        return;
+    }
+
+    const hasUnchecked = checkboxes.some((cb) => !cb.checked);
+    checkboxes.forEach((cb) => {
+        cb.checked = hasUnchecked;
+    });
+
+    updateDocumentSelectionUI();
+}
+
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initDocumentSelectionControls);
+} else {
+    initDocumentSelectionControls();
+}
+
+// Экспорт в глобальную область для inline onclick в шаблонах
+globalThis.selectCategoryDocuments = selectCategoryDocuments;
+globalThis.clearCategoryDocuments = clearCategoryDocuments;
+globalThis.selectSubcategoryDocuments = selectSubcategoryDocuments;
+globalThis.clearSubcategoryDocuments = clearSubcategoryDocuments;
+globalThis.downloadSelectedDocuments = downloadSelectedDocuments;
+globalThis.clearSelectedDocuments = clearSelectedDocuments;
+globalThis.toggleAllDocumentCheckboxes = toggleAllDocumentCheckboxes;
 
 console.log('documents.js загружен');

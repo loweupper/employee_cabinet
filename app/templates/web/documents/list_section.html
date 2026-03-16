@@ -3,10 +3,8 @@
 <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition document-item"
     data-category="{{ doc.category.value }}">
     <!-- Чекбокс для batch delete -->
-    {% if object.created_by == user.id or user.role == "admin" %}
     <input type="checkbox" class="document-checkbox mr-3 w-4 h-4 text-indigo-600 rounded flex-shrink-0"
         data-doc-id="{{ doc.id }}">
-    {% endif %}
     <div class="flex items-center gap-3 flex-1 min-w-0">
         <!-- Иконка файла -->
         <div class="w-10 h-10 bg-gray-50 rounded-lg flex items-center justify-center flex-shrink-0">
@@ -67,36 +65,75 @@
     <div class="category-section" data-category="{{ category.value }}">
 
         <!-- ✅ ЗАГОЛОВОК КАТЕГОРИИ -->
-        <h5 class="text-md font-semibold text-gray-700 mb-2 flex items-center gap-2">
-            {% if category.value == 'general' %}📋 Общие
-            {% elif category.value == 'technical' %}📐 Технические
-            {% elif category.value == 'accounting' %}💰 Бухгалтерия
-            {% elif category.value == 'safety' %}👷 Охрана труда
-            {% elif category.value == 'legal' %}⚖️ Юридические
-            {% elif category.value == 'hr' %}👔 Кадровые
-            {% endif %}
-            <span class="text-xs text-gray-500">({{ category_data.docs|length }})</span>
-        </h5>
+        <div class="mb-2 flex flex-wrap items-center justify-between gap-2">
+            <h5 class="text-md font-semibold text-gray-700 flex items-center gap-2">
+                {% if category.value == 'general' %}📋 Общие
+                {% elif category.value == 'technical' %}📐 Технические
+                {% elif category.value == 'accounting' %}💰 Бухгалтерия
+                {% elif category.value == 'safety' %}👷 Охрана труда
+                {% elif category.value == 'legal' %}⚖️ Юридические
+                {% elif category.value == 'hr' %}👔 Кадровые
+                {% endif %}
+                <span class="text-xs text-gray-500">({{ category_data.docs|length }})</span>
+                <span class="text-xs text-gray-500">Выбрано: <span data-selected-count-for="{{ category.value }}">0</span></span>
+            </h5>
+
+            <div class="flex flex-wrap items-center gap-1">
+                <button type="button"
+                    onclick="downloadSelectedDocuments()"
+                    data-action="download-selected"
+                    disabled
+                    class="px-2 py-1 text-xs bg-emerald-100 text-emerald-700 rounded-md hover:bg-emerald-200 transition disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-emerald-100">
+                    📦 Скачать выбранные
+                </button>
+            </div>
+        </div>
 
         <!-- ✅ ПОДКАТЕГОРИИ -->
-        {% for subcategory_id, subcat_docs in category_data.by_subcat %}
+        {% for subcategory_id, subcat_docs in category_data.by_subcat|sort(attribute='0') %}
         {% if subcategory_id != 0 %}
         {% set subcat = subcat_docs[0].subcategory_ref %}
+        {% set accordion_key = category.value ~ '-' ~ subcategory_id %}
+        {% else %}
+        {% set accordion_key = category.value ~ '-none' %}
+        {% endif %}
 
         <!-- АККОРДЕОН ПОДКАТЕГОРИИ -->
         <div class="mb-3 border border-gray-200 rounded-lg overflow-hidden">
             <!-- Заголовок подкатегории -->
             <div class="bg-gray-50 p-3 flex justify-between items-center cursor-pointer hover:bg-gray-100 transition"
-                onclick="toggleSubcategoryAccordion({{ subcategory_id }})">
+                onclick="toggleSubcategoryAccordion('{{ accordion_key }}')">
                 <div class="flex items-center gap-2">
-                    <span id="subcategory-toggle-{{ subcategory_id }}" class="text-gray-600">▼</span>
-                    <span class="font-medium text-gray-800">📁 {{ subcat.name }}</span>
+                    <span id="subcategory-toggle-{{ accordion_key }}" class="text-gray-600">▼</span>
+                    <span class="font-medium text-gray-800">
+                        {% if subcategory_id != 0 %}
+                        📁 {{ subcat.name }}
+                        {% else %}
+                        📂 Без подкатегории
+                        {% endif %}
+                    </span>
                     <span class="text-xs text-gray-500">({{ subcat_docs|length }} файлов)</span>
+                    <span class="text-xs text-gray-500">Выбрано: <span data-selected-count-for-subcategory="{{ accordion_key }}">0</span></span>
                 </div>
 
                 <!-- Кнопки управления подкатегорией -->
-                {% if object.created_by == user.id or user.role == "admin" %}
                 <div class="flex gap-2" onclick="event.stopPropagation()">
+                    <button type="button"
+                        onclick="selectSubcategoryDocuments('{{ accordion_key }}')"
+                        class="text-xs px-2 py-1 bg-gray-100 text-gray-700 rounded hover:bg-gray-200">
+                        ☑
+                    </button>
+
+                    <button type="button"
+                        onclick="clearSubcategoryDocuments('{{ accordion_key }}')"
+                        data-action="clear-subcategory"
+                        data-subcategory-key="{{ accordion_key }}"
+                        disabled
+                        class="text-xs px-2 py-1 bg-gray-100 text-gray-700 rounded hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed">
+                        ✖
+                    </button>
+
+                    {% if subcategory_id != 0 and (object.created_by == user.id or user.role == "admin") %}
                     <button
                         onclick="openEditSubcategoryModal({{ object.id }}, {{ subcategory_id }}, '{{ subcat.name }}', '{{ subcat.description or '' }}')"
                         class="text-xs px-2 py-1 bg-indigo-100 text-indigo-700 rounded hover:bg-indigo-200">
@@ -107,25 +144,17 @@
                         class="text-xs px-2 py-1 bg-red-100 text-red-700 rounded hover:bg-red-200">
                         🗑️
                     </button>
+                    {% endif %}
                 </div>
-                {% endif %}
             </div>
 
             <!-- Содержимое подкатегории (файлы) -->
-            <div id="subcategory-content-{{ subcategory_id }}" class="p-3 space-y-2 bg-white">
+            <div id="subcategory-content-{{ accordion_key }}" class="p-3 space-y-2 bg-white">
                 {% for doc in subcat_docs %}
                 {{ render_document_item(doc, object, user) }}
                 {% endfor %}
             </div>
         </div>
-        {% else %}
-        <!-- Документы БЕЗ подкатегории -->
-        <div class="space-y-2 mb-3">
-            {% for doc in subcat_docs %}
-            {{ render_document_item(doc, object, user) }}
-            {% endfor %}
-        </div>
-        {% endif %}
         {% endfor %}
 
     </div>

@@ -2,13 +2,16 @@ from sqlalchemy import func
 from core.template_helpers import get_sidebar_context
 from core.config import settings
 from core.constants import UserRole  # ✅ импорт из constants
-from core.validators import (
-    validate_file_extension,
-    ALLOWED_DOCUMENT_EXTENSIONS
-)
+from core.validators import validate_file_extension, ALLOWED_DOCUMENT_EXTENSIONS
 from modules.objects.models import Object, ObjectAccess
 from fastapi import APIRouter, Depends, Request, Form, HTTPException
-from fastapi.responses import HTMLResponse, RedirectResponse, FileResponse, JSONResponse, StreamingResponse
+from fastapi.responses import (
+    HTMLResponse,
+    RedirectResponse,
+    FileResponse,
+    JSONResponse,
+    StreamingResponse,
+)
 from pathlib import Path
 from sqlalchemy.orm import Session
 import io
@@ -35,15 +38,42 @@ limiter = Limiter(key_func=get_remote_address)
 router = APIRouter(tags=["documents"])
 
 from fastapi.templating import Jinja2Templates
+
 templates = Jinja2Templates(directory="templates")
 
 
 def _is_ajax_request(request: Request) -> bool:
     """Detect if the request was made via AJAX/fetch expecting a JSON response."""
-    return (
-        request.headers.get("X-Requested-With") == "XMLHttpRequest"
-        or "application/json" in request.headers.get("Accept", "")
+    return request.headers.get(
+        "X-Requested-With"
+    ) == "XMLHttpRequest" or "application/json" in request.headers.get("Accept", "")
+
+
+def _resolve_document_file_path(stored_path: str) -> Path:
+    """Resolve file path from DB safely for both relative and legacy absolute paths."""
+    files_base = Path(settings.FILES_PATH).resolve()
+    raw_path = Path(stored_path)
+
+    # Relative path is expected in current schema; absolute is supported for legacy rows.
+    resolved_path = (
+        raw_path.resolve()
+        if raw_path.is_absolute()
+        else (files_base / raw_path).resolve()
     )
+
+    # Cross-platform safe check (Windows drive letter case, etc.)
+    base_norm = os.path.normcase(str(files_base))
+    path_norm = os.path.normcase(str(resolved_path))
+
+    try:
+        is_inside_base = os.path.commonpath([path_norm, base_norm]) == base_norm
+    except ValueError:
+        is_inside_base = False
+
+    if not is_inside_base:
+        raise HTTPException(status_code=400, detail="Недопустимый путь к файлу")
+
+    return resolved_path
 
 
 # ===================================
@@ -57,7 +87,7 @@ async def upload_documents(
     category: str = Form(...),
     subcategory_id: Optional[int] = Form(None),
     user: User = Depends(get_current_user_from_cookie),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """
     Загрузить множество документов к объекту
@@ -66,13 +96,15 @@ async def upload_documents(
     # ✅ Сохраняем user.id до try-блока, чтобы избежать PendingRollbackError
     user_id = user.id
 
-    logger.info({
-        "event": "upload_documents_start",
-        "object_id": object_id,
-        "category": category,
-        "subcategory_id": subcategory_id,
-        "user_id": user_id
-    })
+    logger.info(
+        {
+            "event": "upload_documents_start",
+            "object_id": object_id,
+            "category": category,
+            "subcategory_id": subcategory_id,
+            "user_id": user_id,
+        }
+    )
 
     try:
         from modules.objects.service import ObjectService
@@ -84,22 +116,22 @@ async def upload_documents(
         form = await request.form()
         files = form.getlist("files")
 
-        logger.info({
-            "event": "upload_documents_received_files",
-            "count": len(files),
-            "object_id": object_id,
-            "user_id": user_id
-        })
+        logger.info(
+            {
+                "event": "upload_documents_received_files",
+                "count": len(files),
+                "object_id": object_id,
+                "user_id": user_id,
+            }
+        )
 
         if not files:
             if _is_ajax_request(request):
                 return JSONResponse(
-                    status_code=400,
-                    content={"detail": "Файлы не выбраны"}
+                    status_code=400, content={"detail": "Файлы не выбраны"}
                 )
             return RedirectResponse(
-                url=f"/objects/{object_id}?error=Файлы не выбраны",
-                status_code=303
+                url=f"/objects/{object_id}?error=Файлы не выбраны", status_code=303
             )
 
         uploaded_count = 0
@@ -109,51 +141,61 @@ async def upload_documents(
         for file in files:
             try:
                 # ===== File Upload Security Validation =====
-                
+
                 # 1. Check file size - read content to validate actual size
                 file_contents = await file.read()
                 actual_size = len(file_contents)
-                
+
                 if actual_size > settings.MAX_FILE_SIZE:
-                    logger.warning({
-                        "event": "file_upload_rejected_size",
-                        "filename": file.filename,
-                        "size": actual_size,
-                        "max_size": settings.MAX_FILE_SIZE,
-                        "object_id": object_id,
-                        "user_id": user_id
-                    })
+                    logger.warning(
+                        {
+                            "event": "file_upload_rejected_size",
+                            "filename": file.filename,
+                            "size": actual_size,
+                            "max_size": settings.MAX_FILE_SIZE,
+                            "object_id": object_id,
+                            "user_id": user_id,
+                        }
+                    )
                     errors.append(f"{file.filename} (слишком большой файл)")
                     continue
-                
+
                 # Reset file pointer after reading
                 await file.seek(0)
-                
+
                 # 2. Validate file extension
-                if not validate_file_extension(file.filename, ALLOWED_DOCUMENT_EXTENSIONS):
-                    logger.warning({
-                        "event": "file_upload_rejected_extension",
-                        "filename": file.filename,
-                        "object_id": object_id,
-                        "user_id": user_id
-                    })
+                if not validate_file_extension(
+                    file.filename, ALLOWED_DOCUMENT_EXTENSIONS
+                ):
+                    logger.warning(
+                        {
+                            "event": "file_upload_rejected_extension",
+                            "filename": file.filename,
+                            "object_id": object_id,
+                            "user_id": user_id,
+                        }
+                    )
                     errors.append(f"{file.filename} (недопустимый тип файла)")
                     continue
-                
+
                 # ===== End Security Validation =====
 
                 # Используем ОРИГИНАЛЬНОЕ имя для БД
                 original_filename = file.filename if file.filename else "unnamed_file"
 
                 # Проверяем, существует ли уже активный документ с таким именем в той же категории
-                existing_doc = db.query(Document).filter(
-                    Document.object_id == object_id,
-                    Document.file_name == original_filename,
-                    Document.category == DocumentCategory(category),
-                    Document.subcategory_id == subcategory_id,
-                    Document.is_active.is_(True),
-                    Document.deleted_at.is_(None),
-                ).first()
+                existing_doc = (
+                    db.query(Document)
+                    .filter(
+                        Document.object_id == object_id,
+                        Document.file_name == original_filename,
+                        Document.category == DocumentCategory(category),
+                        Document.subcategory_id == subcategory_id,
+                        Document.is_active.is_(True),
+                        Document.deleted_at.is_(None),
+                    )
+                    .first()
+                )
 
                 # Сохраняем новый файл на диск
                 file_path = await DocumentService.save_file(file, object_id)
@@ -165,12 +207,14 @@ async def upload_documents(
                         try:
                             old_file_path.unlink()
                         except Exception as del_err:
-                            logger.warning({
-                                "event": "old_file_delete_failed",
-                                "path": str(old_file_path),
-                                "error": str(del_err),
-                                "user_id": user_id,
-                            })
+                            logger.warning(
+                                {
+                                    "event": "old_file_delete_failed",
+                                    "path": str(old_file_path),
+                                    "error": str(del_err),
+                                    "user_id": user_id,
+                                }
+                            )
 
                     # Обновляем запись в БД
                     existing_doc.file_path = file_path
@@ -180,14 +224,16 @@ async def upload_documents(
                     existing_doc.updated_at = datetime.utcnow()
                     existing_doc.version = (existing_doc.version or 1) + 1
 
-                    logger.info({
-                        "event": "document_replaced",
-                        "document_id": existing_doc.id,
-                        "object_id": object_id,
-                        "file_name": original_filename,
-                        "new_version": existing_doc.version,
-                        "user_id": user_id,
-                    })
+                    logger.info(
+                        {
+                            "event": "document_replaced",
+                            "document_id": existing_doc.id,
+                            "object_id": object_id,
+                            "file_name": original_filename,
+                            "new_version": existing_doc.version,
+                            "user_id": user_id,
+                        }
+                    )
                     updated_count += 1
                 else:
                     # Название документа из оригинального имени
@@ -212,13 +258,15 @@ async def upload_documents(
                     uploaded_count += 1
 
             except Exception as e:
-                logger.error({
-                    "event": "ошибка_загрузки_документа",
-                    "file": file.filename,
-                    "object_id": object_id,
-                    "user_id": user_id,
-                    "error": str(e)
-                })
+                logger.error(
+                    {
+                        "event": "ошибка_загрузки_документа",
+                        "file": file.filename,
+                        "object_id": object_id,
+                        "user_id": user_id,
+                        "error": str(e),
+                    }
+                )
                 errors.append(file.filename)
 
         # Коммитим
@@ -233,42 +281,46 @@ async def upload_documents(
             parts.append(f"Обновлено {updated_count} существующих")
         message = ", ".join(parts) if parts else "Изменений нет"
         if errors:
-            message += f". Ошибки: {', '.join(errors[:3])}"  # Показываем максимум 3 ошибки
+            message += (
+                f". Ошибки: {', '.join(errors[:3])}"  # Показываем максимум 3 ошибки
+            )
 
-        logger.info({
-            "event": "documents_uploaded",
-            "object_id": object_id,
-            "uploaded": uploaded_count,
-            "updated": updated_count,
-            "error_count": len(errors),
-            "user_id": user_id
-        })
+        logger.info(
+            {
+                "event": "documents_uploaded",
+                "object_id": object_id,
+                "uploaded": uploaded_count,
+                "updated": updated_count,
+                "error_count": len(errors),
+                "user_id": user_id,
+            }
+        )
 
         return RedirectResponse(
-            url=f"/objects/{object_id}?success={message}",
-            status_code=303
+            url=f"/objects/{object_id}?success={message}", status_code=303
         )
 
     except Exception as e:
-        logger.error({
-            "event": "upload_documents_fatal_error",
-            "object_id": object_id,
-            "user_id": user_id,
-            "error": str(e)
-        })
+        logger.error(
+            {
+                "event": "upload_documents_fatal_error",
+                "object_id": object_id,
+                "user_id": user_id,
+                "error": str(e),
+            }
+        )
 
         # ✅ Откатываем сессию при ошибке
         db.rollback()
 
         if _is_ajax_request(request):
             return JSONResponse(
-                status_code=500,
-                content={"detail": f"Ошибка загрузки: {str(e)}"}
+                status_code=500, content={"detail": f"Ошибка загрузки: {str(e)}"}
             )
         return RedirectResponse(
-            url=f"/objects/{object_id}?error=Ошибка загрузки: {str(e)}",
-            status_code=303
+            url=f"/objects/{object_id}?error=Ошибка загрузки: {str(e)}", status_code=303
         )
+
 
 # ===================================
 # Обновление документа
@@ -282,7 +334,7 @@ async def update_document(
     category: str = Form(...),
     subcategory_id: Optional[int] = Form(None),
     user: User = Depends(get_current_user_from_cookie),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """
     Обновить название, категорию и подкатегорию документа
@@ -293,50 +345,55 @@ async def update_document(
 
         if not document:
             if _is_ajax_request(request):
-                return JSONResponse(status_code=404, content={"detail": "Документ не найден"})
+                return JSONResponse(
+                    status_code=404, content={"detail": "Документ не найден"}
+                )
             return RedirectResponse(
-                url=f"/objects/{object_id}?error=Документ не найден",
-                status_code=303
+                url=f"/objects/{object_id}?error=Документ не найден", status_code=303
             )
 
         # Проверяем доступ (только владелец объекта или админ)
         from modules.objects.service import ObjectService
+
         obj = ObjectService.get_object(object_id, user, db)
 
         if obj.created_by != user.id and user.role != UserRole.ADMIN:  # ✅ исправлено
             if _is_ajax_request(request):
-                return JSONResponse(status_code=403, content={"detail": "Нет прав для редактирования"})
+                return JSONResponse(
+                    status_code=403, content={"detail": "Нет прав для редактирования"}
+                )
             return RedirectResponse(
                 url=f"/objects/{object_id}?error=Нет прав для редактирования",
-                status_code=303
+                status_code=303,
             )
-        
+
         # Обновляем данные
         document.title = title
         document.category = DocumentCategory(category)
         document.subcategory_id = subcategory_id if subcategory_id else None
-        
+
         db.commit()
-        
-        logger.info({
-            "event": "document_updated",
-            "document_id": document_id,
-            "object_id": object_id,
-            "new_category": category,
-            "new_subcategory_id": subcategory_id,
-            "user_id": user.id
-        })
-        
-        return RedirectResponse(
-            url=f"/objects/{object_id}?success=Документ обновлён",
-            status_code=303
+
+        logger.info(
+            {
+                "event": "document_updated",
+                "document_id": document_id,
+                "object_id": object_id,
+                "new_category": category,
+                "new_subcategory_id": subcategory_id,
+                "user_id": user.id,
+            }
         )
-        
+
+        return RedirectResponse(
+            url=f"/objects/{object_id}?success=Документ обновлён", status_code=303
+        )
+
     except Exception as e:
         logger.error(f"❌ Ошибка обновления документа: {str(e)}")
         return RedirectResponse(
             url=f"/objects/{object_id}?error=Ошибка обновления: {str(e)}",
-            status_code=303
+            status_code=303,
         )
 
 
@@ -349,7 +406,7 @@ async def delete_document(
     document_id: int,
     request: Request,
     user: User = Depends(get_current_user_from_cookie),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """
     Удалить документ (мягкое удаление)
@@ -360,24 +417,27 @@ async def delete_document(
 
         if not document:
             if _is_ajax_request(request):
-                return JSONResponse(status_code=404, content={"detail": "Документ не найден"})
+                return JSONResponse(
+                    status_code=404, content={"detail": "Документ не найден"}
+                )
             return RedirectResponse(
-                url=f"/objects/{object_id}?error=Документ не найден",
-                status_code=303
+                url=f"/objects/{object_id}?error=Документ не найден", status_code=303
             )
 
         # Проверяем доступ (только владелец объекта или админ)
         from modules.objects.service import ObjectService
+
         obj = ObjectService.get_object(object_id, user, db)
 
         if obj.created_by != user.id and user.role != UserRole.ADMIN:  # ✅ исправлено
             if _is_ajax_request(request):
-                return JSONResponse(status_code=403, content={"detail": "Нет прав для удаления"})
+                return JSONResponse(
+                    status_code=403, content={"detail": "Нет прав для удаления"}
+                )
             return RedirectResponse(
-                url=f"/objects/{object_id}?error=Нет прав для удаления",
-                status_code=303
+                url=f"/objects/{object_id}?error=Нет прав для удаления", status_code=303
             )
-        
+
         # ✅ Удаляем файл с диска
         file_path = Path(settings.FILES_PATH) / document.file_path
         if file_path.exists():
@@ -386,32 +446,33 @@ async def delete_document(
                 logger.info(f"✅ File deleted: {file_path}")
             except Exception as e:
                 logger.error(f"Could not delete file {file_path}: {e}")
-        
+
         # Мягкое удаление
         document.deleted_at = datetime.utcnow()
         document.is_active = False
-        
+
         db.commit()
-        
-        logger.info({
-            "event": "document_deleted",
-            "document_id": document_id,
-            "object_id": object_id,
-            "file_name": document.file_name,
-            "user_id": user.id
-        })
-        
-        return RedirectResponse(
-            url=f"/objects/{object_id}?success=Документ удалён",
-            status_code=303
+
+        logger.info(
+            {
+                "event": "document_deleted",
+                "document_id": document_id,
+                "object_id": object_id,
+                "file_name": document.file_name,
+                "user_id": user.id,
+            }
         )
-        
+
+        return RedirectResponse(
+            url=f"/objects/{object_id}?success=Документ удалён", status_code=303
+        )
+
     except Exception as e:
         logger.error(f"❌ Ошибка удаления документа: {str(e)}")
         return RedirectResponse(
-            url=f"/objects/{object_id}?error=Ошибка удаления: {str(e)}",
-            status_code=303
+            url=f"/objects/{object_id}?error=Ошибка удаления: {str(e)}", status_code=303
         )
+
 
 # ===================================
 # Скачивание документа
@@ -420,7 +481,7 @@ async def delete_document(
 async def download_document(
     document_id: int,
     user: User = Depends(get_current_user_from_cookie),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """
     Скачать документ
@@ -434,28 +495,20 @@ async def download_document(
     if not document.can_access(user, db):
         raise HTTPException(status_code=403, detail="Нет доступа к этому документу")
 
-    # Полный путь = FILES_PATH + relative_path_from_db
-    files_base = Path(settings.FILES_PATH).resolve()
-    file_path = (files_base / document.file_path).resolve()
-
-    # Защита от path traversal: убедиться, что путь находится внутри FILES_PATH
-    if not str(file_path).startswith(str(files_base)):
-        raise HTTPException(status_code=400, detail="Недопустимый путь к файлу")
+    # Полный путь = FILES_PATH + relative_path_from_db (с поддержкой legacy absolute path)
+    file_path = _resolve_document_file_path(document.file_path)
 
     if not file_path.exists():
         raise HTTPException(status_code=404, detail="Файл не найден на диске")
 
-    logger.info({
-        "event": "document_downloaded",
-        "document_id": document_id,
-        "user_id": user.id
-    })
+    logger.info(
+        {"event": "document_downloaded", "document_id": document_id, "user_id": user.id}
+    )
 
     return FileResponse(
-        path=file_path,
-        filename=document.file_name,
-        media_type=document.file_type
+        path=file_path, filename=document.file_name, media_type=document.file_type
     )
+
 
 # ===================================
 # Просмотр списка документов объекта с фильтрацией по категориям
@@ -466,34 +519,36 @@ async def documents_list(
     object_id: int,
     category: str = None,
     user: User = Depends(get_current_user_from_cookie),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """Список документов объекта с фильтрацией по категориям"""
-    
+
     # Проверяем доступ к объекту
     obj = db.query(Object).filter(Object.id == object_id).first()
     if not obj:
         raise HTTPException(status_code=404, detail="Объект не найден")
-    
+
     # ✅ ИСПРАВЛЕНИЕ: Проверка доступа
     if user.role != UserRole.ADMIN:  # ✅ используем Enum
-        access = db.query(ObjectAccess).filter(
-            ObjectAccess.user_id == user.id,
-            ObjectAccess.object_id == object_id
-        ).first()
-        
+        access = (
+            db.query(ObjectAccess)
+            .filter(
+                ObjectAccess.user_id == user.id, ObjectAccess.object_id == object_id
+            )
+            .first()
+        )
+
         if not access:
             raise HTTPException(status_code=403, detail="Доступ запрещён")
-    
+
     # ✅ ИСПРАВЛЕНИЕ: Базовый запрос документов
     query = db.query(Document).filter(
-        Document.object_id == object_id,
-        Document.deleted_at == None
+        Document.object_id == object_id, Document.deleted_at == None
     )
-    
+
     # ✅ ИСПРАВЛЕНИЕ: Фильтрация по категориям с учётом доступов
     allowed_categories = []
-    
+
     if user.role == UserRole.ADMIN:  # ✅ используем Enum
         # Админ видит всё
         if category:
@@ -501,81 +556,93 @@ async def documents_list(
             query = query.filter(Document.category == DocumentCategory(category))
     else:
         # Обычный пользователь
-        access = db.query(ObjectAccess).filter(
-            ObjectAccess.user_id == user.id,
-            ObjectAccess.object_id == object_id
-        ).first()
-        
+        access = (
+            db.query(ObjectAccess)
+            .filter(
+                ObjectAccess.user_id == user.id, ObjectAccess.object_id == object_id
+            )
+            .first()
+        )
+
         # Формируем список разрешённых категорий
         allowed_categories = [DocumentCategory.GENERAL]  # Общие документы доступны всем
-        
+
         # ✅ Добавляем категории на основе sections_access
         if access and access.sections_access:
             dept_mapping = {
-                'safety': DocumentCategory.SAFETY,
-                'hr': DocumentCategory.HR, 
-                'accounting': DocumentCategory.ACCOUNTING,
-                'technical': DocumentCategory.TECHNICAL,
-                'legal': DocumentCategory.LEGAL
+                "safety": DocumentCategory.SAFETY,
+                "hr": DocumentCategory.HR,
+                "accounting": DocumentCategory.ACCOUNTING,
+                "technical": DocumentCategory.TECHNICAL,
+                "legal": DocumentCategory.LEGAL,
             }
-            
+
             for section in access.sections_access:
                 if section in dept_mapping:
                     cat = dept_mapping[section]
                     if cat not in allowed_categories:
                         allowed_categories.append(cat)
-        
+
         # Если указана конкретная категория
         if category:
             category_enum = DocumentCategory(category)
-            
+
             # Проверяем доступ к этой категории
             if category_enum not in allowed_categories:
-                raise HTTPException(status_code=403, detail="Доступ к этой категории запрещён")
-            
+                raise HTTPException(
+                    status_code=403, detail="Доступ к этой категории запрещён"
+                )
+
             # ✅ Фильтруем по Document.category
             query = query.filter(Document.category == category_enum)
         else:
             # Показываем только документы из разрешённых категорий
             query = query.filter(Document.category.in_(allowed_categories))
-    
+
     documents = query.order_by(Document.created_at.desc()).all()
-    
+
     # Получаем статистику по категориям (с учётом доступов)
     if user.role == UserRole.ADMIN:  # ✅ используем Enum
         # Админ видит все категории
-        categories_stats = db.query(
-            Document.category,
-            func.count(Document.id).label('count')
-        ).filter(
-            Document.object_id == object_id,
-            Document.deleted_at == None
-        ).group_by(Document.category).all()
+        categories_stats = (
+            db.query(Document.category, func.count(Document.id).label("count"))
+            .filter(Document.object_id == object_id, Document.deleted_at == None)
+            .group_by(Document.category)
+            .all()
+        )
     else:
         # Обычный пользователь видит только свои категории
-        categories_stats = db.query(
-            Document.category,
-            func.count(Document.id).label('count')
-        ).filter(
-            Document.object_id == object_id,
-            Document.deleted_at == None,
-            Document.category.in_(allowed_categories)
-        ).group_by(Document.category).all()
-    
+        categories_stats = (
+            db.query(Document.category, func.count(Document.id).label("count"))
+            .filter(
+                Document.object_id == object_id,
+                Document.deleted_at == None,
+                Document.category.in_(allowed_categories),
+            )
+            .group_by(Document.category)
+            .all()
+        )
+
     # ✅ Преобразуем enum в строку для шаблона
     categories_dict = {cat.value: count for cat, count in categories_stats}
-    
-    logger.info({
-        "event": "documents_list_viewed",
-        "user_id": user.id,
-        "object_id": object_id,
-        "category": category,
-        "total_documents": len(documents),
-        "allowed_categories": [c.value for c in allowed_categories] if user.role != UserRole.ADMIN else "all"
-    })
-    
+
+    logger.info(
+        {
+            "event": "documents_list_viewed",
+            "user_id": user.id,
+            "object_id": object_id,
+            "category": category,
+            "total_documents": len(documents),
+            "allowed_categories": (
+                [c.value for c in allowed_categories]
+                if user.role != UserRole.ADMIN
+                else "all"
+            ),
+        }
+    )
+
     sidebar_context = get_sidebar_context(user, db)
-    
+
     return templates.TemplateResponse(
         "web/documents/list.html",
         {
@@ -585,8 +652,8 @@ async def documents_list(
             "documents": documents,
             "current_category": category,
             "categories_count": categories_dict,
-            **sidebar_context
-        }
+            **sidebar_context,
+        },
     )
 
 
@@ -598,21 +665,27 @@ async def update_document_file(
     document_id: int,
     request: Request,
     user: User = Depends(get_current_user_from_cookie),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """Обновить содержимое документа (новая версия)"""
-    document = db.query(Document).filter(
-        Document.id == document_id,
-        Document.is_active.is_(True),
-        Document.deleted_at.is_(None)
-    ).first()
+    document = (
+        db.query(Document)
+        .filter(
+            Document.id == document_id,
+            Document.is_active.is_(True),
+            Document.deleted_at.is_(None),
+        )
+        .first()
+    )
 
     if not document:
         return JSONResponse(status_code=404, content={"detail": "Документ не найден"})
 
     # Проверяем права
     if not DocumentService.can_update_document(user, document, db):
-        return JSONResponse(status_code=403, content={"detail": "Нет прав для обновления"})
+        return JSONResponse(
+            status_code=403, content={"detail": "Нет прав для обновления"}
+        )
 
     try:
         form = await request.form()
@@ -623,13 +696,17 @@ async def update_document_file(
 
         # Валидация расширения
         if not validate_file_extension(file.filename, ALLOWED_DOCUMENT_EXTENSIONS):
-            return JSONResponse(status_code=400, content={"detail": "Недопустимый тип файла"})
+            return JSONResponse(
+                status_code=400, content={"detail": "Недопустимый тип файла"}
+            )
 
         # Валидация размера
         file_contents = await file.read()
         actual_size = len(file_contents)
         if actual_size > settings.MAX_FILE_SIZE:
-            return JSONResponse(status_code=400, content={"detail": "Файл слишком большой"})
+            return JSONResponse(
+                status_code=400, content={"detail": "Файл слишком большой"}
+            )
 
         await file.seek(0)
 
@@ -656,12 +733,14 @@ async def update_document_file(
 
         db.commit()
 
-        logger.info({
-            "event": "document_file_updated",
-            "document_id": document_id,
-            "version": document.version,
-            "user_id": user.id
-        })
+        logger.info(
+            {
+                "event": "document_file_updated",
+                "document_id": document_id,
+                "version": document.version,
+                "user_id": user.id,
+            }
+        )
 
         return JSONResponse({"status": "ok", "version": document.version})
 
@@ -677,7 +756,7 @@ async def update_document_file(
 async def batch_delete_documents(
     request: Request,
     user: User = Depends(get_current_user_from_cookie),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """Удалить несколько документов одновременно"""
     try:
@@ -694,11 +773,15 @@ async def batch_delete_documents(
         deleted_count = 0
 
         for doc_id in document_ids:
-            doc = db.query(Document).filter(
-                Document.id == doc_id,
-                Document.is_active.is_(True),
-                Document.deleted_at.is_(None)
-            ).first()
+            doc = (
+                db.query(Document)
+                .filter(
+                    Document.id == doc_id,
+                    Document.is_active.is_(True),
+                    Document.deleted_at.is_(None),
+                )
+                .first()
+            )
 
             if not doc:
                 continue
@@ -722,11 +805,13 @@ async def batch_delete_documents(
 
         db.commit()
 
-        logger.info({
-            "event": "documents_batch_deleted",
-            "count": deleted_count,
-            "user_id": user.id
-        })
+        logger.info(
+            {
+                "event": "documents_batch_deleted",
+                "count": deleted_count,
+                "user_id": user.id,
+            }
+        )
 
         return JSONResponse({"status": "ok", "deleted": deleted_count})
 
@@ -742,7 +827,7 @@ async def batch_delete_documents(
 async def batch_download_documents(
     request: Request,
     user: User = Depends(get_current_user_from_cookie),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """Скачать несколько документов как ZIP архив"""
     try:
@@ -758,57 +843,83 @@ async def batch_download_documents(
     try:
         zip_buffer = io.BytesIO()
 
-        with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+        added_count = 0
+
+        with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
             for doc_id in document_ids:
-                doc = db.query(Document).filter(Document.id == doc_id).first()
+                doc = (
+                    db.query(Document)
+                    .filter(
+                        Document.id == doc_id,
+                        Document.is_active.is_(True),
+                        Document.deleted_at.is_(None),
+                    )
+                    .first()
+                )
 
                 if not doc or not doc.can_access(user, db):
-                    logger.warning({
-                        "event": "batch_download_document_skipped",
-                        "doc_id": doc_id,
-                        "reason": "not found or no access",
-                        "user_id": user.id
-                    })
+                    logger.warning(
+                        {
+                            "event": "batch_download_document_skipped",
+                            "doc_id": doc_id,
+                            "reason": "not found or no access",
+                            "user_id": user.id,
+                        }
+                    )
                     continue
 
-                files_base = Path(settings.FILES_PATH).resolve()
-                file_path = (files_base / doc.file_path).resolve()
-
-                # Защита от path traversal
-                if not str(file_path).startswith(str(files_base)):
-                    logger.warning({
-                        "event": "batch_download_path_traversal",
-                        "doc_id": doc_id,
-                        "user_id": user.id
-                    })
+                try:
+                    file_path = _resolve_document_file_path(doc.file_path)
+                except HTTPException:
+                    logger.warning(
+                        {
+                            "event": "batch_download_path_traversal",
+                            "doc_id": doc_id,
+                            "user_id": user.id,
+                        }
+                    )
                     continue
 
                 if not file_path.exists():
-                    logger.warning({
-                        "event": "batch_download_file_missing",
-                        "doc_id": doc_id,
-                        "file_path": str(file_path),
-                        "user_id": user.id
-                    })
+                    logger.warning(
+                        {
+                            "event": "batch_download_file_missing",
+                            "doc_id": doc_id,
+                            "file_path": str(file_path),
+                            "user_id": user.id,
+                        }
+                    )
                     continue
 
                 # Префикс doc_id предотвращает коллизии имён файлов
                 archive_name = f"{doc.id}_{doc.file_name}"
-                with open(file_path, 'rb') as f:
+                with open(file_path, "rb") as f:
                     zip_file.writestr(archive_name, f.read())
+                added_count += 1
+
+        if added_count == 0:
+            return JSONResponse(
+                status_code=404,
+                content={
+                    "detail": "Не удалось добавить файлы в архив. Проверьте доступ и наличие файлов на диске."
+                },
+            )
 
         zip_buffer.seek(0)
 
-        logger.info({
-            "event": "documents_batch_downloaded",
-            "count": len(document_ids),
-            "user_id": user.id
-        })
+        logger.info(
+            {
+                "event": "documents_batch_downloaded",
+                "requested": len(document_ids),
+                "added": added_count,
+                "user_id": user.id,
+            }
+        )
 
         return StreamingResponse(
             iter([zip_buffer.getvalue()]),
             media_type="application/zip",
-            headers={"Content-Disposition": "attachment; filename=documents.zip"}
+            headers={"Content-Disposition": "attachment; filename=documents.zip"},
         )
 
     except Exception as e:

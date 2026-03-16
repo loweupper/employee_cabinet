@@ -1,0 +1,465 @@
+EMPLOYEE CABINET - PROJECT GUIDE
+Generated: 2026-03-16
+
+==================================================
+1) PROJECT PURPOSE
+==================================================
+Employee Cabinet is a FastAPI-based corporate web system for:
+- authentication and session management
+- user profile management
+- object and document management
+- admin operations (users, permissions, audit logs)
+- security monitoring, alerts, and metrics
+
+Core stack:
+- Backend: FastAPI, SQLAlchemy, Pydantic v2
+- DB: PostgreSQL
+- Cache/queues: Redis, Celery
+- Templates/UI: Jinja2, Tailwind CSS
+- Logging/Monitoring: structured JSON logs, DB audit logs, Prometheus metrics
+
+
+==================================================
+2) HOW THE APP STARTS
+==================================================
+Entry point:
+- app/main.py
+
+Run modes found in project:
+- Docker: docker-compose.yml (backend + redis)
+- Gunicorn/Uvicorn worker inside container
+- Local (dev): python app/main.py (uvicorn.run in __main__)
+
+Key startup behavior in app/main.py:
+- initializes logging config (stdout JSON + DB handler + file handlers)
+- sets middleware chain (CORS, CSRF, AccessLog, SwaggerSecurity, RequestID)
+- mounts static: /static -> app/static
+- includes routers:
+  - /api/v1 + auth router (/auth/...)
+  - /profile + profile router
+  - /objects + objects router
+  - /documents + documents router
+  - admin router (/admin/...)
+  - monitoring router only if MONITORING_ENABLED: /admin/monitoring/...
+- provides /health and /dashboard endpoints
+- starts monitoring init and periodic session cleanup task
+
+
+==================================================
+3) ROOT STRUCTURE (HIGH LEVEL)
+==================================================
+- Dockerfile
+  Container image and startup command.
+- docker-compose.yml
+  Defines services: redis, backend.
+- requirements.txt
+  Python dependencies (FastAPI, SQLAlchemy, Redis, Celery, monitoring, etc).
+- package.json
+  Frontend build scripts for Tailwind CSS.
+- app/
+  Main Python application source.
+- docs/
+  Operational docs (logging, monitoring).
+- logs/
+  Runtime log files (app/security/system/audit).
+
+
+==================================================
+4) APP DIRECTORY MAP
+==================================================
+4.1 app/core/
+Shared infrastructure and platform-level utilities.
+
+- config.py
+  Central settings via BaseSettings, timezone helpers, env parsing, security validators.
+- database.py
+  SQLAlchemy engine/session setup and get_db dependency.
+- request_id_middleware.py
+  Generates X-Request-ID per request, stores in request.state and contextvar.
+- db_log_handler.py
+  Custom logging.Handler writing log records into DB audit table with TTL policy.
+- log_cleanup.py
+  Marks expired audit logs as archived.
+- jwt.py, security.py, encryption.py, validators.py
+  Security and validation utilities.
+- constants.py
+  Shared constants and role/department mapping helpers.
+- template_helpers.py
+  Helpers for Jinja context (for sidebar and shared UI data).
+- swagger_security.py
+  Restricts/guards docs access.
+- redis.py
+  Redis connectivity helper.
+- seed.py
+  Seed/init data routines.
+
+4.1.1 app/core/logging/
+Structured logging subsystem.
+- actions.py
+  Unified async function log_event(...) with auto-categorization and optional alert creation.
+- middleware.py
+  AccessLogMiddleware logs request metrics and request metadata.
+- formatters.py
+  EnhancedJSONFormatter, CompactJSONFormatter, DevelopmentFormatter.
+- filters.py
+  Sensitive data redaction and PII masking filters.
+- handlers.py
+  Rotating file handlers with compression for app/security/system logs.
+- geoip_resolver.py
+  IP geo-resolution for security events.
+
+4.1.2 app/core/monitoring/
+Monitoring internals.
+- metrics.py: Prometheus-style metrics collection
+- health.py: DB/Redis/system health checks
+- alerts.py: alert manager
+- detector.py: suspicious login and anomaly detection
+
+4.1.3 app/core/notifications/
+Alert integrations.
+- email_notifier.py
+- telegram_notifier.py
+
+4.2 app/modules/
+Business modules grouped by domain.
+
+- auth/
+  Authentication and user identity lifecycle.
+- admin/
+  Admin panel and operational management.
+- profile/
+  Personal profile pages and updates.
+- objects/
+  Corporate objects and access control to them.
+- documents/
+  Document upload/storage/versioning/download.
+- monitoring/
+  Admin monitoring APIs/pages and alert operations.
+- permissions/
+  Permission and subsection access models.
+- access/
+  ACL and permission model helpers/decorators.
+- audit/, departments/, integration_1c/, notifications/, reports/, search/, tasks/
+  Domain placeholders/expansion areas (currently minimal or empty in current snapshot).
+
+4.3 app/services/
+Cross-module services (for example OCR, email, file storage, telegram).
+
+4.4 app/templates/
+Jinja templates:
+- web/ (pages)
+- components/ (shared parts)
+- emails/ (email templates)
+
+4.5 app/static/
+Static assets: css, js, images, avatars, object files.
+
+4.6 app/migrations/
+Alembic migration setup and versions history.
+
+4.7 app/workers/
+Celery setup and async background tasks.
+
+4.8 app/tests/
+Unit and integration tests.
+
+
+==================================================
+5) ROUTE MAP (FULL LIST FOUND IN ROUTE FILES)
+==================================================
+Note about full URL building:
+- auth router is included with /api/v1 + prefix /auth
+- profile router is included with /profile
+- objects router is included with /objects
+- documents router is included with /documents
+- admin router has prefix /admin
+- monitoring router is included with /admin + prefix /monitoring
+
+5.1 AUTH ROUTES (app/modules/auth/routes.py)
+Sections in file:
+- login/register web pages
+- registration and login
+- tokens
+- user profile
+- password
+- OTP (2FA)
+- sessions
+
+Endpoints:
+- GET    /api/v1/auth/login-page
+- GET    /api/v1/auth/register-page
+- POST   /api/v1/auth/register
+- POST   /api/v1/auth/login
+- POST   /api/v1/auth/refresh
+- GET    /api/v1/auth/logout
+- GET    /api/v1/auth/me
+- PATCH  /api/v1/auth/me
+- POST   /api/v1/auth/change-password
+- POST   /api/v1/auth/password-reset/request
+- POST   /api/v1/auth/password-reset/confirm
+- POST   /api/v1/auth/otp/request
+- POST   /api/v1/auth/otp/verify
+- GET    /api/v1/auth/sessions
+- DELETE /api/v1/auth/sessions/{session_id}
+
+5.2 PROFILE ROUTES (app/modules/profile/routes.py)
+- GET  /profile
+- POST /profile/update
+- POST /profile/upload-avatar
+- POST /profile/change-password
+
+5.3 OBJECTS ROUTES (app/modules/objects/routes.py)
+- GET  /objects
+- GET  /objects/create
+- POST /objects/create
+- GET  /objects/{object_id}/edit
+- POST /objects/{object_id}/edit
+- GET  /objects/{object_id}
+- POST /objects/{object_id}/delete
+- GET  /objects/admin/all
+- POST /objects/{object_id}/restore
+- POST /objects/{object_id}/activate
+- POST /objects/{object_id}/deactivate
+- POST /objects/{object_id}/archive
+- POST /objects/{object_id}/unarchive
+- POST /objects/{object_id}/access/grant
+- POST /objects/{object_id}/access/{user_id}/revoke
+- POST /objects/{object_id}/access/grant-department
+- POST /objects/{object_id}/access/{user_id}/update
+- GET  /objects/{object_id}/subcategories
+- POST /objects/{object_id}/subcategories/create
+- POST /objects/{object_id}/subcategories/{subcategory_id}/delete
+- POST /objects/{object_id}/subcategories/{subcategory_id}/update
+
+5.4 DOCUMENTS ROUTES (app/modules/documents/routes.py)
+- POST /documents/objects/{object_id}/upload
+- POST /documents/objects/{object_id}/{document_id}/update
+- POST /documents/objects/{object_id}/{document_id}/delete
+- GET  /documents/{document_id}/download
+- GET  /documents/objects
+- POST /documents/{document_id}/update
+- POST /documents/batch-delete
+- POST /documents/batch-download
+
+5.5 ADMIN ROUTES (app/modules/admin/routes.py)
+- GET    /admin/users
+- POST   /admin/users/{user_id}/activate
+- POST   /admin/users/{user_id}/deactivate
+- POST   /admin/users/{user_id}/role
+- DELETE /admin/users/{user_id}
+- POST   /admin/users/{user_id}/edit
+- POST   /admin/users/{user_id}/reset-password
+- GET    /admin/logs
+- GET    /admin/logs/{log_id}/detail
+- GET    /admin/logs/export
+- GET    /admin/logs/export/json
+- GET    /admin/logs/stats
+- GET    /admin/departments
+- POST   /admin/departments
+- PUT    /admin/departments/{department_id}
+- DELETE /admin/departments/{department_id}
+- GET    /admin/users/{user_id}/sessions
+- POST   /admin/sessions/{session_id}/revoke
+- POST   /admin/users/{user_id}/sessions/revoke-all
+- POST   /admin/users/{user_id}/sessions/revoke-others
+- GET    /admin/category-mappings
+- PUT    /admin/category-mappings/{category}
+- GET    /admin/permissions
+- GET    /admin/users/{user_id}/permissions
+- PUT    /admin/users/{user_id}/permissions
+- GET    /admin/users/{user_id}/subsection-access
+- PUT    /admin/users/{user_id}/subsection-access/{subsection_id}
+- GET    /admin/subsections
+- GET    /admin/sections/{section_id}/subsections
+
+5.6 MONITORING ROUTES (app/modules/monitoring/routes.py)
+(Full prefix: /admin/monitoring)
+- GET  /admin/monitoring/metrics
+- GET  /admin/monitoring/alerts
+- GET  /admin/monitoring/alerts/{alert_id}
+- POST /admin/monitoring/alerts/{alert_id}/resolve
+- GET  /admin/monitoring/alerts/counts
+- GET  /admin/monitoring/health
+- GET  /admin/monitoring/stats
+- GET  /admin/monitoring/logs
+- GET  /admin/monitoring/logs/security
+- GET  /admin/monitoring/dashboard
+- GET  /admin/monitoring/alerts-page
+- POST /admin/monitoring/alerts/resolve-bulk
+
+Also in main app:
+- GET /health
+- GET /
+- GET /dashboard
+- GET /docs-access-denied
+
+
+==================================================
+6) MODELS AND SCHEMAS (WHAT LIVES WHERE)
+==================================================
+6.1 auth
+- app/modules/auth/models.py
+  DB models: Department, User, Session, OTP, LoginAttempt.
+- app/modules/auth/schemas.py
+  API schemas: UserCreate/UserLogin/UserRead/UserUpdate, TokenResponse, OTP schemas,
+  password reset schemas, session and department schemas, ErrorResponse.
+
+6.2 admin
+- app/modules/admin/models.py
+  DB models: AuditLog, UserAgentCache; enum: LogLevel.
+
+6.3 objects
+- app/modules/objects/models.py
+  DB models: Object, ObjectAccess; enums for object access role and document section.
+- app/modules/objects/schemas.py
+  Object CRUD and access schemas (ObjectCreate/Update/Read, ObjectAccess*).
+
+6.4 documents
+- app/modules/documents/models.py
+  DB models: Document, DocumentSubcategory, DocumentCategoryMapping.
+- app/modules/documents/schemas.py
+  Document and subcategory input/output schemas.
+
+6.5 monitoring
+- app/modules/monitoring/models.py
+  Alert model and enums AlertSeverity/AlertType.
+- app/modules/monitoring/schemas.py
+  Alert responses, counts, health/stats/log schemas.
+
+6.6 permissions
+- app/modules/permissions/models.py
+  Permission, RolePermission, UserPermission, Subsection, UserSubsectionAccess.
+
+6.7 access
+- app/modules/access/models_sql.py
+  ACL SQL model and enums ACLEffect/PermissionType.
+- app/modules/access/models.py
+  Additional domain enums and Pydantic contract models.
+
+
+==================================================
+7) LOGGING SYSTEM: WHERE IT IS AND HOW TO USE
+==================================================
+7.1 Where logging is configured
+- app/main.py
+  - LOGGING_CONFIG dictConfig (stdout json, access handler, database handler)
+  - logger names used in project: app, security, system, audit
+  - setup_log_handlers(...) adds rotating file handlers in /app/logs/{app,security,system}
+
+7.2 Main logging building blocks
+- app/core/logging/actions.py
+  - unified API: await log_event(event=..., actor=..., request=..., level=..., create_alert=...)
+  - auto-categorizes events (security/admin/system/user)
+  - enriches payload with timestamps, request_id, IP, user_agent
+  - can auto-create monitoring alerts in DB
+- app/core/logging/middleware.py
+  - logs every HTTP request + duration + status
+  - attempts to bind user context from token
+  - writes X-Request-ID response header
+- app/core/request_id_middleware.py
+  - generates request id and puts it into contextvar + request.state
+- app/core/db_log_handler.py
+  - writes logs into admin audit table
+  - computes TTL by level and sets expires_at
+- app/core/logging/handlers.py
+  - rotating compressed file handlers
+- app/core/logging/filters.py
+  - sensitive data redaction and PII masking helpers
+
+7.3 Log storage destinations
+- stdout (JSON)
+- database (AuditLog)
+- files:
+  - /app/logs/app/app.log
+  - /app/logs/security/security.log
+  - /app/logs/system/system.log
+
+7.4 How to use logging in module code
+Preferred way for business/security events:
+1) import from core.logging.actions:
+   from core.logging.actions import log_event
+2) in route/service:
+   await log_event(
+       event="some_event_name",
+       actor=current_user_or_none,
+       request=request,
+       level="INFO",          # or WARNING/ERROR
+       create_alert=False,     # True for security alerts
+       extra={"key": "value"}
+   )
+
+For technical low-level logs also possible:
+- logger = logging.getLogger("app")
+- logger.info({...}) / logger.warning({...}) / logger.error({...})
+
+Recommendation:
+- keep event names consistent (snake_case)
+- pass request whenever available (for request_id/IP/user-agent linkage)
+- do not put raw secrets/passwords/tokens into logs
+
+
+==================================================
+8) MONITORING AND ALERTS
+==================================================
+Monitoring implementation split:
+- core.monitoring.* -> engine/metrics/detectors
+- modules.monitoring.* -> API/service/repository schemas for admin usage
+
+Capabilities in current project:
+- Prometheus metrics endpoint
+- health checks (basic and detailed)
+- alert retrieval/filtering/resolution
+- security logs endpoint and dashboard pages
+- notifier integration (email, telegram) based on settings
+
+Main docs:
+- docs/MONITORING.md
+- docs/LOGGING.md
+
+
+==================================================
+9) FRONTEND/TEMPLATES/STATIC MAP
+==================================================
+- app/templates/web/
+  main web pages for auth, dashboard, profile, objects, admin, monitoring
+- app/templates/components/
+  reusable UI blocks
+- app/templates/emails/
+  email templates for notifications
+- app/static/css, app/static/js, app/static/images, app/static/avatars
+  compiled and source assets
+
+Tailwind build commands (package.json):
+- npm run build:css
+- npm run watch:css
+
+
+==================================================
+10) BACKGROUND AND OPS
+==================================================
+- app/workers/celery.py and app/workers/tasks.py
+  async/background processing layer.
+- app/migrations/
+  Alembic migration files (schema changes history).
+- app/tests/unit and app/tests/integration
+  automated testing areas.
+
+
+==================================================
+11) QUICK ORIENTATION (FOR NEW TEAMMATE)
+==================================================
+If you need to change...
+- auth/login/session logic -> app/modules/auth/
+- user/admin panel and audit UI -> app/modules/admin/
+- object card/access rules -> app/modules/objects/
+- document upload/version/download -> app/modules/documents/
+- profile page and avatar/password UI -> app/modules/profile/
+- monitoring dashboard/alerts -> app/modules/monitoring/ and app/core/monitoring/
+- global settings/timezone/env -> app/core/config.py
+- db connection/session -> app/core/database.py
+- logging behavior -> app/main.py + app/core/logging/
+
+This file is intended to be shared with other developers so they can quickly understand:
+- what the project does
+- where each responsibility lives
+- where to implement new features safely
