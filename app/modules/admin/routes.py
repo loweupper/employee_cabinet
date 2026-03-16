@@ -914,19 +914,7 @@ async def logs_page(
     )
     unique_methods = [m[0] for m in unique_methods if m[0]]
 
-    logger.info(
-        {
-            "event": "admin_logs_viewed",
-            "user_id": user.id,
-            "filters": {
-                "level": level,
-                "event": event,
-                "user_id": user_id,
-                "search": search,
-                "http_method": http_method,
-            },
-        }
-    )
+    logger.info("event=admin_logs_viewed")
 
     sidebar_context = get_sidebar_context(user, db)
 

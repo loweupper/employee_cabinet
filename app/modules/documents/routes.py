@@ -431,13 +431,7 @@ async def upload_documents(
     # ✅ Сохраняем user.id до try-блока, чтобы избежать PendingRollbackError
     user_id = user.id
 
-    logger.info(
-        {
-            "event": "upload_documents_start",
-            "object_id": object_id,
-            "user_id": user_id,
-        }
-    )
+    logger.info("event=upload_documents_start")
 
     try:
         from modules.objects.service import ObjectService
@@ -582,14 +576,7 @@ async def update_document(
 
         db.commit()
 
-        logger.info(
-            {
-                "event": "document_updated",
-                "document_id": document_id,
-                "object_id": object_id,
-                "user_id": user.id,
-            }
-        )
+        logger.info("event=document_updated")
 
         return RedirectResponse(
             url=f"/objects/{object_id}?success=Документ обновлён",
@@ -804,14 +791,7 @@ async def documents_list(
 
     categories_dict = {cat.value: count for cat, count in categories_stats}
 
-    logger.info(
-        {
-            "event": "documents_list_viewed",
-            "user_id": user.id,
-            "object_id": object_id,
-            "total_documents": len(documents),
-        }
-    )
+    logger.info("event=documents_list_viewed")
 
     sidebar_context = get_sidebar_context(user, db)
 

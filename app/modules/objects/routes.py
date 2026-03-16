@@ -256,14 +256,7 @@ async def objects_list(
 
     pages = (total + page_size - 1) // page_size
 
-    logger.info(
-        {
-            "event": "objects_list_view",
-            "actor_id": user.id,
-            "total_objects": total,
-            "timestamp": _utcnow_iso(),
-        }
-    )
+    logger.info("event=objects_list_view")
 
     sidebar_context = get_sidebar_context(user, db)
     return templates.TemplateResponse(
@@ -917,14 +910,7 @@ async def grant_object_access(
         ObjectService.grant_access(object_id, access_data, current_user, db)
 
         # ✅ Логируем с новым форматом
-        logger.info(
-            {
-                "event": "access_granted",
-                "actor_id": current_user.id,
-                "object_id": object_id,
-                "target_user_id": target_user.id,
-            }
-        )
+        logger.info("event=access_granted")
 
         return RedirectResponse(
             url=f"/objects/{object_id}?success=Доступ предоставлен",
@@ -1357,15 +1343,7 @@ async def update_subcategory(
         subcategory.description = description
         db.commit()
 
-        logger.info(
-            {
-                "event": "subcategory_updated",
-                "object_id": obj.id,
-                "subcategory_id": subcategory.id,
-                "actor_id": current_user.id,
-                "timestamp": _utcnow_iso(),
-            }
-        )
+        logger.info("event=subcategory_updated")
 
         return RedirectResponse(
             url=f"/objects/{object_id}?success=Подкатегория обновлена", status_code=303

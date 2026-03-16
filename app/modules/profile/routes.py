@@ -56,7 +56,7 @@ async def profile_page(
     """
     Страница профиля пользователя
     """
-    logger.info({"event": "profile_view", "user_id": user.id, "email": user.email})
+    logger.info("event=profile_view")
 
     sidebar_context = get_sidebar_context(user, db)
 
@@ -174,12 +174,7 @@ async def upload_avatar(
     """
     Загрузка аватара пользователя
     """
-    logger.info(
-        {
-            "event": "avatar_upload_attempt",
-            "user_id": user.id,
-        }
-    )
+    logger.info("event=avatar_upload_attempt")
 
     try:
         # Проверка типа файла
@@ -214,12 +209,7 @@ async def upload_avatar(
         user.avatar_url = f"/static/avatars/{filename}"
         db.commit()
 
-        logger.info(
-            {
-                "event": "avatar_uploaded",
-                "user_id": user.id,
-            }
-        )
+        logger.info("event=avatar_uploaded")
 
         return RedirectResponse(
             url="/profile?success=Аватар успешно загружен", status_code=303
