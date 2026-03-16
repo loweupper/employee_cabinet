@@ -1761,7 +1761,14 @@ async def get_permissions(
     from modules.permissions.models import Permission
 
     permissions = (
-        db.query(Permission).order_by(Permission.category, Permission.key).all()
+        db.query(
+            Permission.id,
+            Permission.key,
+            Permission.description,
+            Permission.category,
+        )
+        .order_by(Permission.category, Permission.key)
+        .all()
     )
     return [
         {
@@ -1797,8 +1804,13 @@ async def get_user_permissions(
     from modules.permissions.models import Permission, UserPermission
 
     user_perms = (
-        db.query(Permission)
-        .join(UserPermission)
+        db.query(
+            Permission.id,
+            Permission.key,
+            Permission.description,
+            Permission.category,
+        )
+        .join(UserPermission, UserPermission.permission_id == Permission.id)
         .filter(UserPermission.user_id == user_id)
         .all()
     )
@@ -1877,7 +1889,15 @@ async def get_user_subsection_access(
     from modules.permissions.models import UserSubsectionAccess, Subsection
 
     accesses = (
-        db.query(UserSubsectionAccess)
+        db.query(
+            UserSubsectionAccess.id,
+            UserSubsectionAccess.subsection_id,
+            UserSubsectionAccess.can_read,
+            UserSubsectionAccess.can_write,
+            UserSubsectionAccess.can_delete,
+            Subsection.name.label("subsection_name"),
+        )
+        .outerjoin(Subsection, Subsection.id == UserSubsectionAccess.subsection_id)
         .filter(UserSubsectionAccess.user_id == user_id)
         .all()
     )
@@ -1885,7 +1905,7 @@ async def get_user_subsection_access(
         {
             "id": a.id,
             "subsection_id": a.subsection_id,
-            "subsection_name": a.subsection.name if a.subsection else None,
+            "subsection_name": a.subsection_name,
             "can_read": a.can_read,
             "can_write": a.can_write,
             "can_delete": a.can_delete,
