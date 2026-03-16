@@ -5,3 +5,8 @@ git push
 
 
 git restore .
+
+
+
+cd /mnt/y/web/employee_cabinet  wsl 
+code .
