@@ -449,7 +449,7 @@ async def activate_user(
             "event": "user_activated",
             "admin_id": admin.id,
             "user_id": user_id,
-            "email": target_user.email,
+            "email": _sanitize_log_value(target_user.email),
         }
     )
 
@@ -500,7 +500,7 @@ async def deactivate_user(
             "event": "user_deactivated",
             "admin_id": admin.id,
             "user_id": user_id,
-            "email": target_user.email,
+            "email": _sanitize_log_value(target_user.email),
         }
     )
 
@@ -566,7 +566,7 @@ async def change_user_role(
                 "event": "user_role_changed",
                 "admin_id": admin.id,
                 "user_id": user_id,
-                "new_role": role,
+                "new_role": _sanitize_log_value(role),
             }
         )
 
@@ -633,7 +633,7 @@ async def delete_user(
                 "event": "user_soft_deleted",
                 "admin_id": admin.id,
                 "user_id": user_id,
-                "original_email": email,
+                "original_email": _sanitize_log_value(email),
             }
         )
 
@@ -646,7 +646,7 @@ async def delete_user(
                 "event": "user_delete_error",
                 "admin_id": admin.id,
                 "user_id": user_id,
-                "error": str(e),
+                "error": _sanitize_log_value(e),
             },
             exc_info=True,
         )
@@ -790,7 +790,7 @@ async def reset_user_password(
                 "event": "user_password_reset_by_admin",
                 "admin_id": admin.id,
                 "user_id": user_id,
-                "email": target_user.email,
+                "email": _sanitize_log_value(target_user.email),
             }
         )
 
@@ -808,7 +808,7 @@ async def reset_user_password(
                 "event": "user_password_reset_error",
                 "admin_id": admin.id,
                 "user_id": user_id,
-                "error": str(e),
+                "error": _sanitize_log_value(e),
             },
             exc_info=True,
         )
@@ -840,6 +840,12 @@ def _parse_extra_data(extra_data: str):
         return json.loads(extra_data)
     except json.JSONDecodeError:
         return {}
+
+
+def _sanitize_log_value(value: object) -> str:
+    """Escape log entry separators in untrusted values."""
+    raw = "" if value is None else str(value)
+    return raw.replace("\r", "\\r").replace("\n", "\\n")
 
 
 # ===================================
@@ -1307,7 +1313,11 @@ async def create_department(
             {"success": False, "message": e.detail}, status_code=e.status_code
         )
     except Exception as e:
-        logger.error(f"Ошибка создания отдела: {str(e)}", exc_info=True)
+        logger.error(
+            "Ошибка создания отдела: %s",
+            _sanitize_log_value(e),
+            exc_info=True,
+        )
         return JSONResponse({"success": False, "message": str(e)}, status_code=500)
 
 
@@ -1368,7 +1378,11 @@ async def update_department(
             {"success": False, "message": e.detail}, status_code=e.status_code
         )
     except Exception as e:
-        logger.error(f"Ошибка обновления отдела: {str(e)}", exc_info=True)
+        logger.error(
+            "Ошибка обновления отдела: %s",
+            _sanitize_log_value(e),
+            exc_info=True,
+        )
         return JSONResponse({"success": False, "message": str(e)}, status_code=500)
 
 
@@ -1409,7 +1423,11 @@ async def delete_department(
             {"success": False, "message": e.detail}, status_code=e.status_code
         )
     except Exception as e:
-        logger.error(f"Ошибка удаления отдела: {str(e)}", exc_info=True)
+        logger.error(
+            "Ошибка удаления отдела: %s",
+            _sanitize_log_value(e),
+            exc_info=True,
+        )
         return JSONResponse({"success": False, "message": str(e)}, status_code=500)
 
 
