@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import re
 import uuid
 from collections import defaultdict
 from datetime import datetime, timezone
@@ -55,11 +56,18 @@ def _utcnow_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+def _safe_file_extension(filename: Optional[str]) -> str:
+    suffix = Path(filename or "").suffix.lower()
+    if re.fullmatch(r"\.[a-z0-9]{1,10}", suffix):
+        return suffix
+    return ""
+
+
 async def _save_icon_file(icon: UploadFile, object_id: int) -> str:
     icons_dir = Path("static/objects")
     icons_dir.mkdir(parents=True, exist_ok=True)
 
-    file_ext = Path(icon.filename).suffix
+    file_ext = _safe_file_extension(icon.filename)
     filename = f"{object_id}_{uuid.uuid4().hex[:8]}{file_ext}"
     file_path = icons_dir / filename
 
@@ -252,9 +260,7 @@ async def objects_list(
         {
             "event": "objects_list_view",
             "actor_id": user.id,
-            "actor_email": user.email,
             "total_objects": total,
-            "status_filter": status,
             "timestamp": _utcnow_iso(),
         }
     )
@@ -567,7 +573,11 @@ async def object_detail(
     except HTTPException as e:
         raise e
     except Exception as e:
-        logger.error(f"❌ Ошибка при загрузке объекта {object_id}: {str(e)}")
+        logger.error(
+            "❌ Ошибка при загрузке объекта %s (type=%s)",
+            object_id,
+            type(e).__name__,
+        )
         import traceback
 
         logger.error(traceback.format_exc())
@@ -859,7 +869,7 @@ async def grant_object_access(
 
         if not target_user:
             return RedirectResponse(
-                url=f"/objects/{object_id}?error=Пользователь с email {user_email} не найден",
+                url=f"/objects/{object_id}?error=Пользователь не найден",
                 status_code=303,
             )
 
@@ -913,14 +923,11 @@ async def grant_object_access(
                 "actor_id": current_user.id,
                 "object_id": object_id,
                 "target_user_id": target_user.id,
-                "target_user_email": target_user.email,
-                "role": role,
-                "sections": sections,
             }
         )
 
         return RedirectResponse(
-            url=f"/objects/{object_id}?success=Доступ предоставлен пользователю {target_user.first_name or target_user.email}",
+            url=f"/objects/{object_id}?success=Доступ предоставлен",
             status_code=303,
         )
 
@@ -1210,11 +1217,8 @@ async def create_subcategory(
         {
             "event": "subcategory_created",
             "object_id": obj.id,
-            "object_title": obj.title,
             "subcategory_id": subcategory.id,
-            "subcategory_name": subcategory.name,
             "actor_id": current_user.id,
-            "actor_email": current_user.email,
             "timestamp": _utcnow_iso(),
         }
     )
@@ -1286,11 +1290,8 @@ async def delete_subcategory(
             {
                 "event": "subcategory_deleted",
                 "object_id": obj.id,
-                "object_title": obj.title,
                 "subcategory_id": subcategory.id,
-                "subcategory_name": subcategory.name,
                 "actor_id": current_user.id,
-                "actor_email": current_user.email,
                 "timestamp": _utcnow_iso(),
             }
         )
@@ -1352,7 +1353,6 @@ async def update_subcategory(
             )
 
         # Обновляем подкатегорию
-        old_name = subcategory.name
         subcategory.name = name
         subcategory.description = description
         db.commit()
@@ -1361,12 +1361,8 @@ async def update_subcategory(
             {
                 "event": "subcategory_updated",
                 "object_id": obj.id,
-                "object_title": obj.title,
                 "subcategory_id": subcategory.id,
-                "old_name": old_name,
-                "new_name": name,
                 "actor_id": current_user.id,
-                "actor_email": current_user.email,
                 "timestamp": _utcnow_iso(),
             }
         )

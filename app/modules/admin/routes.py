@@ -703,7 +703,6 @@ async def edit_user(
                 "event": "user_edited",
                 "admin_id": admin.id,
                 "user_id": user_id,
-                "email": target_user.email,
                 "department_changed": (old_department_id != target_user.department_id),
             }
         )
@@ -723,7 +722,7 @@ async def edit_user(
                 "event": "user_edit_error",
                 "admin_id": admin.id,
                 "user_id": user_id,
-                "error": str(e),
+                "error_type": type(e).__name__,
             },
             exc_info=True,
         )

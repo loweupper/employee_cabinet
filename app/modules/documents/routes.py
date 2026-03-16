@@ -435,8 +435,6 @@ async def upload_documents(
         {
             "event": "upload_documents_start",
             "object_id": object_id,
-            "category": category,
-            "subcategory_id": subcategory_id,
             "user_id": user_id,
         }
     )
@@ -589,8 +587,6 @@ async def update_document(
                 "event": "document_updated",
                 "document_id": document_id,
                 "object_id": object_id,
-                "new_category": category,
-                "new_subcategory_id": subcategory_id,
                 "user_id": user.id,
             }
         )
@@ -813,13 +809,7 @@ async def documents_list(
             "event": "documents_list_viewed",
             "user_id": user.id,
             "object_id": object_id,
-            "category": category,
             "total_documents": len(documents),
-            "allowed_categories": (
-                [c.value for c in allowed_categories]
-                if allowed_categories is not None
-                else "all"
-            ),
         }
     )
 
