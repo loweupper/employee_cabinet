@@ -185,6 +185,8 @@
                                     <td class="px-6 py-4">
                                         <select onchange="changeRole({{ u.id }}, this.value)"
                                             class="px-3 py-1 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                            name="role" id="role-{{ u.id }}"
+                                            id="role-{{ u.id }}"
                                             {{ 'disabled' if u.id==user.id else '' }}>
                                             <option value="employee" {{ 'selected' if u.role.value=='employee' else ''
                                                 }}>👤 Сотрудник</option>
@@ -334,22 +336,22 @@
                 <!-- ФИО + Роль в одной сетке -->
                 <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-2">Имя</label>
+                        <label for="edit_first_name" class="block text-sm font-medium text-gray-700 mb-2">Имя</label>
                         <input type="text" id="edit_first_name"
                             class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
                     </div>
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-2">Фамилия</label>
+                        <label for="edit_last_name" class="block text-sm font-medium text-gray-700 mb-2">Фамилия</label>
                         <input type="text" id="edit_last_name"
                             class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
                     </div>
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-2">Отчество</label>
+                        <label for="edit_middle_name" class="block text-sm font-medium text-gray-700 mb-2">Отчество</label>
                         <input type="text" id="edit_middle_name"
                             class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
                     </div>
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-2">Роль</label>
+                        <label for="edit_role" class="block text-sm font-medium text-gray-700 mb-2">Роль</label>
                         <select id="edit_role" required
                             class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
                             <option value="employee">👤 Сотрудник</option>
@@ -364,14 +366,14 @@
 
                 <!-- Email -->
                 <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-2">Email</label>
+                    <label for="edit_email" class="block text-sm font-medium text-gray-700 mb-2">Email</label>
                     <input type="email" id="edit_email" required
                         class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
                 </div>
 
                 <!-- Телефон -->
                 <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-2">Телефон</label>
+                    <label for="edit_phone_number" class="block text-sm font-medium text-gray-700 mb-2">Телефон</label>
                     <input type="tel" id="edit_phone_number" placeholder="+7 (999) 999-99-99"
                         class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
                 </div>
@@ -379,7 +381,7 @@
                 <!-- Отдел и Должность -->
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-2">Отдел</label>
+                        <label for="edit_department_id" class="block text-sm font-medium text-gray-700 mb-2">Отдел</label>
                         <select id="edit_department_id"
                             class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
                             <option value="">Не указан</option>
@@ -389,7 +391,7 @@
                         </select>
                     </div>
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-2">Должность</label>
+                        <label for="edit_position" class="block text-sm font-medium text-gray-700 mb-2">Должность</label>
                         <input type="text" id="edit_position"
                             class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
                     </div>
@@ -397,7 +399,7 @@
 
                 <!-- Локация -->
                 <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-2">Местоположение</label>
+                    <label for="edit_location" class="block text-sm font-medium text-gray-700 mb-2">Местоположение</label>
                     <input type="text" id="edit_location" placeholder="Москва, офис 1"
                         class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
                 </div>
@@ -458,7 +460,7 @@
 
                 <!-- Новый пароль -->
                 <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-2">Новый пароль</label>
+                    <label for="reset_new_password" class="block text-sm font-medium text-gray-700 mb-2">Новый пароль</label>
                     <input type="password" id="reset_new_password" required minlength="6"
                         placeholder="Минимум 6 символов"
                         class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500">
@@ -466,7 +468,7 @@
 
                 <!-- Подтверждение пароля -->
                 <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-2">Подтвердите пароль</label>
+                    <label for="reset_confirm_password" class="block text-sm font-medium text-gray-700 mb-2">Подтвердите пароль</label>
                     <input type="password" id="reset_confirm_password" required minlength="6"
                         placeholder="Повторите пароль"
                         class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500">
@@ -677,7 +679,7 @@
             }
 
             // Загрузить разрешения и доступ к подразделам
-            loadUserPermissionsAndAccess(userId);
+            loadUserPermissionsAndAccess(userId, departmentId || '');
 
             document.getElementById('editModal').classList.remove('hidden');
         }
@@ -685,33 +687,46 @@
         // ===================================
         // РАЗРЕШЕНИЯ И ДОСТУП К ПОДРАЗДЕЛАМ
         // ===================================
-        async function loadUserPermissionsAndAccess(userId) {
-            console.log('📡 Loading permissions and subsection access for user:', userId);
+        async function loadUserPermissionsAndAccess(userId, departmentId) {
+            console.log('📡 Loading permissions and subsection access for user:', userId, 'department:', departmentId);
 
             document.getElementById('permissions-list').innerHTML = '<p>Загрузка разрешений...</p>';
             document.getElementById('subsections-list').innerHTML = '<p>Загрузка подразделов...</p>';
 
             try {
-                const [allPermsResp, userPermsResp, subsecResp] = await Promise.all([
+                const requests = [
                     fetch('/admin/permissions', { credentials: 'include' }),
                     fetch(`/admin/users/${userId}/permissions`, { credentials: 'include' }),
-                    fetch(`/admin/users/${userId}/subsection-access`, { credentials: 'include' })
-                ]);
+                    fetch(`/admin/users/${userId}/subsection-access`, { credentials: 'include' }),
+                ];
 
-                if (!allPermsResp.ok || !userPermsResp.ok || !subsecResp.ok) {
-                    throw new Error(`HTTP error: ${allPermsResp.status} / ${userPermsResp.status} / ${subsecResp.status}`);
+                if (departmentId) {
+                    requests.push(fetch(`/admin/sections/${departmentId}/subsections`, { credentials: 'include' }));
+                }
+
+                const responses = await Promise.all(requests);
+                const [allPermsResp, userPermsResp, userSubAccessResp, allSubsectionsResp] = responses;
+
+                if (!allPermsResp.ok || !userPermsResp.ok || !userSubAccessResp.ok) {
+                    throw new Error(`HTTP error: ${allPermsResp.status} / ${userPermsResp.status} / ${userSubAccessResp.status}`);
+                }
+
+                if (allSubsectionsResp && !allSubsectionsResp.ok) {
+                    throw new Error(`HTTP error: ${allSubsectionsResp.status}`);
                 }
 
                 const allPermissions = await allPermsResp.json();
                 const userPermissions = await userPermsResp.json();
-                const subsections = await subsecResp.json();
+                const userSubsectionAccess = await userSubAccessResp.json();
+                const allSubsections = allSubsectionsResp ? await allSubsectionsResp.json() : [];
 
                 console.log('📥 All permissions:', allPermissions);
                 console.log('📥 User permissions:', userPermissions);
-                console.log('📥 Subsection access:', subsections);
+                console.log('📥 User subsection access:', userSubsectionAccess);
+                console.log('📥 All subsections for department:', allSubsections);
 
                 renderPermissions(userPermissions, allPermissions);
-                renderSubsectionAccess(subsections);
+                renderSubsectionAccess(allSubsections, userSubsectionAccess, departmentId);
             } catch (error) {
                 console.error('❌ Error loading permissions:', error);
                 document.getElementById('permissions-list').innerHTML = '<p class="text-red-600">Ошибка загрузки разрешений</p>';
@@ -745,10 +760,18 @@
             }).join('');
         }
 
-        function renderSubsectionAccess(subsections) {
+        function renderSubsectionAccess(allSubsections, userSubsectionAccess, departmentId) {
             const container = document.getElementById('subsections-list');
+            const accessBySubsectionId = new Map(
+                (userSubsectionAccess || []).map(a => [String(a.subsection_id), a])
+            );
 
-            if (!subsections.length) {
+            if (!departmentId) {
+                container.innerHTML = '<p class="text-gray-500">Сначала выберите отдел</p>';
+                return;
+            }
+
+            if (!allSubsections.length) {
                 container.innerHTML = '<p class="text-gray-500">Нет подразделов для этого отдела</p>';
                 return;
             }
@@ -765,29 +788,87 @@
                         </tr>
                     </thead>
                     <tbody class="divide-y">
-                        ${subsections.map(sub => `
-                            <tr class="hover:bg-gray-50">
-                                <td class="px-4 py-3 text-gray-800 font-medium">${sub.subsection_name || 'Без названия'}</td>
+                        ${allSubsections.map(sub => {
+                            const access = accessBySubsectionId.get(String(sub.id)) || {};
+                            return `
+                            <tr class="hover:bg-gray-50" data-subsection-id="${sub.id}">
+                                <td class="px-4 py-3 text-gray-800 font-medium">${sub.name || 'Без названия'}</td>
                                 <td class="px-4 py-3 text-center">
-                                    <input type="checkbox" name="subsection_read_${sub.subsection_id}"
-                                           class="w-4 h-4 text-green-600 rounded focus:ring-green-500"
-                                           ${sub.can_read ? 'checked' : ''}>
+                                    <input type="checkbox" class="js-sub-read w-4 h-4 text-green-600 rounded focus:ring-green-500"
+                                           ${access.can_read ? 'checked' : ''}>
                                 </td>
                                 <td class="px-4 py-3 text-center">
-                                    <input type="checkbox" name="subsection_write_${sub.subsection_id}"
-                                           class="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
-                                           ${sub.can_write ? 'checked' : ''}>
+                                    <input type="checkbox" class="js-sub-write w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+                                           ${access.can_write ? 'checked' : ''}>
                                 </td>
                                 <td class="px-4 py-3 text-center">
-                                    <input type="checkbox" name="subsection_delete_${sub.subsection_id}"
-                                           class="w-4 h-4 text-red-600 rounded focus:ring-red-500"
-                                           ${sub.can_delete ? 'checked' : ''}>
+                                    <input type="checkbox" class="js-sub-delete w-4 h-4 text-red-600 rounded focus:ring-red-500"
+                                           ${access.can_delete ? 'checked' : ''}>
                                 </td>
                             </tr>
-                        `).join('')}
+                        `;
+                        }).join('')}
                     </tbody>
                 </table>
             `;
+        }
+
+        function getSelectedPermissionIds() {
+            return Array.from(document.querySelectorAll('input[name="permissions"]:checked'))
+                .map(input => Number(input.value))
+                .filter(Number.isFinite);
+        }
+
+        function getSubsectionAccessPayloads() {
+            const rows = Array.from(document.querySelectorAll('#subsections-list tbody tr[data-subsection-id]'));
+            return rows.map(row => ({
+                subsectionId: row.dataset.subsectionId,
+                can_read: row.querySelector('.js-sub-read')?.checked ?? false,
+                can_write: row.querySelector('.js-sub-write')?.checked ?? false,
+                can_delete: row.querySelector('.js-sub-delete')?.checked ?? false,
+            }));
+        }
+
+        async function saveUserPermissions(userId) {
+            const permissionIds = getSelectedPermissionIds();
+            const response = await fetch(`/admin/users/${userId}/permissions`, {
+                method: 'PUT',
+                credentials: 'include',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ permission_ids: permissionIds })
+            });
+
+            if (!response.ok) {
+                throw new Error(`Не удалось сохранить разрешения: HTTP ${response.status}`);
+            }
+        }
+
+        async function saveUserSubsectionAccess(userId) {
+            const payloads = getSubsectionAccessPayloads();
+            if (!payloads.length) {
+                return;
+            }
+
+            await Promise.all(payloads.map(async (payload) => {
+                const response = await fetch(`/admin/users/${userId}/subsection-access/${payload.subsectionId}`, {
+                    method: 'PUT',
+                    credentials: 'include',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        can_read: payload.can_read,
+                        can_write: payload.can_write,
+                        can_delete: payload.can_delete,
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`Не удалось сохранить доступ к подразделу ${payload.subsectionId}: HTTP ${response.status}`);
+                }
+            }));
         }
 
         function closeEditModal() {
@@ -828,6 +909,8 @@
                 console.log('📥 Response:', data);
 
                 if (data.success) {
+                    await saveUserPermissions(userId);
+                    await saveUserSubsectionAccess(userId);
                     alert(data.message);
                     closeEditModal();
                     location.reload();
@@ -845,6 +928,14 @@
             if (e.target === this) {
                 closeEditModal();
             }
+        });
+
+        document.getElementById('edit_department_id').addEventListener('change', function () {
+            const userId = document.getElementById('edit_user_id').value;
+            if (!userId) {
+                return;
+            }
+            loadUserPermissionsAndAccess(userId, this.value || '');
         });
 
         // ===================================

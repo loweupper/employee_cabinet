@@ -60,7 +60,6 @@ class AuditLog(Base):
     message = Column(Text, nullable=True)
     
     # Метаданные (JSON)
-    # metadata = Column(Text, nullable=True)  # Храним как JSON string, если не используем PostgreSQL, иначе можно использовать JSONB
     extra_data = Column(JSONB, nullable=True)  # Храним как JSONB для удобства запросов
     
     # Пользователь (опционально)

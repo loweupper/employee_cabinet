@@ -3,6 +3,7 @@ from core.template_helpers import get_sidebar_context
 from fastapi import APIRouter, Depends, Request, Form, UploadFile, File, HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
+from sqlalchemy import update
 from sqlalchemy.exc import IntegrityError
 from pydantic import ValidationError
 import logging
@@ -207,8 +208,10 @@ async def upload_avatar(
         await asyncio.to_thread(file_path.write_bytes, contents)
 
         # Обновляем URL аватара в БД
-        user.avatar_url = f"/static/avatars/{filename}"
+        avatar_url = f"/static/avatars/{filename}"
+        db.execute(update(User).where(User.id == user.id).values(avatar_url=avatar_url))
         db.commit()
+        user.avatar_url = avatar_url
 
         logger.info("event=avatar_uploaded")
 

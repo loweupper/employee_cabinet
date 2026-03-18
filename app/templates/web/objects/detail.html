@@ -460,7 +460,7 @@
                                         class="space-y-4">
 
                                         <div>
-                                            <label class="block text-gray-700 font-medium mb-2">Email
+                                            <label for="userEmailInput" class="block text-gray-700 font-medium mb-2">Email
                                                 сотрудника</label>
                                             <input type="email" name="user_email" id="userEmailInput" required
                                                 list="userEmails"
@@ -481,8 +481,8 @@
                                         </div>
 
                                         <div>
-                                            <label class="block text-gray-700 font-medium mb-2">Роль доступа</label>
-                                            <select name="role" required
+                                            <label for="userRoleSelect" class="block text-gray-700 font-medium mb-2">Роль доступа</label>
+                                            <select name="role" id="userRoleSelect" required
                                                 class="w-full px-4 py-2 rounded-lg border border-gray-300 focus:border-indigo-500">
                                                 <option value="viewer">👁️ Просмотр (может видеть объект и
                                                     документы)
@@ -497,8 +497,8 @@
 
                                         <!-- ✅ ГАЛОЧКИ: Доступ к разделам документов -->
                                         <div>
-                                            <label class="block text-gray-700 font-medium mb-2">Доступ к разделам
-                                                документов</label>
+                                            <p class="block text-gray-700 font-medium mb-2">Доступ к разделам
+                                                документов</p>
 
                                             <div class="space-y-2 bg-gray-50 p-4 rounded-lg">
 
@@ -571,9 +571,9 @@
                                         class="space-y-4">
 
                                         <div>
-                                            <label class="block text-gray-700 font-medium mb-2">Выберите
+                                            <label for="departmentSelect" class="block text-gray-700 font-medium mb-2">Выберите
                                                 отдел</label>
-                                            <select name="department" required
+                                            <select name="department" id="departmentSelect" required
                                                 class="w-full px-4 py-2 rounded-lg border border-gray-300 focus:border-indigo-500">
                                                 <option value="">Выберите отдел</option>
                                                 <option value="Технический отдел">📐 Технический отдел</option>
@@ -586,8 +586,8 @@
                                         </div>
 
                                         <div>
-                                            <label class="block text-gray-700 font-medium mb-2">Роль доступа</label>
-                                            <select name="role" required
+                                            <label for="departmentRoleSelect" class="block text-gray-700 font-medium mb-2">Роль доступа</label>
+                                            <select name="role" id="departmentRoleSelect" required
                                                 class="w-full px-4 py-2 rounded-lg border border-gray-300 focus:border-indigo-500">
                                                 <option value="viewer">👁️ Просмотр (может видеть объект и
                                                     документы)</option>
@@ -638,7 +638,7 @@
                                 <form id="editAccessForm" method="post" action="" class="space-y-4">
 
                                     <div>
-                                        <label class="block text-gray-700 font-medium mb-2">Роль доступа</label>
+                                        <label for="editRole" class="block text-gray-700 font-medium mb-2">Роль доступа</label>
                                         <select name="role" id="editRole" required
                                             class="w-full px-4 py-2 rounded-lg border border-gray-300 focus:border-indigo-500">
                                             <option value="viewer">👁️ Просмотр (может видеть объект и
@@ -651,8 +651,8 @@
 
                                     <!-- ✅ ГАЛОЧКИ: Доступ к разделам документов -->
                                     <div>
-                                        <label class="block text-gray-700 font-medium mb-2">Доступ к разделам
-                                            документов</label>
+                                        <p class="block text-gray-700 font-medium mb-2">Доступ к разделам
+                                            документов</p>
 
                                         <div class="space-y-2 bg-gray-50 p-4 rounded-lg">
 

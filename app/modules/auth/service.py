@@ -2,26 +2,37 @@ import logging
 
 from modules.auth.models import LoginAttempt
 from datetime import datetime, timezone, timedelta
-from sqlalchemy import text
+from sqlalchemy import text, update
 from sqlalchemy.orm import Session
 from fastapi import HTTPException, status
-from modules.monitoring.service_alerts import AlertService 
+from modules.monitoring.service_alerts import AlertService
 from modules.monitoring.models import AlertSeverity, AlertType
 from core.config import settings, OTP_EXPIRATION_DELTA
 from core.redis import redis_client
 from core.constants import UserRole  # ✅ импорт из constants
 from modules.auth.models import User, Session as SessionModel, OTP, OTPPurpose
 from modules.auth.schemas import (
-    UserCreate, UserLogin, UserUpdate,
-    ChangePasswordRequest, TokenResponse, UserRead,
-    OTPRequest, OTPVerify, PasswordResetRequest, PasswordResetConfirm
+    UserCreate,
+    UserLogin,
+    UserUpdate,
+    ChangePasswordRequest,
+    TokenResponse,
+    UserRead,
+    OTPRequest,
+    OTPVerify,
+    PasswordResetRequest,
+    PasswordResetConfirm,
 )
 from modules.auth.utils import (
-    hash_password, verify_password,
-    create_access_token, create_refresh_token,
+    hash_password,
+    verify_password,
+    create_access_token,
+    create_refresh_token,
     hash_refresh_token,
-    hash_otp, verify_otp, generate_otp,
-    get_error_id
+    hash_otp,
+    verify_otp,
+    generate_otp,
+    get_error_id,
 )
 from modules.auth.brute_force import (
     BruteForceProtection,
@@ -29,7 +40,7 @@ from modules.auth.brute_force import (
     OTPBruteForcedException,
     OTPRateLimitException,
     RegistrationBruteForcedException,
-    PasswordResetRateLimitException
+    PasswordResetRateLimitException,
 )
 
 # ✅ дублирующийся импорт удалён
@@ -62,19 +73,31 @@ class AuthService:
             print(f"Registration attempt blocked from IP {ip_address}")
             logger.warning({"event": "registration_blocked", "ip_address": ip_address})
             raise RegistrationBruteForcedException()
-        
+
         brute_force.record_registration_attempt(ip_address)
 
-        logger.info({"event": "check_email", "email": data.email.lower(), "ip_address": ip_address})
+        logger.info(
+            {
+                "event": "check_email",
+                "email": data.email.lower(),
+                "ip_address": ip_address,
+            }
+        )
         # Проверяем email
         existing = db.query(User).filter(User.email == data.email.lower()).first()
         if existing:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Email already registered",
-                headers={"X-Error-ID": get_error_id()}
+                headers={"X-Error-ID": get_error_id()},
             )
-        logger.info({"event": "register_user", "email": data.email.lower(), "ip_address": ip_address})
+        logger.info(
+            {
+                "event": "register_user",
+                "email": data.email.lower(),
+                "ip_address": ip_address,
+            }
+        )
 
         user = User(
             email=data.email.lower(),
@@ -91,8 +114,14 @@ class AuthService:
             location=data.location,
             object_id=data.object_id,
         )
-        
-        logger.info({"event": "register_user", "email": data.email.lower(), "ip_address": ip_address})
+
+        logger.info(
+            {
+                "event": "register_user",
+                "email": data.email.lower(),
+                "ip_address": ip_address,
+            }
+        )
 
         db.add(user)
         print(f"User {data.email} added to DB session")
@@ -108,14 +137,11 @@ class AuthService:
     # ============================================================
     @staticmethod
     def login(
-        data: UserLogin,
-        db: Session,
-        user_agent: str = None,
-        ip_address: str = None
+        data: UserLogin, db: Session, user_agent: str = None, ip_address: str = None
     ) -> TokenResponse:
         """
         Вход в систему с защитой от брутфорса.
-        
+
         Args:
             data: UserLogin схема
             db: Database session
@@ -127,7 +153,9 @@ class AuthService:
         # ===== Проверяем блокировку =====
         if brute_force.check_login_attempts(email, ip_address):
             remaining_time = brute_force.get_login_block_time(email, ip_address)
-            logger.warning(f"Пользователь {email} заблокирован на {remaining_time} секунд с IP {ip_address}")
+            logger.warning(
+                f"Пользователь {email} заблокирован на {remaining_time} секунд с IP {ip_address}"
+            )
             raise LoginBruteForcedException(remaining_time)
 
         # ===== Проверяем учётные данные =====
@@ -144,7 +172,7 @@ class AuthService:
                 email=email,
                 ip_address=ip_address,
                 user_id=user.id if user else None,
-                success=False
+                success=False,
             )
             db.add(attempt)
             db.commit()
@@ -156,7 +184,7 @@ class AuthService:
                     LoginAttempt.email == email,
                     LoginAttempt.ip_address == ip_address,
                     LoginAttempt.success == False,
-                    LoginAttempt.timestamp >= datetime.utcnow() - timedelta(minutes=10)
+                    LoginAttempt.timestamp >= datetime.utcnow() - timedelta(minutes=10),
                 )
                 .count()
             )
@@ -170,22 +198,21 @@ class AuthService:
                     message=f"Множественные неудачные попытки входа для {email} с IP {ip_address}",
                     ip_address=ip_address,
                     user_id=user.id if user else None,
-                    details={"failed_attempts": failed_attempts}
+                    details={"failed_attempts": failed_attempts},
                 )
                 db.commit()
 
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Пользователь не найден или пароль неверный",
-                headers={"X-Error-ID": get_error_id()}
-            ) 
-
+                headers={"X-Error-ID": get_error_id()},
+            )
 
         if not user.is_active:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Акаунт не активирован. Пожалуйста, дождитесь активации администратором.",
-                headers={"X-Error-ID": get_error_id()}
+                headers={"X-Error-ID": get_error_id()},
             )
 
         # ===== Успешный логин — сбрасываем счётчик =====
@@ -194,10 +221,7 @@ class AuthService:
 
         # Записываем успешную попытку
         attempt = LoginAttempt(
-            email=email,
-            ip_address=ip_address,
-            user_id=user.id,
-            success=True
+            email=email, ip_address=ip_address, user_id=user.id, success=True
         )
         db.add(attempt)
         db.commit()
@@ -224,7 +248,7 @@ class AuthService:
             access_token=access_token,
             refresh_token=refresh_raw,
             expires_in=settings.JWT_EXPIRATION_SECONDS,
-            user=UserRead.from_orm(user)
+            user=UserRead.from_orm(user),
         )
 
     # ============================================================
@@ -234,17 +258,21 @@ class AuthService:
     def refresh_token(refresh_token: str, db: Session) -> TokenResponse:
         refresh_hash = hash_refresh_token(refresh_token)
 
-        session = db.query(SessionModel).filter(
-            SessionModel.token_hash == refresh_hash,
-            SessionModel.is_revoked == False,
-            SessionModel.expires_at > datetime.now(timezone.utc)
-        ).first()
+        session = (
+            db.query(SessionModel)
+            .filter(
+                SessionModel.token_hash == refresh_hash,
+                SessionModel.is_revoked == False,
+                SessionModel.expires_at > datetime.now(timezone.utc),
+            )
+            .first()
+        )
 
         if not session:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Неверный или просроченный refresh token",
-                headers={"X-Error-ID": get_error_id()}
+                headers={"X-Error-ID": get_error_id()},
             )
 
         user = db.query(User).filter(User.id == session.user_id).first()
@@ -253,7 +281,7 @@ class AuthService:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Пользователь не найден или неактивен",
-                headers={"X-Error-ID": get_error_id()}
+                headers={"X-Error-ID": get_error_id()},
             )
 
         # Создаём новый access token
@@ -272,7 +300,7 @@ class AuthService:
             access_token=access_token,
             refresh_token=new_refresh_raw,
             expires_in=settings.JWT_EXPIRATION_SECONDS,
-            user=UserRead.from_orm(user)
+            user=UserRead.from_orm(user),
         )
 
     # ============================================================
@@ -283,10 +311,14 @@ class AuthService:
         if refresh_token:
             refresh_hash = hash_refresh_token(refresh_token)
 
-            session = db.query(SessionModel).filter(
-                SessionModel.user_id == user.id,
-                SessionModel.token_hash == refresh_hash
-            ).first()
+            session = (
+                db.query(SessionModel)
+                .filter(
+                    SessionModel.user_id == user.id,
+                    SessionModel.token_hash == refresh_hash,
+                )
+                .first()
+            )
 
             if session:
                 session.is_revoked = True
@@ -303,11 +335,15 @@ class AuthService:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Неверный текущий пароль",
-                headers={"X-Error-ID": get_error_id()}
+                headers={"X-Error-ID": get_error_id()},
             )
 
-        user.hashed_password = hash_password(data.new_password)
+        new_hash = hash_password(data.new_password)
+        db.execute(
+            update(User).where(User.id == user.id).values(hashed_password=new_hash)
+        )
         db.commit()
+        user.hashed_password = new_hash
 
         logger.info(f"Пароль изменён для пользователя: {user.email}")
 
@@ -320,7 +356,7 @@ class AuthService:
     def request_otp(data: OTPRequest, db: Session) -> dict:
         """
         Запрос OTP кода с rate limiting.
-        
+
         Лимит: 3 запроса в час на email+purpose
         """
         email = data.email.lower()
@@ -334,7 +370,9 @@ class AuthService:
 
         # ===== Проверяем rate limiting =====
         if brute_force.check_otp_request_rate(email, purpose):
-            logger.warning(f"OTP request rate limit exceeded for {email} (purpose: {purpose})")
+            logger.warning(
+                f"OTP request rate limit exceeded for {email} (purpose: {purpose})"
+            )
             raise OTPRateLimitException()
 
         brute_force.record_otp_request(email, purpose)
@@ -343,7 +381,7 @@ class AuthService:
         db.query(OTP).filter(
             OTP.user_id == user.id,
             OTP.purpose == OTPPurpose(purpose),
-            OTP.used == False
+            OTP.used == False,
         ).delete()
         db.commit()
 
@@ -358,7 +396,7 @@ class AuthService:
             purpose=OTPPurpose(purpose),
             expires_at=expires_at,
             used=False,
-            attempts=0
+            attempts=0,
         )
 
         db.add(otp)
@@ -376,7 +414,7 @@ class AuthService:
     def verify_otp(data: OTPVerify, db: Session) -> TokenResponse:
         """
         Верификация OTP кода с защитой от брутфорса.
-        
+
         Лимит: 5 попыток в 15 минут на email+purpose
         """
         email = data.email.lower()
@@ -387,21 +425,26 @@ class AuthService:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Неверный email или код",
-                headers={"X-Error-ID": get_error_id()}
+                headers={"X-Error-ID": get_error_id()},
             )
 
         # ===== Получаем активный OTP =====
-        otp = db.query(OTP).filter(
-            OTP.user_id == user.id,
-            OTP.used == False,
-            OTP.expires_at > datetime.now(timezone.utc)
-        ).order_by(OTP.created_at.desc()).first()
+        otp = (
+            db.query(OTP)
+            .filter(
+                OTP.user_id == user.id,
+                OTP.used == False,
+                OTP.expires_at > datetime.now(timezone.utc),
+            )
+            .order_by(OTP.created_at.desc())
+            .first()
+        )
 
         if not otp:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Неверный или просроченный код",
-                headers={"X-Error-ID": get_error_id()}
+                headers={"X-Error-ID": get_error_id()},
             )
 
         purpose = otp.purpose.value
@@ -411,7 +454,9 @@ class AuthService:
             remaining_time = brute_force.get_remaining_block_time(
                 f"otp_verify:{email}:{purpose}"
             )
-            logger.warning(f"OTP verification attempt blocked for {email} (blocked for {remaining_time}s)")
+            logger.warning(
+                f"OTP verification attempt blocked for {email} (blocked for {remaining_time}s)"
+            )
             raise OTPBruteForcedException(remaining_time)
 
         # ===== Проверяем количество попыток =====
@@ -427,7 +472,7 @@ class AuthService:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Неверный код",
-                headers={"X-Error-ID": get_error_id()}
+                headers={"X-Error-ID": get_error_id()},
             )
 
         # ===== Успешная верификация — сбрасываем счётчик =====
@@ -442,9 +487,7 @@ class AuthService:
         refresh_raw, refresh_hash, refresh_expires = create_refresh_token()
 
         session = SessionModel(
-            user_id=user.id,
-            token_hash=refresh_hash,
-            expires_at=refresh_expires
+            user_id=user.id, token_hash=refresh_hash, expires_at=refresh_expires
         )
         db.add(session)
         db.commit()
@@ -453,7 +496,7 @@ class AuthService:
             access_token=access_token,
             refresh_token=refresh_raw,
             expires_in=settings.JWT_EXPIRATION_SECONDS,
-            user=UserRead.from_orm(user)
+            user=UserRead.from_orm(user),
         )
 
     # ============================================================
@@ -463,7 +506,7 @@ class AuthService:
     def password_reset_request(data: PasswordResetRequest, db: Session) -> dict:
         """
         Запрос на сброс пароля с rate limiting.
-        
+
         Лимит: 3 запроса в час на email
         """
         email = data.email.lower()
@@ -471,7 +514,9 @@ class AuthService:
         user = db.query(User).filter(User.email == email).first()
 
         if not user:
-            return {"message": "Если email существует, ссылка для сброса пароля была отправлена"}
+            return {
+                "message": "Если email существует, ссылка для сброса пароля была отправлена"
+            }
 
         # ===== Проверяем rate limiting =====
         if brute_force.check_password_reset_attempts(email):
@@ -484,7 +529,7 @@ class AuthService:
         db.query(OTP).filter(
             OTP.user_id == user.id,
             OTP.purpose == OTPPurpose.PASSWORD_RESET,
-            OTP.used == False
+            OTP.used == False,
         ).delete()
         db.commit()
 
@@ -499,7 +544,7 @@ class AuthService:
             purpose=OTPPurpose.PASSWORD_RESET,
             expires_at=expires_at,
             used=False,
-            attempts=0
+            attempts=0,
         )
 
         db.add(otp)
@@ -508,7 +553,9 @@ class AuthService:
         logger.debug(f"Password reset OTP for {email}, code: {code}")
         # TODO: отправить OTP по email
 
-        return {"message": "Если email существует, ссылка для сброса пароля была отправлена"}
+        return {
+            "message": "Если email существует, ссылка для сброса пароля была отправлена"
+        }
 
     # ============================================================
     # Сброс пароля — подтверждение (с защитой от брутфорса)
@@ -517,7 +564,7 @@ class AuthService:
     def password_reset_confirm(data: PasswordResetConfirm, db: Session) -> dict:
         """
         Подтверждение сброса пароля с защитой от брутфорса.
-        
+
         Лимит: 5 попыток в 15 минут на email
         """
         email = data.email.lower()
@@ -528,22 +575,26 @@ class AuthService:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Invalid email or code",
-                headers={"X-Error-ID": get_error_id()}
+                headers={"X-Error-ID": get_error_id()},
             )
 
         # Получаем OTP
-        otp = db.query(OTP).filter(
-            OTP.user_id == user.id,
-            OTP.purpose == OTPPurpose.PASSWORD_RESET,
-            OTP.used == False,
-            OTP.expires_at > datetime.now(timezone.utc)
-        ).first()
+        otp = (
+            db.query(OTP)
+            .filter(
+                OTP.user_id == user.id,
+                OTP.purpose == OTPPurpose.PASSWORD_RESET,
+                OTP.used == False,
+                OTP.expires_at > datetime.now(timezone.utc),
+            )
+            .first()
+        )
 
         if not otp:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Invalid or expired code",
-                headers={"X-Error-ID": get_error_id()}
+                headers={"X-Error-ID": get_error_id()},
             )
 
         purpose = "password_reset"
@@ -565,7 +616,7 @@ class AuthService:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Invalid code",
-                headers={"X-Error-ID": get_error_id()}
+                headers={"X-Error-ID": get_error_id()},
             )
 
         # ===== Успешное подтверждение =====
@@ -583,11 +634,14 @@ class AuthService:
     # ============================================================
     @staticmethod
     def update_user(user: User, data: UserUpdate, db: Session) -> UserRead:
-        for field, value in data.dict(exclude_unset=True).items():
+        values = data.dict(exclude_unset=True)
+
+        for field, value in values.items():
             setattr(user, field, value)
 
+        if values:
+            db.execute(update(User).where(User.id == user.id).values(**values))
         db.commit()
-        db.refresh(user)
 
         logger.info(f"Профиль пользователя обновлён: {user.email}")
 
@@ -598,16 +652,17 @@ class AuthService:
     # ============================================================
     @staticmethod
     def revoke_session(user_id: int, session_id: int, db: Session) -> dict:
-        session = db.query(SessionModel).filter(
-            SessionModel.id == session_id,
-            SessionModel.user_id == user_id
-        ).first()
+        session = (
+            db.query(SessionModel)
+            .filter(SessionModel.id == session_id, SessionModel.user_id == user_id)
+            .first()
+        )
 
         if not session:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Сессия не найдена",
-                headers={"X-Error-ID": get_error_id()}
+                headers={"X-Error-ID": get_error_id()},
             )
 
         session.is_revoked = True
@@ -616,20 +671,25 @@ class AuthService:
         logger.info(f"Сессия отозвана: user_id={user_id}, session_id={session_id}")
 
         return {"message": "Сессия успешно отозвана"}
-    
+
     @staticmethod
     def change_user_role(user_id: int, new_role: UserRole, db: Session):
         user = db.query(User).filter(User.id == user_id).first()
         user.role = new_role
-    
+
         # ✅ СИНХРОНИЗАЦИЯ ДОСТУПОВ КО ВСЕМ ОБЪЕКТАМ
         from modules.objects.service import ObjectService
+
         ObjectService.sync_user_access_by_role(user, db)
 
     @staticmethod
     def user_has_permission(user: User, permission_key: str, db: Session) -> bool:
         """Проверить имеет ли пользователь разрешение (через личное или через роль)."""
-        from modules.permissions.models import Permission, UserPermission, RolePermission
+        from modules.permissions.models import (
+            Permission,
+            UserPermission,
+            RolePermission,
+        )
 
         # Проверяем явное разрешение пользователю
         user_perm = (
@@ -657,7 +717,9 @@ class AuthService:
         return bool(role_perm)
 
     @staticmethod
-    def user_can_access_subsection(user: User, subsection, action: str, db: Session) -> bool:
+    def user_can_access_subsection(
+        user: User, subsection, action: str, db: Session
+    ) -> bool:
         """Проверить может ли пользователь получить доступ к подразделу."""
         from modules.permissions.models import UserSubsectionAccess
 

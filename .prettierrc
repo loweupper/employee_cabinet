@@ -1,0 +1,15 @@
+{
+  "plugins": ["prettier-plugin-jinja-template"],
+  "overrides": [
+    {
+      "files": ["*.html", "*.j2", "*.jinja", "*.jinja2"],
+      "options": {
+        "parser": "jinja-template"
+      }
+    }
+  ],
+  "tabWidth": 2,
+  "useTabs": false,
+  "singleQuote": false,
+  "bracketSameLine": true
+}

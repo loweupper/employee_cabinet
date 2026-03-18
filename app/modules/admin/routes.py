@@ -1,3 +1,6 @@
+# ===================================
+# Стандартная библиотека
+# ===================================
 import csv
 import json
 import logging
@@ -5,28 +8,32 @@ from datetime import datetime, timedelta, timezone
 from io import StringIO
 from typing import Annotated
 
+# ===================================
+# Сторонние библиотеки
+# ===================================
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
-from sqlalchemy import or_
+from sqlalchemy import and_, or_
 from sqlalchemy.orm import Session, joinedload
 
-from modules.auth.ip_geo import get_ip_geo
-from modules.auth.user_agent_parser import parse_user_agent
-
+# ===================================
+# Локальные импорты (FIRSTPARTY)
+# ===================================
 from core.constants import get_department_for_role
 from core.database import get_db
+from core.logging.actions import log_admin_action
 from core.template_helpers import get_sidebar_context
+
 from modules.admin.models import AuditLog, LogLevel
-from modules.auth.dependencies import get_current_user_from_cookie
-from modules.auth.models import Department, User, UserRole
-from modules.auth.models import Session as SessionModel
-from modules.auth.utils import hash_password
 from modules.auth import department_service
-from core.logging.actions import (
-    log_admin_action,
-)
+from modules.auth.dependencies import get_current_user_from_cookie
+from modules.auth.ip_geo import get_ip_geo
+from modules.auth.models import Department, Session as SessionModel, User, UserRole
+from modules.auth.user_agent_parser import parse_user_agent
+from modules.auth.utils import hash_password
 from modules.documents.service_mappings import CategoryMappingService
+from modules.objects.service import ObjectService
 
 logger = logging.getLogger("app")
 router = APIRouter(
@@ -323,10 +330,10 @@ def _serialize_log_for_json_export(log: AuditLog):
 )
 async def users_list(
     request: Request,
+    user: Annotated[User, Depends(get_current_user_from_cookie)],
+    db: Annotated[Session, Depends(get_db)],
     status: str = None,  # all, active, pending, deactivated, deleted
     search: str = None,
-    user: User = Depends(get_current_user_from_cookie),
-    db: Session = Depends(get_db),
 ):
     """Админ-панель: список пользователей"""
 
@@ -563,8 +570,8 @@ async def change_user_role(
         )
 
         return JSONResponse({"success": True, "message": f"Роль изменена на {role}"})
-    except ValueError:
-        raise HTTPException(status_code=400, detail="Недопустимая роль")
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="Недопустимая роль") from exc
 
 
 # ===================================
@@ -600,8 +607,6 @@ async def delete_user(
     email = target_user.email
 
     try:
-        from modules.auth.models import Session as SessionModel
-
         # ✅ Деактивируем пользователя и ставим дату удаления
         target_user.deleted_at = datetime.now(timezone.utc)
         target_user.is_active = False
@@ -682,7 +687,6 @@ async def edit_user(
         db.refresh(target_user)
 
         if old_department_id != target_user.department_id:
-            from modules.objects.service import ObjectService
 
             ObjectService.sync_user_access_by_department(target_user, db)
 
@@ -988,6 +992,7 @@ async def log_detail_api(
     responses={403: {"description": "Access denied"}},
 )
 async def logs_export_csv(
+    request: Request,
     level: str = None,
     event: str = None,
     user_id: int = None,
@@ -1065,7 +1070,10 @@ async def logs_export_csv(
 
     # Логируем экспорт
     log_admin_action(
-        event="logs_exported_csv", admin=user, extra={"total_records": len(logs)}
+        event="logs_exported_csv",
+        admin=user,
+        request=request,
+        extra={"total_records": len(logs)},
     )
 
     output.seek(0)
@@ -1087,6 +1095,7 @@ async def logs_export_csv(
     responses={403: {"description": "Доступ запрещён"}},
 )
 async def logs_export_json(
+    request: Request,
     level: str = None,
     event: str = None,
     user_id: int = None,
@@ -1121,7 +1130,10 @@ async def logs_export_json(
 
     # Логируем экспорт
     log_admin_action(
-        event="logs_exported_json", admin=user, extra={"total_records": len(result)}
+        event="logs_exported_json",
+        admin=user,
+        request=request,
+        extra={"total_records": len(result)},
     )
 
     return StreamingResponse(
@@ -1276,7 +1288,6 @@ async def create_department(
         log_admin_action(
             event="department_created",
             admin=admin,
-            target_user=None,
             request=request,
             extra={"department_id": department.id, "department_name": department.name},
         )
@@ -1339,7 +1350,6 @@ async def update_department(
         log_admin_action(
             event="department_updated",
             admin=admin,
-            target_user=None,
             request=request,
             extra={"department_id": department.id, "department_name": department.name},
         )
@@ -1374,6 +1384,7 @@ async def update_department(
 @router.delete("/departments/{department_id}")
 async def delete_department(
     department_id: int,
+    request: Request,
     admin: User = Depends(get_current_user_from_cookie),
     db: Session = Depends(get_db),
 ):
@@ -1394,6 +1405,7 @@ async def delete_department(
         log_admin_action(
             event="department_deleted",
             admin=admin,
+            request=request,
             extra={"department_id": department_id},
         )
 
@@ -1522,9 +1534,12 @@ async def revoke_session(
     log_admin_action(
         event="revoke_session",
         admin=admin,
-        target_user=db.query(User).filter(User.id == session.user_id).first(),
         request=request,
-        extra={"session_id": session.id, "ip": session.ip_address},
+        extra={
+            "session_id": session.id,
+            "ip": session.ip_address,
+            "target_user_id": session.user_id,
+        },
     )
 
     # Возвращаемся обратно на страницу сессий
@@ -1575,9 +1590,8 @@ async def revoke_all_sessions(
     log_admin_action(
         event="revoke_all_sessions",
         admin=admin,
-        target_user=user,
         request=request,
-        extra={"revoked_count": updated},
+        extra={"target_user_id": user_id, "revoked_count": updated},
     )
 
     return JSONResponse(
@@ -1728,6 +1742,7 @@ async def update_category_mapping(
     log_admin_action(
         event="category_mapping_updated",
         admin=user,
+        request=request,
         extra={"category": category, "department_id": department_id},
     )
 
@@ -1860,6 +1875,7 @@ async def update_user_permissions(
     log_admin_action(
         event="user_permissions_updated",
         admin=user,
+        request=request,
         extra={"user_id": user_id, "permission_ids": permission_ids},
     )
 
@@ -1886,19 +1902,29 @@ async def get_user_subsection_access(
     if not target:
         raise HTTPException(status_code=404, detail=ERROR_USER_NOT_FOUND)
 
-    from modules.permissions.models import UserSubsectionAccess, Subsection
+    from modules.permissions.models import Subsection, UserSubsectionAccess
+
+    if not target.department_id:
+        return []
 
     accesses = (
         db.query(
+            Subsection.id.label("subsection_id"),
+            Subsection.name.label("subsection_name"),
             UserSubsectionAccess.id,
-            UserSubsectionAccess.subsection_id,
             UserSubsectionAccess.can_read,
             UserSubsectionAccess.can_write,
             UserSubsectionAccess.can_delete,
-            Subsection.name.label("subsection_name"),
         )
-        .outerjoin(Subsection, Subsection.id == UserSubsectionAccess.subsection_id)
-        .filter(UserSubsectionAccess.user_id == user_id)
+        .outerjoin(
+            UserSubsectionAccess,
+            and_(
+                UserSubsectionAccess.subsection_id == Subsection.id,
+                UserSubsectionAccess.user_id == user_id,
+            ),
+        )
+        .filter(Subsection.section_id == target.department_id)
+        .order_by(Subsection.order, Subsection.id)
         .all()
     )
     return [
@@ -1906,9 +1932,9 @@ async def get_user_subsection_access(
             "id": a.id,
             "subsection_id": a.subsection_id,
             "subsection_name": a.subsection_name,
-            "can_read": a.can_read,
-            "can_write": a.can_write,
-            "can_delete": a.can_delete,
+            "can_read": bool(a.can_read),
+            "can_write": bool(a.can_write),
+            "can_delete": bool(a.can_delete),
         }
         for a in accesses
     ]
@@ -1936,7 +1962,7 @@ async def update_user_subsection_access(
     if not target:
         raise HTTPException(status_code=404, detail=ERROR_USER_NOT_FOUND)
 
-    from modules.permissions.models import UserSubsectionAccess, Subsection
+    from modules.permissions.models import Subsection, UserSubsectionAccess
 
     subsection = db.query(Subsection).filter(Subsection.id == subsection_id).first()
     if not subsection:
@@ -1971,6 +1997,7 @@ async def update_user_subsection_access(
     log_admin_action(
         event="user_subsection_access_updated",
         admin=user,
+        request=request,
         extra={
             "user_id": user_id,
             "subsection_id": subsection_id,

@@ -1,17 +1,63 @@
-from fastapi import Depends, HTTPException, status, Request
-from fastapi.security import HTTPBearer
-from sqlalchemy.orm import Session
-from sqlalchemy.exc import SQLAlchemyError
-from jose import JWTError
+"""Dependencies for user authentication and role checks."""
+
 import logging
 
+from fastapi import Depends, HTTPException, Request, status
+from fastapi.security import HTTPBearer
+from jose import JWTError
+from sqlalchemy import select
+from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.orm import Session
+
 from core.database import get_db
-from core.config import settings
 from core.constants import UserRole  # ✅ импорт Enum
 from modules.auth.models import User
-from modules.auth.utils import decode_token, get_error_id
+from modules.auth.utils import decode_token
 
 logger = logging.getLogger("app")
+LOGIN_PAGE_URL = "/api/v1/auth/login-page"
+
+
+def _load_user_snapshot(db: Session, user_id: int) -> User | None:
+    """Load a minimal user snapshot without ORM entity row processing."""
+    row = db.execute(
+        select(
+            User.id,
+            User.email,
+            User.role,
+            User.is_active,
+            User.first_name,
+            User.last_name,
+            User.middle_name,
+            User.phone_number,
+            User.avatar_url,
+            User.position,
+            User.location,
+            User.created_at,
+            User.department_id,
+            User.hashed_password,
+        ).where(User.id == user_id)
+    ).first()
+    if not row:
+        return None
+
+    return User(
+        id=row.id,
+        email=row.email,
+        role=row.role,
+        is_active=row.is_active,
+        first_name=row.first_name,
+        last_name=row.last_name,
+        middle_name=row.middle_name,
+        phone_number=row.phone_number,
+        avatar_url=row.avatar_url,
+        position=row.position,
+        location=row.location,
+        created_at=row.created_at,
+        department_id=row.department_id,
+        hashed_password=row.hashed_password,
+    )
+
 
 # ===================================
 # HTTP Bearer схема для JWT
@@ -22,7 +68,7 @@ security = HTTPBearer()
 # ===================================
 # Зависимость для получения текущего пользователя из JWT (API)
 # ===================================
-async def get_current_user(
+def get_current_user(
     credentials=Depends(security), db: Session = Depends(get_db)
 ) -> User:
     """
@@ -32,7 +78,6 @@ async def get_current_user(
         HTTPException 401: если токен невалиден или пользователь не найден
     """
     token = credentials.credentials
-    error_id = get_error_id()
 
     try:
         payload = decode_token(token)
@@ -49,11 +94,11 @@ async def get_current_user(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=f"Неверный токен: {str(e)}",
             headers={"WWW-Authenticate": "Bearer"},
-        )
+        ) from e
 
     # Получаем пользователя из БД
     try:
-        user = db.query(User).filter(User.id == int(user_id)).first()
+        user = _load_user_snapshot(db, int(user_id))
     except SQLAlchemyError as e:
         # На случай проблем с курсором/состоянием транзакции откатываем и
         # пробуем один повторный запрос в рамках того же Session.
@@ -64,7 +109,7 @@ async def get_current_user(
             }
         )
         db.rollback()
-        user = db.query(User).filter(User.id == int(user_id)).first()
+        user = _load_user_snapshot(db, int(user_id))
 
     if not user:
         raise HTTPException(
@@ -85,7 +130,7 @@ async def get_current_user(
 # ===================================
 # Зависимость для получения текущего пользователя из Cookie (WEB)
 # ===================================
-async def get_current_user_from_cookie(
+def get_current_user_from_cookie(
     request: Request, db: Session = Depends(get_db)
 ) -> User:
     """
@@ -102,14 +147,16 @@ async def get_current_user_from_cookie(
             {
                 "event": "unauthorized_access",
                 "path": str(request.url.path),
-                "client_ip": request.client.host if request.client else "unknown",
+                "client_ip": (
+                    request.client.host if request.client else "unknown"
+                ),
             }
         )
         # Редирект на страницу логина вместо 401
         raise HTTPException(
             status_code=status.HTTP_307_TEMPORARY_REDIRECT,
             detail="Необходима авторизация",
-            headers={"Location": "/api/v1/auth/login-page"},
+            headers={"Location": LOGIN_PAGE_URL},
         )
 
     try:
@@ -121,7 +168,7 @@ async def get_current_user_from_cookie(
             raise HTTPException(
                 status_code=status.HTTP_307_TEMPORARY_REDIRECT,
                 detail="Неверный токен: отсутствует ID пользователя",
-                headers={"Location": "/api/v1/auth/login-page"},
+                headers={"Location": LOGIN_PAGE_URL},
             )
 
     except JWTError as e:
@@ -130,18 +177,20 @@ async def get_current_user_from_cookie(
                 "event": "invalid_token",
                 "error": str(e),
                 "path": str(request.url.path),
-                "client_ip": request.client.host if request.client else "unknown",
+                "client_ip": (
+                    request.client.host if request.client else "unknown"
+                ),
             }
         )
         raise HTTPException(
             status_code=status.HTTP_307_TEMPORARY_REDIRECT,
             detail="Неверный токен",
-            headers={"Location": "/api/v1/auth/login-page"},
-        )
+            headers={"Location": LOGIN_PAGE_URL},
+        ) from e
 
     # Получаем пользователя из БД
     try:
-        user = db.query(User).filter(User.id == int(user_id)).first()
+        user = _load_user_snapshot(db, int(user_id))
     except SQLAlchemyError as e:
         logger.error(
             {
@@ -151,13 +200,13 @@ async def get_current_user_from_cookie(
             }
         )
         db.rollback()
-        user = db.query(User).filter(User.id == int(user_id)).first()
+        user = _load_user_snapshot(db, int(user_id))
 
     if not user:
         raise HTTPException(
             status_code=status.HTTP_307_TEMPORARY_REDIRECT,
             detail="Пользователь не найден",
-            headers={"Location": "/api/v1/auth/login-page"},
+            headers={"Location": LOGIN_PAGE_URL},
         )
 
     if not user.is_active:
@@ -180,7 +229,7 @@ async def get_current_user_from_cookie(
 # ===================================
 # Опциональная зависимость (для страниц, где авторизация не обязательна)
 # ===================================
-async def get_current_user_optional(
+def get_current_user_optional(
     request: Request, db: Session = Depends(get_db)
 ) -> User | None:
     """
@@ -199,7 +248,7 @@ async def get_current_user_optional(
         if user_id is None:
             return None
 
-        user = db.query(User).filter(User.id == int(user_id)).first()
+        user = _load_user_snapshot(db, int(user_id))
 
         if user and user.is_active:
             return user
@@ -223,9 +272,11 @@ def require_role(*roles: str):
             ...
     """
 
-    async def check_role(user: User = Depends(get_current_user)) -> User:
+    def check_role(user: User = Depends(get_current_user)) -> User:
         # Получаем значение роли пользователя (если это Enum)
-        user_role = user.role.value if hasattr(user.role, "value") else user.role
+        user_role = (
+            user.role.value if hasattr(user.role, "value") else user.role
+        )
 
         if user_role not in roles:
             raise HTTPException(
@@ -245,9 +296,11 @@ def require_role_web(*roles: str):
     Декоратор для проверки роли пользователя (для веб-страниц).
     """
 
-    async def check_role(user: User = Depends(get_current_user_from_cookie)) -> User:
+    def check_role(user: User = Depends(get_current_user_from_cookie)) -> User:
         # Получаем значение роли пользователя (если это Enum)
-        user_role = user.role.value if hasattr(user.role, "value") else user.role
+        user_role = (
+            user.role.value if hasattr(user.role, "value") else user.role
+        )
 
         if user_role not in roles:
             raise HTTPException(
@@ -262,14 +315,14 @@ def require_role_web(*roles: str):
 # ===================================
 # Зависимость для проверки admin-а
 # ===================================
-async def require_admin(
+def require_admin(
     user: User = Depends(require_role(UserRole.ADMIN.value)),
 ) -> User:
     """Проверка что пользователь admin (для API)"""
     return user
 
 
-async def require_admin_web(
+def require_admin_web(
     user: User = Depends(require_role_web(UserRole.ADMIN.value)),
 ) -> User:
     """Проверка что пользователь admin (для веб-страниц)"""

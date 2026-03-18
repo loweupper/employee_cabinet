@@ -57,7 +57,7 @@
 
                 <!-- ========== ЛЕВАЯ КОЛОНКА: Аватар и основная инфо ========== -->
                 <div class="lg:col-span-1">
-                    
+
                     <!-- Аватар -->
                     <div class="bg-white rounded-xl shadow-md p-6 mb-6 fade-in">
                         <div class="flex flex-col items-center">
@@ -68,7 +68,7 @@
                                 {{ user.first_name[0] if user.first_name else user.email[0]|upper }}
                             </div>
                             {% endif %}
-                            
+
                             <h3 class="text-xl font-semibold text-gray-800 mb-1">
                                 {% if user.first_name or user.last_name %}
                                 {{ user.first_name }} {{ user.last_name }}
@@ -76,9 +76,9 @@
                                 {{ user.email }}
                                 {% endif %}
                             </h3>
-                            
+
                             <p class="text-sm text-gray-500 mb-4">{{ user.position or "Должность не указана" }}</p>
-                            
+
                             <!-- Форма загрузки аватара -->
                             <form method="post" action="/profile/upload-avatar" enctype="multipart/form-data" class="w-full">
                                 <label class="block w-full">
@@ -109,7 +109,7 @@
                             </div>
                             <div>
                                 <span class="text-gray-500">Дата регистрации:</span>
-                                <p class="font-medium text-gray-800">{{ user.created_at.strftime('%d.%m.%Y') }}</p>
+                                <p class="font-medium text-gray-800">{{ user.created_at.strftime('%d.%m.%Y') if user.created_at else "-" }}</p>
                             </div>
                         </div>
                     </div>
@@ -122,32 +122,37 @@
                     <!-- Редактирование профиля -->
                     <div class="bg-white rounded-xl shadow-md p-6 fade-in" style="animation-delay: 0.2s">
                         <h4 class="text-lg font-semibold text-gray-800 mb-4">✏️ Редактировать профиль</h4>
-                        
+
                         <form method="post" action="/profile/update" class="space-y-4">
-                            
+
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
-                                    <label class="block text-gray-700 mb-1">Имя</label>
-                                    <input type="text" name="first_name" value="{{ user.first_name or '' }}" 
+                                    <label for="first_name" class="block text-gray-700 mb-1">Имя</label>
+                                    <input
+                                    type="text"
+                                    name="first_name"
+                                    autocomplete="given-name"
+                                    id="first_name"
+                                    value="{{ user.first_name or '' }}"
                                            class="w-full px-4 py-2 rounded-lg border border-gray-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200">
                                 </div>
 
                                 <div>
-                                    <label class="block text-gray-700 mb-1">Фамилия</label>
-                                    <input type="text" name="last_name" value="{{ user.last_name or '' }}" 
+                                    <label for="last_name" class="block text-gray-700 mb-1">Фамилия</label>
+                                    <input type="text" name="last_name" id="last_name" value="{{ user.last_name or '' }}"
                                            class="w-full px-4 py-2 rounded-lg border border-gray-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200">
                                 </div>
                             </div>
 
                             <div>
-                                <label class="block text-gray-700 mb-1">Отчество</label>
-                                <input type="text" name="middle_name" value="{{ user.middle_name or '' }}" 
+                                <label for="middle_name" class="block text-gray-700 mb-1">Отчество</label>
+                                <input type="text" name="middle_name" id="middle_name" value="{{ user.middle_name or '' }}"
                                        class="w-full px-4 py-2 rounded-lg border border-gray-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200">
                             </div>
 
                             <div>
-                                <label class="block text-gray-700 mb-1">Телефон</label>
-                                <input type="tel" name="phone_number" value="{{ user.phone_number or '' }}" 
+                                <label for="phone_number" class="block text-gray-700 mb-1">Телефон</label>
+                                <input type="tel" name="phone_number" id="phone_number" value="{{ user.phone_number or '' }}"
                                        placeholder="+7 (999) 123-45-67"
                                        class="w-full px-4 py-2 rounded-lg border border-gray-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200">
                             </div>
@@ -162,25 +167,25 @@
                     <div class="bg-white rounded-xl shadow-md p-6 fade-in" style="animation-delay: 0.3s">
                         <h4 class="text-lg font-semibold text-gray-800 mb-4">🔒 Изменить пароль</h4>
 
-                        
+
                         <form method="post" action="/profile/change-password" class="space-y-4">
-                            
+
                             <div>
-                                <label class="block text-gray-700 mb-1">Текущий пароль</label>
-                                <input type="password" name="current_password" required
+                                <label for="current_password" class="block text-gray-700 mb-1">Текущий пароль</label>
+                                <input type="password" name="current_password" id="current_password" required
                                        class="w-full px-4 py-2 rounded-lg border border-gray-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200">
                             </div>
 
                             <div>
-                                <label class="block text-gray-700 mb-1">Новый пароль</label>
-                                <input type="password" name="new_password" required
+                                <label for="new_password" class="block text-gray-700 mb-1">Новый пароль</label>
+                                <input type="password" name="new_password" id="new_password" required
                                        class="w-full px-4 py-2 rounded-lg border border-gray-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200">
                                 <p class="text-xs text-gray-500 mt-1">Минимум 8 символов: A-Z, a-z, 0-9, @$!%*?&</p>
                             </div>
 
                             <div>
-                                <label class="block text-gray-700 mb-1">Подтвердите новый пароль</label>
-                                <input type="password" name="confirm_password" required
+                                <label for="confirm_password" class="block text-gray-700 mb-1">Подтвердите новый пароль</label>
+                                <input type="password" name="confirm_password" id="confirm_password" required
                                        class="w-full px-4 py-2 rounded-lg border border-gray-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200">
                             </div>
 
@@ -193,7 +198,7 @@
                     <!-- Мои разрешения -->
                     <div class="bg-white rounded-xl shadow-md p-6 fade-in" style="animation-delay: 0.4s">
                         <h4 class="text-lg font-semibold text-gray-800 mb-4">🔐 Мои разрешения</h4>
-                        
+
                         <div class="space-y-2">
                             {% if user_permissions %}
                                 {% for permission in user_permissions %}
@@ -214,7 +219,7 @@
                     <!-- Мой доступ к подразделам -->
                     <div class="bg-white rounded-xl shadow-md p-6 fade-in" style="animation-delay: 0.5s">
                         <h4 class="text-lg font-semibold text-gray-800 mb-4">📊 Мой доступ к подразделам</h4>
-                        
+
                         {% if user_subsection_access %}
                         <div class="overflow-x-auto">
                             <table class="w-full text-sm">
