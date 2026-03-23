@@ -194,8 +194,8 @@
                                                 Администратор</option>
                                             <option value="accountant" {{ 'selected' if u.role.value=='accountant'
                                                 else '' }}>💰 Бухгалтер</option>
-                                            <option value="hr" {{ 'selected' if u.role.value=='hr' else '' }}>👔 HR
-                                            </option>
+                                            <option value="hr" {{ 'selected' if u.role.value=='hr' else '' }}>👔 Отдел кадров</option>
+                                            <option value="safety" {{ 'selected' if u.role.value=='safety' else '' }}>👷 Специалист по охране труда</option>
                                             <option value="engineer" {{ 'selected' if u.role.value=='engineer' else ''
                                                 }}>🔧 Инженер</option>
                                             <option value="lawyer" {{ 'selected' if u.role.value=='lawyer' else '' }}>⚖️
@@ -357,7 +357,8 @@
                             <option value="employee">👤 Сотрудник</option>
                             <option value="admin">👑 Администратор</option>
                             <option value="accountant">💰 Бухгалтер</option>
-                            <option value="hr">👔 HR</option>
+                            <option value="safety">👷 Специалист по охране труда</option>
+                            <option value="hr">👔 Отдел кадров</option>
                             <option value="engineer">🔧 Инженер</option>
                             <option value="lawyer">⚖️ Юрист</option>
                         </select>

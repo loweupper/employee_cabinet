@@ -1,0 +1,518 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Охрана труда</title>
+    <link
+      rel="stylesheet"
+      href="{{ url_for('static', path='/css/output.css') }}" />
+  </head>
+
+  <body class="bg-gray-50">
+    <div class="flex h-screen">
+      {% include "components/sidebar.html" %}
+
+      <main class="flex-1 overflow-y-auto">
+        <header
+          class="bg-white shadow-sm px-8 py-4 flex justify-between items-center">
+          <h2 class="text-2xl font-semibold text-gray-800">
+            👷 Охрана труда: карточки сотрудников
+          </h2>
+          <span class="text-sm text-gray-600">{{ current_user.email }}</span>
+        </header>
+
+        <div class="p-8 space-y-6">
+          {% if success %}
+            <div class="rounded-lg bg-green-100 text-green-800 px-4 py-3">
+              ✅ {{ success }}
+            </div>
+          {% endif %}
+
+          {% if error %}
+            <div class="rounded-lg bg-red-100 text-red-800 px-4 py-3">
+              ❌ {{ error }}
+            </div>
+          {% endif %}
+
+          <section class="bg-white rounded-xl shadow-md p-6">
+            <h3 class="text-lg font-semibold text-gray-800 mb-4">
+              Новая карточка
+            </h3>
+            <p class="text-sm text-gray-500 mb-4">
+              Выберите сотрудника из списка по email/ФИО, поля заполнятся сразу.
+              Если сотрудника нет, заполните данные вручную.
+            </p>
+
+            <form
+              method="post"
+              action="/departments/safety/profiles/create-form"
+              class="space-y-4">
+              <input type="hidden" name="is_external" value="false" />
+              <input type="hidden" name="user_id" id="safety-user-id-hidden" />
+              <input
+                type="hidden"
+                name="object_id"
+                id="safety-object-id-hidden" />
+
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label
+                    for="safety-user-search"
+                    class="block text-sm text-gray-700 mb-1"
+                    >Сотрудник (поиск по email/ФИО)</label
+                  >
+                  <input
+                    id="safety-user-search"
+                    type="text"
+                    list="safety-users-list"
+                    placeholder="Начните вводить email или ФИО"
+                    class="w-full px-4 py-2 rounded-lg border border-gray-300" />
+                  <datalist id="safety-users-list">
+                    {% for u in users %}
+                      <option
+                        value="{{ u.email }}{% if u.last_name or u.first_name %}
+                          —
+                          {{ (u.last_name or '') ~ ' ' ~ (u.first_name or '') ~ ' ' ~ (u.middle_name or '') }}
+                        {% endif %}"
+                        data-user-id="{{ u.id }}"
+                        data-first-name="{{ u.first_name or '' }}"
+                        data-last-name="{{ u.last_name or '' }}"
+                        data-middle-name="{{ u.middle_name or '' }}"
+                        data-position="{{ u.position or '' }}"
+                        data-department="{{ u.department_rel.name if u.department_rel else '' }}"
+                        data-phone="{{ u.phone_number or '' }}"
+                        data-full-name="{{ ((u.last_name or '') ~ ' ' ~ (u.first_name or '') ~ ' ' ~ (u.middle_name or '')).strip() }}"></option>
+                    {% endfor %}
+                  </datalist>
+                </div>
+
+                <div>
+                  <label
+                    for="safety-full-name"
+                    class="block text-sm text-gray-700 mb-1"
+                    >ФИО (для внешнего сотрудника)</label
+                  >
+                  <input
+                    id="safety-full-name"
+                    type="text"
+                    name="full_name"
+                    placeholder="Иванов Иван Иванович"
+                    class="w-full px-4 py-2 rounded-lg border border-gray-300" />
+                </div>
+
+                <div>
+                  <label
+                    for="safety-position"
+                    class="block text-sm text-gray-700 mb-1"
+                    >Должность</label
+                  >
+                  <input
+                    id="safety-position"
+                    type="text"
+                    name="position"
+                    class="w-full px-4 py-2 rounded-lg border border-gray-300" />
+                </div>
+
+                <div>
+                  <label
+                    for="safety-department"
+                    class="block text-sm text-gray-700 mb-1"
+                    >Отдел</label
+                  >
+                  <input
+                    id="safety-department"
+                    type="text"
+                    name="department_name"
+                    class="w-full px-4 py-2 rounded-lg border border-gray-300" />
+                </div>
+
+                <div>
+                  <label
+                    for="safety-phone"
+                    class="block text-sm text-gray-700 mb-1"
+                    >Телефон</label
+                  >
+                  <input
+                    id="safety-phone"
+                    type="text"
+                    name="phone"
+                    class="w-full px-4 py-2 rounded-lg border border-gray-300" />
+                </div>
+
+                <div>
+                  <label
+                    for="safety-object-id"
+                    class="block text-sm text-gray-700 mb-1"
+                    >Объект (поиск по названию)</label
+                  >
+                  <input
+                    id="safety-object-id"
+                    type="text"
+                    list="safety-objects-list"
+                    class="w-full px-4 py-2 rounded-lg border border-gray-300" />
+                  <datalist id="safety-objects-list">
+                    {% for obj in objects %}
+                      <option
+                        value="{{ obj.title }}"
+                        data-object-id="{{ obj.id }}"></option>
+                    {% endfor %}
+                  </datalist>
+                </div>
+              </div>
+
+              <div>
+                <label
+                  for="safety-note"
+                  class="block text-sm text-gray-700 mb-1"
+                  >Заметка</label
+                >
+                <textarea
+                  id="safety-note"
+                  name="note"
+                  rows="3"
+                  class="w-full px-4 py-2 rounded-lg border border-gray-300"></textarea>
+              </div>
+
+              <div class="flex items-center justify-end">
+                <button
+                  type="submit"
+                  class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition">
+                  ➕ Создать карточку
+                </button>
+              </div>
+            </form>
+          </section>
+
+          <section class="bg-white rounded-xl shadow-md p-6">
+            <h3 class="text-lg font-semibold text-gray-800 mb-4">
+              Общие нормативные документы
+            </h3>
+            <form
+              method="post"
+              action="/departments/safety/documents/upload-common"
+              enctype="multipart/form-data"
+              class="space-y-4">
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label
+                    for="common-doc-title"
+                    class="block text-sm text-gray-700 mb-1"
+                    >Название</label
+                  >
+                  <input
+                    id="common-doc-title"
+                    name="title"
+                    required
+                    class="w-full px-4 py-2 rounded-lg border border-gray-300" />
+                </div>
+                <div>
+                  <label
+                    for="common-doc-file"
+                    class="block text-sm text-gray-700 mb-1"
+                    >Файл</label
+                  >
+                  <input
+                    id="common-doc-file"
+                    type="file"
+                    name="file"
+                    required
+                    class="w-full px-4 py-2 rounded-lg border border-gray-300" />
+                </div>
+                <div>
+                  <label
+                    for="common-object"
+                    class="block text-sm text-gray-700 mb-1"
+                    >Объект</label
+                  >
+                  <select
+                    id="common-object"
+                    name="object_id"
+                    required
+                    class="w-full px-4 py-2 rounded-lg border border-gray-300">
+                    <option value="">Выберите объект</option>
+                    {% for obj in objects %}
+                      <option value="{{ obj.id }}">{{ obj.title }}</option>
+                    {% endfor %}
+                  </select>
+                </div>
+                <div>
+                  <label
+                    for="common-expiry"
+                    class="block text-sm text-gray-700 mb-1"
+                    >Срок действия (опционально)</label
+                  >
+                  <input
+                    id="common-expiry"
+                    type="date"
+                    name="expiry_date"
+                    class="w-full px-4 py-2 rounded-lg border border-gray-300" />
+                </div>
+              </div>
+
+              <div class="flex items-center gap-2">
+                <input
+                  id="common-all-company"
+                  type="checkbox"
+                  name="all_company"
+                  value="true"
+                  class="h-4 w-4" />
+                <label for="common-all-company" class="text-sm text-gray-700"
+                  >Доступно всем сотрудникам</label
+                >
+              </div>
+
+              <div>
+                <label
+                  for="common-grant-users"
+                  class="block text-sm text-gray-700 mb-1"
+                  >Дополнительно открыть доступ пользователям</label
+                >
+                <select
+                  id="common-grant-users"
+                  name="grant_user_ids"
+                  multiple
+                  class="w-full px-4 py-2 rounded-lg border border-gray-300 h-40">
+                  {% for u in users %}
+                    <option value="{{ u.id }}">
+                      {{ u.email }}{% if u.last_name or u.first_name %}
+                        — {{ (u.last_name or '') ~ ' ' ~ (u.first_name or '') }}
+                      {% endif %}
+                    </option>
+                  {% endfor %}
+                </select>
+              </div>
+
+              <div class="flex justify-end">
+                <button
+                  type="submit"
+                  class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition">
+                  📎 Добавить общий документ
+                </button>
+              </div>
+            </form>
+
+            {% if common_documents %}
+              <div class="mt-6 overflow-x-auto">
+                <table class="min-w-full text-sm">
+                  <thead>
+                    <tr class="border-b">
+                      <th class="text-left py-2 pr-4">ID</th>
+                      <th class="text-left py-2 pr-4">Название</th>
+                      <th class="text-left py-2 pr-4">Файл</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {% for doc in common_documents %}
+                      <tr class="border-b hover:bg-gray-50">
+                        <td class="py-2 pr-4">{{ doc.id }}</td>
+                        <td class="py-2 pr-4">{{ doc.title }}</td>
+                        <td class="py-2 pr-4">{{ doc.file_name }}</td>
+                      </tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+              </div>
+            {% endif %}
+          </section>
+
+          <section class="bg-white rounded-xl shadow-md p-6">
+            <div class="flex justify-between items-center mb-4">
+              <h3 class="text-lg font-semibold text-gray-800">
+                Список карточек
+              </h3>
+              <span class="text-sm text-gray-500"
+                >Всего: {{ profiles|length }}</span
+              >
+            </div>
+
+            <form method="get" action="/departments/safety" class="mb-4">
+              <input
+                type="text"
+                name="search"
+                value="{{ search or '' }}"
+                placeholder="Поиск по ФИО/отделу/должности"
+                class="w-full md:w-96 px-4 py-2 rounded-lg border border-gray-300" />
+            </form>
+
+            {% if profiles %}
+              <form
+                method="post"
+                action="/departments/safety/profiles/batch-delete"
+                onsubmit="return confirm('Удалить выбранные карточки?');">
+                <div class="overflow-x-auto">
+                  <table class="min-w-full text-sm">
+                    <thead>
+                      <tr class="border-b">
+                        <th class="text-left py-2 pr-4">
+                          <input
+                            id="select-all-profiles"
+                            type="checkbox"
+                            class="h-4 w-4" />
+                        </th>
+                        <th class="text-left py-2 pr-4">ID</th>
+                        <th class="text-left py-2 pr-4">Сотрудник</th>
+                        <th class="text-left py-2 pr-4">Тип</th>
+                        <th class="text-left py-2 pr-4">Отдел</th>
+                        <th class="text-left py-2 pr-4">Должность</th>
+                        <th class="text-left py-2 pr-4">Действия</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {% for p in profiles %}
+                        <tr class="border-b hover:bg-gray-50">
+                          <td class="py-2 pr-4">
+                            <input
+                              type="checkbox"
+                              name="profile_ids"
+                              value="{{ p.id }}"
+                              class="profile-checkbox h-4 w-4" />
+                          </td>
+                          <td class="py-2 pr-4">{{ p.id }}</td>
+                          <td class="py-2 pr-4">{{ p.full_name }}</td>
+                          <td class="py-2 pr-4">
+                            {% if p.is_external %}
+                              <span
+                                class="px-2 py-1 bg-amber-100 text-amber-700 rounded"
+                                >Внешний</span
+                              >
+                            {% else %}
+                              <span
+                                class="px-2 py-1 bg-green-100 text-green-700 rounded"
+                                >В системе</span
+                              >
+                            {% endif %}
+                          </td>
+                          <td class="py-2 pr-4">
+                            {{ p.department_name or '-' }}
+                          </td>
+                          <td class="py-2 pr-4">{{ p.position or '-' }}</td>
+                          <td class="py-2 pr-4">
+                            <div class="flex items-center gap-3">
+                              <a
+                                href="/departments/safety/profiles/{{ p.id }}"
+                                class="text-indigo-600 hover:underline"
+                                >Открыть</a
+                              >
+                              <button
+                                type="submit"
+                                formaction="/departments/safety/profiles/{{ p.id }}/delete"
+                                formmethod="post"
+                                onclick="return confirm('Удалить карточку?');"
+                                class="text-red-600 hover:underline">
+                                Удалить
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      {% endfor %}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div class="mt-4 flex justify-end">
+                  <button
+                    type="submit"
+                    class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition">
+                    🗑️ Удалить выбранные
+                  </button>
+                </div>
+              </form>
+            {% else %}
+              <p class="text-gray-500">Карточек пока нет.</p>
+            {% endif %}
+          </section>
+        </div>
+      </main>
+    </div>
+
+    <script>
+      const userSearchInput = document.getElementById("safety-user-search");
+      const userIdHidden = document.getElementById("safety-user-id-hidden");
+      const firstNameInput = document.getElementById("safety-first-name");
+      const lastNameInput = document.getElementById("safety-last-name");
+      const middleNameInput = document.getElementById("safety-middle-name");
+      const fullNameInput = document.getElementById("safety-full-name");
+      const positionInput = document.getElementById("safety-position");
+      const departmentInput = document.getElementById("safety-department");
+      const phoneInput = document.getElementById("safety-phone");
+
+      const firstNameHidden = document.createElement("input");
+      firstNameHidden.type = "hidden";
+      firstNameHidden.name = "first_name";
+      firstNameHidden.id = "safety-first-name";
+      document.forms[0].appendChild(firstNameHidden);
+
+      const lastNameHidden = document.createElement("input");
+      lastNameHidden.type = "hidden";
+      lastNameHidden.name = "last_name";
+      lastNameHidden.id = "safety-last-name";
+      document.forms[0].appendChild(lastNameHidden);
+
+      const middleNameHidden = document.createElement("input");
+      middleNameHidden.type = "hidden";
+      middleNameHidden.name = "middle_name";
+      middleNameHidden.id = "safety-middle-name";
+      document.forms[0].appendChild(middleNameHidden);
+
+      function findOptionByValue(listId, value) {
+        const list = document.getElementById(listId);
+        if (!list) return null;
+        const options = Array.from(list.options);
+        return options.find((o) => o.value === value) || null;
+      }
+
+      function applyUserData() {
+        const selected = findOptionByValue(
+          "safety-users-list",
+          userSearchInput.value,
+        );
+        if (!selected) {
+          userIdHidden.value = "";
+          document.getElementById("safety-first-name").value = "";
+          document.getElementById("safety-last-name").value = "";
+          document.getElementById("safety-middle-name").value = "";
+          return;
+        }
+        userIdHidden.value = selected.dataset.userId || "";
+        document.getElementById("safety-first-name").value =
+          selected.dataset.firstName || "";
+        document.getElementById("safety-last-name").value =
+          selected.dataset.lastName || "";
+        document.getElementById("safety-middle-name").value =
+          selected.dataset.middleName || "";
+
+        if (selected.dataset.fullName)
+          fullNameInput.value = selected.dataset.fullName;
+        if (selected.dataset.position)
+          positionInput.value = selected.dataset.position;
+        if (selected.dataset.department)
+          departmentInput.value = selected.dataset.department;
+        if (selected.dataset.phone) phoneInput.value = selected.dataset.phone;
+      }
+
+      const objectNameInput = document.getElementById("safety-object-id");
+      const objectIdHidden = document.getElementById("safety-object-id-hidden");
+      function applyObjectData() {
+        const selected = findOptionByValue(
+          "safety-objects-list",
+          objectNameInput.value,
+        );
+        objectIdHidden.value = selected ? selected.dataset.objectId || "" : "";
+      }
+
+      userSearchInput.addEventListener("change", applyUserData);
+      userSearchInput.addEventListener("blur", applyUserData);
+      objectNameInput.addEventListener("change", applyObjectData);
+      objectNameInput.addEventListener("blur", applyObjectData);
+
+      const selectAll = document.getElementById("select-all-profiles");
+      if (selectAll) {
+        selectAll.addEventListener("change", (e) => {
+          document.querySelectorAll(".profile-checkbox").forEach((cb) => {
+            cb.checked = e.target.checked;
+          });
+        });
+      }
+    </script>
+  </body>
+</html>

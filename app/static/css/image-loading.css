@@ -1,0 +1,33 @@
+/* Global image loading helpers to prevent FOUC and layout jumps. */
+.img-shell {
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(135deg, #eef2ff, #e0e7ff);
+}
+
+.img-shell-square {
+  aspect-ratio: 1 / 1;
+}
+
+.smart-image {
+  opacity: 1;
+  filter: none;
+  transform: none;
+  transition:
+    opacity 220ms ease,
+    filter 260ms ease,
+    transform 260ms ease;
+  will-change: opacity, filter, transform;
+}
+
+.smart-image.is-loaded {
+  opacity: 1;
+  filter: none;
+  transform: none;
+}
+
+.smart-image.is-error {
+  opacity: 1;
+  filter: none;
+  transform: none;
+}

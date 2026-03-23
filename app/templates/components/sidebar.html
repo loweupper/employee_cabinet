@@ -1,105 +1,160 @@
-<script src="/static/js/employee.js"></script>
-<aside class="w-64 bg-indigo-900 text-white flex flex-col">
+<link rel="stylesheet" href="/static/css/image-loading.css?v=20260323-2" />
+<script src="/static/js/employee.js?v=20260323-3"></script>
+<aside
+  class="w-64 min-h-screen bg-indigo-900 text-white flex flex-col overflow-hidden">
+  {% set p = request.url.path %}
 
-    <div class="p-6 border-b border-indigo-800 flex-shrink-0">
-        <h1 class="text-2xl font-bold">🏢 Личный кабинет</h1>
+  <div class="p-6 border-b border-indigo-800 flex-shrink-0">
+    <h1 class="text-2xl font-bold">🏢 Личный кабинет</h1>
+  </div>
+
+  <nav class="flex-1 p-4 space-y-2 overflow-y-auto">
+    <a
+      href="/dashboard"
+      class="flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-indigo-800 transition {% if p == '/dashboard' %}
+        bg-indigo-700 ring-1 ring-indigo-300/40
+      {% endif %}">
+      📊 Главная
+    </a>
+    <a
+      href="/objects"
+      class="flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-indigo-800 transition {% if p.startswith('/objects') %}
+        bg-indigo-700 ring-1 ring-indigo-300/40
+      {% endif %}">
+      🏗️ Объекты
+    </a>
+    <a
+      href="/documents"
+      class="flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-indigo-800 transition {% if p.startswith('/documents') %}
+        bg-indigo-700 ring-1 ring-indigo-300/40
+      {% endif %}">
+      📁 Мои документы
+    </a>
+
+    <div class="pt-4 pb-2 text-xs text-indigo-300 uppercase tracking-wide">
+      Разделы
     </div>
 
+    <a
+      href="/departments/safety"
+      class="flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-indigo-800 transition text-sm {% if p.startswith('/departments/safety') %}
+        bg-indigo-700 ring-1 ring-indigo-300/40
+      {% endif %}">
+      👷 Охрана труда
+    </a>
+    <a
+      href="/departments/hr"
+      class="flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-indigo-800 transition text-sm {% if p.startswith('/departments/hr') %}
+        bg-indigo-700 ring-1 ring-indigo-300/40
+      {% endif %}">
+      👔 Отдел кадров
+    </a>
+    <a
+      href="/departments/accounting"
+      class="flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-indigo-800 transition text-sm {% if p.startswith('/departments/accounting') %}
+        bg-indigo-700 ring-1 ring-indigo-300/40
+      {% endif %}">
+      💰 Бухгалтерия
+    </a>
+    <a
+      href="/departments/technical"
+      class="flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-indigo-800 transition text-sm {% if p.startswith('/departments/technical') %}
+        bg-indigo-700 ring-1 ring-indigo-300/40
+      {% endif %}">
+      📋 Техотдел
+    </a>
+    <a
+      href="/departments/legal"
+      class="flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-indigo-800 transition text-sm {% if p.startswith('/departments/legal') %}
+        bg-indigo-700 ring-1 ring-indigo-300/40
+      {% endif %}">
+      ⚖️ Юридический
+    </a>
 
-    <nav class="flex-1 p-4 space-y-2">
-        <a href="/dashboard" class="flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-indigo-800 transition">
-            📊 Главная
-        </a>
-        <a href="/objects" class="flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-indigo-800 transition">
-            🏗️ Объекты
-        </a>
-        <a href="/documents" class="flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-indigo-800 transition">
-            📁 Мои документы
+    <!-- АДМИН-ПАНЕЛЬ (только для админов) -->
+    {% if current_user.role.value == "admin" %}
+      {% set admin_open = p.startswith('/admin') or p.startswith('/objects/admin') %}
+      <details class="pt-4" {% if admin_open %}open{% endif %}>
+        <summary
+          class="pb-2 text-xs text-indigo-300 uppercase tracking-wide cursor-pointer select-none">
+          Администрирование
+        </summary>
+
+        <a
+          href="/objects/admin/all"
+          class="flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-indigo-800 transition text-sm {% if p.startswith('/objects/admin') %}
+            bg-indigo-700 ring-1 ring-indigo-300/40
+          {% endif %}">
+          🛡️ Все объекты
         </a>
 
-        <div class="pt-4 pb-2 text-xs text-indigo-300 uppercase tracking-wide">
-            Разделы
-        </div>
-
-        <a href="/departments/safety"
-            class="flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-indigo-800 transition text-sm">
-            👷 Охрана труда
-        </a>
-        <a href="/departments/hr"
-            class="flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-indigo-800 transition text-sm">
-            👔 Отдел кадров
-        </a>
-        <a href="/departments/accounting"
-            class="flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-indigo-800 transition text-sm">
-            💰 Бухгалтерия
-        </a>
-        <a href="/departments/technical"
-            class="flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-indigo-800 transition text-sm">
-            📋 Техотдел
-        </a>
-        <a href="/departments/legal"
-            class="flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-indigo-800 transition text-sm">
-            ⚖️ Юридический
-        </a>
-
-        <!-- АДМИН-ПАНЕЛЬ (только для админов) -->
-        {% if current_user.role.value == "admin" %}
-        <div class="pt-4 pb-2 text-xs text-indigo-300 uppercase tracking-wide">
-            Администрирование
-        </div>
-
-        <a href="/objects/admin/all"
-            class="flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-indigo-800 transition text-sm bg-red-900">
-            🛡️ Все объекты
-        </a>
-
-        <a href="/admin/users"
-            class="flex items-center justify-between gap-3 px-4 py-3 rounded-lg hover:bg-indigo-800 transition text-sm">
-            <span>👥 Пользователи</span>
-            {% if pending_users_count is defined and pending_users_count > 0 %}
-            <span class="px-2 py-1 bg-orange-500 text-white text-xs rounded-full font-bold">
-                {{ pending_users_count }}
+        <a
+          href="/admin/users"
+          class="flex items-center justify-between gap-3 px-4 py-3 rounded-lg hover:bg-indigo-800 transition text-sm {% if p.startswith('/admin/users') %}
+            bg-indigo-700 ring-1 ring-indigo-300/40
+          {% endif %}">
+          <span>👥 Пользователи</span>
+          {% if pending_users_count is defined and pending_users_count > 0 %}
+            <span
+              class="px-2 py-1 bg-orange-500 text-white text-xs rounded-full font-bold">
+              {{ pending_users_count }}
             </span>
-            {% endif %}
+          {% endif %}
         </a>
 
-        <!-- ✅ МОНИТОРИНГ (НОВОЕ) -->
-        <a href="/admin/monitoring/dashboard"
-            class="flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-indigo-800 transition text-sm">
-            📊 Мониторинг
+        <a
+          href="/admin/monitoring/dashboard"
+          class="flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-indigo-800 transition text-sm {% if p.startswith('/admin/monitoring/dashboard') %}
+            bg-indigo-700 ring-1 ring-indigo-300/40
+          {% endif %}">
+          📊 Мониторинг
         </a>
 
-        <a href="/admin/monitoring/alerts-page"
-            class="flex items-center justify-between gap-3 px-4 py-3 rounded-lg hover:bg-indigo-800 transition text-sm">
-            <span>🚨 Алерты</span>
+        <a
+          href="/admin/monitoring/alerts-page"
+          class="flex items-center justify-between gap-3 px-4 py-3 rounded-lg hover:bg-indigo-800 transition text-sm {% if p.startswith('/admin/monitoring/alerts-page') %}
+            bg-indigo-700 ring-1 ring-indigo-300/40
+          {% endif %}">
+          <span>🚨 Алерты</span>
 
-            {% if active_alerts_count is defined and active_alerts_count > 0 %}
-            <span class="px-2 py-1 bg-red-500 text-white text-xs rounded-full font-bold">
-                {{ active_alerts_count }}
+          {% if active_alerts_count is defined and active_alerts_count > 0 %}
+            <span
+              class="px-2 py-1 bg-red-500 text-white text-xs rounded-full font-bold">
+              {{ active_alerts_count }}
             </span>
-            {% endif %}
+          {% endif %}
         </a>
 
-
-        <a href="/admin/logs"
-            class="flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-indigo-800 transition text-sm">
-            📜 Логи
+        <a
+          href="/admin/logs"
+          class="flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-indigo-800 transition text-sm {% if p.startswith('/admin/logs') %}
+            bg-indigo-700 ring-1 ring-indigo-300/40
+          {% endif %}">
+          📜 Логи
         </a>
 
-        <a href="/admin/category-mappings"
-            class="flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-indigo-800 transition text-sm">
-            🗂️ Маппинги категорий
+        <a
+          href="/admin/category-mappings"
+          class="flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-indigo-800 transition text-sm {% if p.startswith('/admin/category-mappings') %}
+            bg-indigo-700 ring-1 ring-indigo-300/40
+          {% endif %}">
+          🗂️ Маппинги категорий
         </a>
-        {% endif %}
-    </nav>
+      </details>
+    {% endif %}
+  </nav>
 
-    <!-- ✅ Кнопки внизу -->
-    <div class="p-4 border-t border-indigo-800 flex-shrink-0">
-        <a href="/profile" class="flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-indigo-800 transition">
-            ⚙️ Настройки
-        </a>
-        <a href="/api/v1/auth/logout" class="flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-red-700 transition">
-            🚪 Выход
-        </a>
-    </div>
+  <!-- ✅ Кнопки внизу -->
+  <div class="p-4 border-t border-indigo-800 flex-shrink-0 bg-indigo-900">
+    <a
+      href="/profile"
+      class="flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-indigo-800 transition">
+      ⚙️ Настройки
+    </a>
+    <a
+      href="/api/v1/auth/logout"
+      class="flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-red-700 transition">
+      🚪 Выход
+    </a>
+  </div>
 </aside>

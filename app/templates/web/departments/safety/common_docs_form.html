@@ -1,0 +1,274 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <title>ОТ - Форма набора документов</title>
+    <link
+      rel="stylesheet"
+      href="{{ url_for('static', path='/css/output.css') }}" />
+  </head>
+
+  <body class="bg-gray-50">
+    <div class="flex h-screen">
+      {% include "components/sidebar.html" %}
+
+      <main class="flex-1 overflow-y-auto">
+        <header class="bg-white shadow-sm px-8 py-5 flex items-center justify-between">
+          <div>
+            <h1 class="text-2xl font-semibold text-gray-800">Охрана труда</h1>
+            <p class="text-sm text-gray-500 mt-1">{{ 'Редактирование набора документов' if mode == 'edit' else 'Создание набора документов' }}</p>
+          </div>
+          <a href="/departments/safety/common-docs" class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200">К списку документов</a>
+        </header>
+
+        <div class="p-8 space-y-5">
+          <div class="bg-white rounded-xl shadow-sm p-4">
+            <div class="flex flex-wrap gap-3 text-sm">
+              <a href="/departments/safety/cards" class="px-3 py-2 rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200">Список карточек</a>
+              <a href="/departments/safety/common-docs" class="px-3 py-2 rounded-lg bg-indigo-100 text-indigo-700 font-medium">Общие нормативные документы</a>
+            </div>
+          </div>
+
+          {% if error %}
+            <div class="rounded-lg bg-red-100 text-red-800 px-4 py-3">{{ error }}</div>
+          {% endif %}
+
+          <section class="bg-white rounded-xl shadow-sm p-6">
+            <form
+              method="post"
+              action="{{ '/departments/safety/documents/common/' ~ document_set_id ~ '/update' if mode == 'edit' else '/departments/safety/documents/upload-common' }}"
+              enctype="multipart/form-data"
+              class="space-y-5">
+
+              <div>
+                <label for="doc-title" class="block text-sm text-gray-700 mb-1">Название</label>
+                <input
+                  id="doc-title"
+                  name="title"
+                  required
+                  value="{{ selected_title }}"
+                  class="w-full px-4 py-2 rounded-lg border border-gray-300" />
+              </div>
+
+              <div>
+                <label for="doc-expiry" class="block text-sm text-gray-700 mb-1">Срок действия (опционально)</label>
+                <input
+                  id="doc-expiry"
+                  type="date"
+                  name="expiry_date"
+                  value="{{ selected_expiry_date }}"
+                  class="w-full md:w-72 px-4 py-2 rounded-lg border border-gray-300" />
+              </div>
+
+              <div>
+                <label for="doc-files" class="block text-sm text-gray-700 mb-1">Файлы</label>
+                <input
+                  id="doc-files"
+                  type="file"
+                  name="files"
+                  {% if mode == 'create' %}required{% endif %}
+                  multiple
+                  class="w-full px-4 py-2 rounded-lg border border-gray-300" />
+                <p class="mt-1 text-xs text-gray-500">{% if mode == 'edit' %}Если выбрать новые файлы, текущие файлы набора будут заменены.{% else %}Можно выбрать несколько файлов сразу.{% endif %}</p>
+              </div>
+
+              <div class="flex items-center gap-2">
+                <input id="all-company" type="checkbox" name="all_company" value="true" {% if selected_all_company %}checked{% endif %} class="h-4 w-4" />
+                <label for="all-company" class="text-sm text-gray-700">Доступно всем сотрудникам</label>
+              </div>
+
+              <div>
+                <button type="button" id="open-user-picker" class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200">Открыть доступ пользователю</button>
+              </div>
+
+              <div id="selected-users-box" class="space-y-2">
+                <p class="text-sm text-gray-700">Выбранные пользователи:</p>
+                <div id="selected-users-list" class="flex flex-wrap gap-2">
+                  {% if selected_users %}
+                    {% for u in selected_users %}
+                      <span class="selected-user-item inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-100 text-indigo-800 text-sm" data-user-id="{{ u.id }}">
+                        {{ u.email }}{% if u.last_name or u.first_name %} - {{ (u.last_name or '') ~ ' ' ~ (u.first_name or '') }}{% endif %}
+                        <button type="button" class="remove-selected-user text-indigo-900">x</button>
+                      </span>
+                    {% endfor %}
+                  {% else %}
+                    <span id="no-users-selected" class="text-sm text-gray-500">Пользователи не выбраны</span>
+                  {% endif %}
+                </div>
+              </div>
+
+              <div id="selected-users-inputs" class="hidden">
+                {% for uid in selected_user_ids %}
+                  <input type="checkbox" name="grant_user_ids" value="{{ uid }}" checked class="selected-user-input" data-user-id="{{ uid }}" />
+                {% endfor %}
+              </div>
+
+              {% if mode == 'edit' and existing_documents %}
+                <div class="border rounded-lg p-4">
+                  <p class="font-medium text-gray-700 mb-2">Текущие файлы набора</p>
+                  <ul class="text-sm text-gray-600 space-y-1">
+                    {% for doc in existing_documents %}
+                      <li>
+                        <a href="/documents/{{ doc.id }}/download" class="text-indigo-600 hover:underline">{{ doc.file_name }}</a>
+                      </li>
+                    {% endfor %}
+                  </ul>
+                </div>
+              {% endif %}
+
+              <div class="flex justify-between items-center gap-2">
+                {% if mode == 'edit' %}
+                  <button
+                    type="submit"
+                    formaction="/departments/safety/documents/common/{{ document_set_id }}/delete"
+                    formmethod="post"
+                    onclick="return confirm('Удалить набор документов?');"
+                    class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition">
+                    Удалить
+                  </button>
+                {% else %}
+                  <span></span>
+                {% endif %}
+
+                <div class="flex gap-2">
+                  <a href="/departments/safety/common-docs" class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200">Отмена</a>
+                  <button type="submit" class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition">{{ 'Сохранить' if mode == 'edit' else 'Создать' }}</button>
+                </div>
+              </div>
+            </form>
+          </section>
+        </div>
+      </main>
+    </div>
+
+    <div id="user-picker-modal" class="fixed inset-0 bg-black/40 hidden items-center justify-center p-4">
+      <div class="bg-white rounded-xl shadow-xl w-full max-w-2xl p-5 space-y-4">
+        <div class="flex items-center justify-between">
+          <h3 class="text-lg font-semibold text-gray-800">Выберите пользователей</h3>
+          <button type="button" id="close-user-picker" class="px-3 py-1 rounded bg-gray-100 hover:bg-gray-200">Закрыть</button>
+        </div>
+
+        <input id="user-search" type="text" placeholder="Поиск по email, имени или фамилии" class="w-full px-4 py-2 rounded-lg border border-gray-300" />
+
+        <div class="max-h-96 overflow-y-auto border rounded-lg p-3 space-y-2">
+          {% for u in users %}
+            <label class="user-row flex items-start gap-2 p-2 rounded hover:bg-gray-50" data-search="{{ (u.email or '') ~ ' ' ~ (u.first_name or '') ~ ' ' ~ (u.last_name or '') ~ ' ' ~ (u.middle_name or '') }}">
+              <input type="checkbox" class="picker-user-checkbox mt-1" value="{{ u.id }}" {% if u.id in selected_user_ids %}checked{% endif %} />
+              <span class="text-sm text-gray-800">{{ u.email }}{% if u.last_name or u.first_name %} - {{ (u.last_name or '') ~ ' ' ~ (u.first_name or '') ~ ' ' ~ (u.middle_name or '') }}{% endif %}</span>
+            </label>
+          {% endfor %}
+        </div>
+
+        <div class="flex justify-end">
+          <button type="button" id="save-user-selection" class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700">Сохранить выбор</button>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      const modal = document.getElementById("user-picker-modal");
+      const openBtn = document.getElementById("open-user-picker");
+      const closeBtn = document.getElementById("close-user-picker");
+      const saveBtn = document.getElementById("save-user-selection");
+      const userSearchInput = document.getElementById("user-search");
+      const userRows = Array.from(document.querySelectorAll(".user-row"));
+      const selectedUsersList = document.getElementById("selected-users-list");
+      const selectedUsersInputs = document.getElementById("selected-users-inputs");
+
+      function selectedIdsFromPicker() {
+        return Array.from(document.querySelectorAll(".picker-user-checkbox:checked")).map((cb) => Number(cb.value));
+      }
+
+      function removeNoUsersLabel() {
+        const label = document.getElementById("no-users-selected");
+        if (label) label.remove();
+      }
+
+      function ensureNoUsersLabel() {
+        if (!selectedUsersList.querySelector(".selected-user-item")) {
+          const span = document.createElement("span");
+          span.id = "no-users-selected";
+          span.className = "text-sm text-gray-500";
+          span.textContent = "Пользователи не выбраны";
+          selectedUsersList.appendChild(span);
+        }
+      }
+
+      function syncSelectedUsersUI() {
+        const selectedIds = selectedIdsFromPicker();
+
+        selectedUsersInputs.innerHTML = "";
+        selectedUsersList.querySelectorAll(".selected-user-item").forEach((el) => el.remove());
+        removeNoUsersLabel();
+
+        if (!selectedIds.length) {
+          ensureNoUsersLabel();
+          return;
+        }
+
+        selectedIds.forEach((userId) => {
+          const input = document.createElement("input");
+          input.type = "checkbox";
+          input.name = "grant_user_ids";
+          input.value = String(userId);
+          input.checked = true;
+          input.className = "selected-user-input";
+          input.dataset.userId = String(userId);
+          selectedUsersInputs.appendChild(input);
+
+          const row = document.querySelector(`.picker-user-checkbox[value="${userId}"]`)?.closest(".user-row");
+          const userText = row ? row.querySelector("span")?.textContent || `ID ${userId}` : `ID ${userId}`;
+
+          const badge = document.createElement("span");
+          badge.className = "selected-user-item inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-100 text-indigo-800 text-sm";
+          badge.dataset.userId = String(userId);
+          badge.innerHTML = `${userText} <button type="button" class="remove-selected-user text-indigo-900">x</button>`;
+          selectedUsersList.appendChild(badge);
+        });
+
+        bindRemoveButtons();
+      }
+
+      function bindRemoveButtons() {
+        selectedUsersList.querySelectorAll(".remove-selected-user").forEach((btn) => {
+          btn.onclick = () => {
+            const badge = btn.closest(".selected-user-item");
+            const userId = badge?.dataset.userId;
+            if (!userId) return;
+
+            const pickerCb = document.querySelector(`.picker-user-checkbox[value="${userId}"]`);
+            if (pickerCb) pickerCb.checked = false;
+
+            syncSelectedUsersUI();
+          };
+        });
+      }
+
+      openBtn.addEventListener("click", () => {
+        modal.classList.remove("hidden");
+        modal.classList.add("flex");
+      });
+
+      closeBtn.addEventListener("click", () => {
+        modal.classList.add("hidden");
+        modal.classList.remove("flex");
+      });
+
+      saveBtn.addEventListener("click", () => {
+        syncSelectedUsersUI();
+        modal.classList.add("hidden");
+        modal.classList.remove("flex");
+      });
+
+      userSearchInput.addEventListener("input", (e) => {
+        const value = e.target.value.trim().toLowerCase();
+        userRows.forEach((row) => {
+          const haystack = (row.dataset.search || "").toLowerCase();
+          row.classList.toggle("hidden", value && !haystack.includes(value));
+        });
+      });
+
+      bindRemoveButtons();
+    </script>
+  </body>
+</html>

@@ -1,0 +1,1 @@
+"""Safety department domain module."""

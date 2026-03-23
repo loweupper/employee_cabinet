@@ -1,0 +1,312 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <title>ОТ - Список карточек</title>
+    <link
+      rel="stylesheet"
+      href="{{ url_for('static', path='/css/output.css') }}" />
+  </head>
+
+  <body class="bg-gray-50">
+    <div class="flex h-screen">
+      {% include "components/sidebar.html" %}
+
+      <main class="flex-1 overflow-y-auto">
+        <header
+          class="bg-white shadow-sm px-8 py-5 flex items-center justify-between">
+          <div>
+            <h1 class="text-2xl font-semibold text-gray-800">Охрана труда</h1>
+            <p class="text-sm text-gray-500 mt-1">
+              Подраздел: список карточек сотрудников
+            </p>
+          </div>
+          <a
+            href="/departments/safety/cards/create"
+            class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition">
+            Создать карточку
+          </a>
+        </header>
+
+        <div class="p-8 space-y-5">
+          <div class="bg-white rounded-xl shadow-sm p-4">
+            <div class="flex flex-wrap gap-3 text-sm">
+              <a
+                href="/departments/safety/cards?view=active"
+                class="px-3 py-2 rounded-lg {% if view == 'active' %}
+                  bg-indigo-100 text-indigo-700 font-medium
+                {% else %}
+                  bg-gray-100 text-gray-700 hover:bg-gray-200
+                {% endif %}"
+                >Список карточек</a
+              >
+              <a
+                href="/departments/safety/cards?view=archived"
+                class="px-3 py-2 rounded-lg {% if view == 'archived' %}
+                  bg-indigo-100 text-indigo-700 font-medium
+                {% else %}
+                  bg-gray-100 text-gray-700 hover:bg-gray-200
+                {% endif %}"
+                >Архив</a
+              >
+              <a
+                href="/departments/safety/common-docs"
+                class="px-3 py-2 rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200"
+                >Общие нормативные документы</a
+              >
+            </div>
+          </div>
+
+          {% if success %}
+            <div class="rounded-lg bg-green-100 text-green-800 px-4 py-3">
+              {{ success }}
+            </div>
+          {% endif %}
+
+          {% if error %}
+            <div class="rounded-lg bg-red-100 text-red-800 px-4 py-3">
+              {{ error }}
+            </div>
+          {% endif %}
+
+          <section class="bg-white rounded-xl shadow-sm p-6 space-y-4">
+            <form
+              method="get"
+              action="/departments/safety/cards"
+              class="grid grid-cols-1 md:grid-cols-6 gap-3">
+              <input
+                type="text"
+                name="search"
+                value="{{ search }}"
+                placeholder="Поиск по ФИО, отделу, должности, телефону"
+                class="md:col-span-2 px-4 py-2 rounded-lg border border-gray-300" />
+
+              <select
+                name="employee_type"
+                class="px-4 py-2 rounded-lg border border-gray-300">
+                <option
+                  value="all"
+                  {% if employee_type == 'all' %}selected{% endif %}>
+                  Все типы
+                </option>
+                <option
+                  value="internal"
+                  {% if employee_type == 'internal' %}selected{% endif %}>
+                  Внутренние
+                </option>
+                <option
+                  value="external"
+                  {% if employee_type == 'external' %}selected{% endif %}>
+                  Внешние
+                </option>
+              </select>
+
+              <select
+                name="sort"
+                class="px-4 py-2 rounded-lg border border-gray-300">
+                <option
+                  value="created_desc"
+                  {% if sort == 'created_desc' %}selected{% endif %}>
+                  Сначала новые
+                </option>
+                <option
+                  value="created_asc"
+                  {% if sort == 'created_asc' %}selected{% endif %}>
+                  Сначала старые
+                </option>
+                <option
+                  value="name_asc"
+                  {% if sort == 'name_asc' %}selected{% endif %}>
+                  ФИО А-Я
+                </option>
+                <option
+                  value="name_desc"
+                  {% if sort == 'name_desc' %}selected{% endif %}>
+                  ФИО Я-А
+                </option>
+              </select>
+
+              <input
+                type="date"
+                name="date_from"
+                value="{{ date_from }}"
+                class="px-4 py-2 rounded-lg border border-gray-300" />
+              <input
+                type="date"
+                name="date_to"
+                value="{{ date_to }}"
+                class="px-4 py-2 rounded-lg border border-gray-300" />
+              <input type="hidden" name="view" value="{{ view }}" />
+
+              <div class="md:col-span-6 flex items-center gap-2">
+                <button
+                  type="submit"
+                  class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition">
+                  Применить
+                </button>
+                <a
+                  href="/departments/safety/cards?view={{ view }}"
+                  class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition"
+                  >Сбросить</a
+                >
+              </div>
+            </form>
+          </section>
+
+          <section class="bg-white rounded-xl shadow-sm p-6">
+            <div class="flex items-center justify-between mb-4">
+              <h2 class="text-lg font-semibold text-gray-800">Карточки</h2>
+              <span class="text-sm text-gray-500">Всего: {{ total }}</span>
+            </div>
+
+            {% if profiles %}
+              <form
+                method="post"
+                action="/departments/safety/profiles/batch-delete"
+                {% if view == 'active' %}
+                  onsubmit="return confirm('Архивировать выбранные карточки?');"
+                {% endif %}>
+                <div class="overflow-x-auto">
+                  <table class="min-w-full text-sm">
+                    <thead>
+                      <tr class="border-b">
+                        <th class="text-left py-2 pr-3">
+                          <input
+                            id="select-all-profiles"
+                            type="checkbox"
+                            class="h-4 w-4" />
+                        </th>
+                        <th class="text-left py-2 pr-3">ID</th>
+                        <th class="text-left py-2 pr-3">ФИО</th>
+                        <th class="text-left py-2 pr-3">Тип</th>
+                        <th class="text-left py-2 pr-3">Отдел</th>
+                        <th class="text-left py-2 pr-3">Должность</th>
+                        <th class="text-left py-2 pr-3">Создана</th>
+                        <th class="text-left py-2 pr-3">Действия</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {% for p in profiles %}
+                        <tr class="border-b hover:bg-gray-50">
+                          <td class="py-2 pr-3">
+                            <input
+                              type="checkbox"
+                              name="profile_ids"
+                              value="{{ p.id }}"
+                              class="profile-checkbox h-4 w-4" />
+                          </td>
+                          <td class="py-2 pr-3">{{ p.id }}</td>
+                          <td class="py-2 pr-3">{{ p.full_name }}</td>
+                          <td class="py-2 pr-3">
+                            {% if p.is_external %}
+                              <span
+                                class="px-2 py-1 rounded bg-amber-100 text-amber-800"
+                                >Внешний</span
+                              >
+                            {% else %}
+                              <span
+                                class="px-2 py-1 rounded bg-emerald-100 text-emerald-700"
+                                >Внутренний</span
+                              >
+                            {% endif %}
+                          </td>
+                          <td class="py-2 pr-3">
+                            {{ p.department_name or '-' }}
+                          </td>
+                          <td class="py-2 pr-3">{{ p.position or '-' }}</td>
+                          <td class="py-2 pr-3">
+                            {{ p.created_at.strftime('%d.%m.%Y') if p.created_at else '-' }}
+                          </td>
+                          <td class="py-2 pr-3">
+                            <div class="flex items-center gap-3">
+                              <a
+                                href="/departments/safety/profiles/{{ p.id }}"
+                                class="text-indigo-600 hover:underline"
+                                >Открыть</a
+                              >
+                              <a
+                                href="/departments/safety/cards/{{ p.id }}/edit"
+                                class="text-amber-700 hover:underline"
+                                >Редактировать</a
+                              >
+                              <a
+                                href="/departments/safety/profiles/{{ p.id }}/documents"
+                                class="text-blue-700 hover:underline"
+                                >Загрузить файлы</a
+                              >
+                              <button
+                                type="submit"
+                                {% if view == 'archived' %}
+                                  formaction="/departments/safety/profiles/{{ p.id }}/restore"
+                                {% else %}
+                                  formaction="/departments/safety/profiles/{{ p.id }}/archive"
+                                {% endif %}
+                                formmethod="post"
+                                onclick="return confirm('{% if view == 'archived' %}
+                                  Восстановить карточку?
+                                {% else %}
+                                  Архивировать карточку?
+                                {% endif %}');"
+                                class="{% if view == 'archived' %}text-emerald-700{% else %}text-red-600{% endif %} hover:underline">
+                                {% if view == 'archived' %}Восстановить{% else %}Архивировать{% endif %}
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      {% endfor %}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div class="mt-4 flex justify-between items-center">
+                  <div class="text-sm text-gray-500">
+                    Страница {{ page }} из {{ total_pages }}
+                  </div>
+                  {% if view == 'active' %}
+                    <button
+                      type="submit"
+                      class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition">
+                      Архивировать выбранные
+                    </button>
+                  {% endif %}
+                </div>
+              </form>
+
+              <div class="mt-4 flex items-center gap-2 text-sm">
+                {% set prev_page = page - 1 %}
+                {% set next_page = page + 1 %}
+                {% if page > 1 %}
+                  <a
+                    href="?search={{ search }}&employee_type={{ employee_type }}&sort={{ sort }}&date_from={{ date_from }}&date_to={{ date_to }}&view={{ view }}&page={{ prev_page }}"
+                    class="px-3 py-2 rounded bg-gray-100 hover:bg-gray-200"
+                    >Назад</a
+                  >
+                {% endif %}
+                {% if page < total_pages %}
+                  <a
+                    href="?search={{ search }}&employee_type={{ employee_type }}&sort={{ sort }}&date_from={{ date_from }}&date_to={{ date_to }}&view={{ view }}&page={{ next_page }}"
+                    class="px-3 py-2 rounded bg-gray-100 hover:bg-gray-200"
+                    >Вперед</a
+                  >
+                {% endif %}
+              </div>
+            {% else %}
+              <p class="text-gray-500">Карточки не найдены.</p>
+            {% endif %}
+          </section>
+        </div>
+      </main>
+    </div>
+
+    <script>
+      const selectAll = document.getElementById("select-all-profiles");
+      if (selectAll) {
+        selectAll.addEventListener("change", (e) => {
+          document.querySelectorAll(".profile-checkbox").forEach((cb) => {
+            cb.checked = e.target.checked;
+          });
+        });
+      }
+    </script>
+  </body>
+</html>

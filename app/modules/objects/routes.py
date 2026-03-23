@@ -4,6 +4,7 @@ import re
 import uuid
 from collections import defaultdict
 from datetime import datetime, timezone
+from io import BytesIO
 from pathlib import Path
 from typing import Annotated, List, Optional
 
@@ -18,18 +19,19 @@ from fastapi import (
     UploadFile,
     status,
 )
-from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
+from PIL import Image, ImageFilter, UnidentifiedImageError
 from pydantic import ValidationError
 from sqlalchemy.orm import Session
 
-from core.database import get_db
 from core.constants import UserRole  # ✅ импорт из constants
+from core.database import get_db
 from core.template_helpers import get_sidebar_context
+from modules.access.models_sql import PermissionType
+from modules.access.service import AccessService
 from modules.auth.dependencies import get_current_user_from_cookie
 from modules.auth.models import User
-from modules.access.service import AccessService
-from modules.access.models_sql import PermissionType
 from modules.documents.models import DocumentCategory, DocumentSubcategory
 from modules.objects.models import Object, ObjectAccess, ObjectAccessRole
 from modules.objects.schemas import (
@@ -40,8 +42,7 @@ from modules.objects.schemas import (
     ObjectUpdate,
 )
 from modules.objects.service import ObjectService
-from modules.permissions.models import UserPermission, RolePermission, Permission
-
+from modules.permissions.models import Permission, RolePermission, UserPermission
 
 logger = logging.getLogger("app")
 
@@ -64,16 +65,123 @@ def _safe_file_extension(filename: Optional[str]) -> str:
 
 
 async def _save_icon_file(icon: UploadFile, object_id: int) -> str:
-    icons_dir = Path("static/objects")
-    icons_dir.mkdir(parents=True, exist_ok=True)
+    allowed_raster_types = {"image/jpeg", "image/png", "image/webp"}
+    allowed_svg_types = {"image/svg+xml"}
+    allowed_ext = {".jpg", ".jpeg", ".png", ".webp", ".svg"}
 
     file_ext = _safe_file_extension(icon.filename)
-    filename = f"{object_id}_{uuid.uuid4().hex[:8]}{file_ext}"
-    file_path = icons_dir / filename
+    content_type = (icon.content_type or "").lower()
+    if file_ext not in allowed_ext:
+        raise HTTPException(
+            status_code=400,
+            detail="Недопустимый формат. Разрешены: JPG, JPEG, PNG, WEBP, SVG",
+        )
 
-    contents = await icon.read()
-    await asyncio.to_thread(file_path.write_bytes, contents)
-    return f"/static/objects/{filename}"
+    is_svg = file_ext == ".svg" or content_type in allowed_svg_types
+    if not is_svg and content_type not in allowed_raster_types:
+        raise HTTPException(
+            status_code=400,
+            detail="Недопустимый формат. Разрешены: JPG, JPEG, PNG, WEBP, SVG",
+        )
+
+    raw_bytes = await icon.read()
+    max_size = 1 * 1024 * 1024
+    if len(raw_bytes) > max_size:
+        raise HTTPException(
+            status_code=400, detail="Файл слишком большой. Максимум 1MB"
+        )
+
+    icons_dir = Path("static/objects") / str(object_id)
+    icons_dir.mkdir(parents=True, exist_ok=True)
+
+    if is_svg:
+        filename = f"{object_id}_{uuid.uuid4().hex[:10]}_optimized.svg"
+        file_path = icons_dir / filename
+        await asyncio.to_thread(file_path.write_bytes, raw_bytes)
+        return f"/static/objects/{object_id}/{filename}"
+
+    try:
+        with Image.open(BytesIO(raw_bytes)) as src:
+            target_size = 512
+            original_width, original_height = src.size
+
+            # Для PNG/WebP с прозрачностью сохраняем альфа-канал
+            has_alpha = src.mode in ("RGBA", "LA", "P") and (
+                src.mode == "RGBA"
+                or (src.mode == "P" and "transparency" in src.info)
+                or src.mode == "LA"
+            )
+
+            working_img = src.convert("RGBA") if has_alpha else src.convert("RGB")
+
+            ratio = min(target_size / original_width, target_size / original_height)
+            new_width = max(1, int(original_width * ratio))
+            new_height = max(1, int(original_height * ratio))
+
+            resized = working_img.resize(
+                (new_width, new_height),
+                Image.Resampling.LANCZOS,
+            )
+
+            # Повышаем резкость после resize, чтобы избежать "мыльности".
+            if new_width != original_width or new_height != original_height:
+                resized = resized.filter(
+                    ImageFilter.UnsharpMask(radius=1.4, percent=140, threshold=2)
+                )
+
+            final_img = Image.new("RGBA", (target_size, target_size), (0, 0, 0, 0))
+            paste_x = (target_size - new_width) // 2
+            paste_y = (target_size - new_height) // 2
+
+            if has_alpha:
+                final_img.paste(resized, (paste_x, paste_y), resized)
+            else:
+                final_img.paste(resized, (paste_x, paste_y))
+
+            output = BytesIO()
+            save_kwargs = {
+                "format": "WEBP",
+                "quality": 88,
+                "method": 6,
+                "sharp_yuv": True,
+            }
+            if has_alpha:
+                save_kwargs["alpha_quality"] = 100
+
+            final_img.save(output, **save_kwargs)
+            optimized_bytes = output.getvalue()
+
+    except UnidentifiedImageError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail="Файл не является корректным изображением",
+        ) from exc
+    except Exception as exc:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Ошибка обработки изображения: {str(exc)}",
+        ) from exc
+
+    filename = f"{object_id}_{uuid.uuid4().hex[:10]}_optimized.webp"
+    file_path = icons_dir / filename
+    await asyncio.to_thread(file_path.write_bytes, optimized_bytes)
+    return f"/static/objects/{object_id}/{filename}"
+
+
+def _icon_path_from_url(icon_url: Optional[str]) -> Optional[Path]:
+    if not icon_url or not icon_url.startswith("/static/"):
+        return None
+
+    candidate = Path(".") / icon_url.lstrip("/")
+    try:
+        static_root = Path("static").resolve()
+        resolved = candidate.resolve()
+    except OSError:
+        return None
+
+    if static_root in resolved.parents or resolved == static_root:
+        return resolved
+    return None
 
 
 def _get_subcategories(db: Session, object_id: int, category: DocumentCategory):
@@ -350,6 +458,10 @@ async def create_object(
         return RedirectResponse(
             url=f"/objects/create?error={error_msg}", status_code=303
         )
+    except HTTPException as e:
+        return RedirectResponse(
+            url=f"/objects/create?error={e.detail}", status_code=303
+        )
 
 
 # ===================================
@@ -431,8 +543,21 @@ async def update_object(
 
         # Загружаем новую иконку (если есть)
         if icon and icon.filename:
+            old_icon_url = obj.icon_url
             obj.icon_url = await _save_icon_file(icon, obj.id)
             db.commit()
+
+            old_icon_path = _icon_path_from_url(old_icon_url)
+            new_icon_path = _icon_path_from_url(obj.icon_url)
+            if (
+                old_icon_path
+                and old_icon_path.exists()
+                and old_icon_path != new_icon_path
+            ):
+                try:
+                    await asyncio.to_thread(old_icon_path.unlink)
+                except OSError:
+                    logger.warning("event=old_object_icon_delete_failed")
 
         return RedirectResponse(
             url=f"/objects/{object_id}?success=Объект успешно обновлен", status_code=303
@@ -1311,5 +1436,3 @@ async def update_subcategory(
         return RedirectResponse(
             url=f"/objects/{object_id}?error={e.detail}", status_code=303
         )
-
-

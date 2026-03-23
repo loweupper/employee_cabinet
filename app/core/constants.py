@@ -17,7 +17,7 @@ class UserRole(str, Enum):
     HR = "hr"
     ENGINEER = "engineer"
     LAWYER = "lawyer"
-    SAFETY = "safety"  # ✅ Добавлено!
+    SAFETY = "safety"
     EMPLOYEE = "employee"
 
     @classmethod

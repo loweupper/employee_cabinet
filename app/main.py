@@ -1,44 +1,42 @@
-from fastapi import FastAPI, Request, Depends
+import asyncio
+import json
+import logging
+import logging.config
+import re
+from contextlib import asynccontextmanager
+from datetime import datetime
+from typing import Annotated
+
+import pytz
+from fastapi import Depends, FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.openapi.utils import get_openapi
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.openapi.utils import get_openapi
-from contextlib import asynccontextmanager
-import logging
-import logging.config
-import json
-from datetime import datetime
-import pytz
-import re
-import asyncio
-from modules.auth.session_cleanup import cleanup_expired_sessions
-from modules.monitoring.models import Alert
-from typing import Annotated
-
-
-
 from slowapi import Limiter, _rate_limit_exceeded_handler
-from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
+from slowapi.util import get_remote_address
 from starlette_csrf import CSRFMiddleware
 
 from core.config import settings
-from core.database import Base, engine
-from core.logging.middleware import AccessLogMiddleware
-from modules.auth.routes import router as auth_router
-from modules.auth.dependencies import get_current_user_from_cookie
-from modules.auth.models import Session, User
-from modules.profile.routes import router as profile_router
-from modules.objects.routes import router as object_router
-from modules.documents.routes import router as documents_router
-from modules.admin.routes import router as admin_router
-from core.database import get_db
-from core.template_helpers import get_sidebar_context
-from core.swagger_security import SwaggerSecurityMiddleware
-from core.request_id_middleware import RequestIDMiddleware
+from core.database import Base, engine, get_db
 from core.db_log_handler import DatabaseLogHandler
 from core.logging.handlers import setup_log_handlers
+from core.logging.middleware import AccessLogMiddleware
+from core.request_id_middleware import RequestIDMiddleware
+from core.swagger_security import SwaggerSecurityMiddleware
+from core.template_helpers import get_sidebar_context
+from modules.admin.routes import router as admin_router
+from modules.auth.dependencies import get_current_user_from_cookie
+from modules.auth.models import Session, User
+from modules.auth.routes import router as auth_router
+from modules.auth.session_cleanup import cleanup_expired_sessions
+from modules.departments.routes import router as departments_router
+from modules.documents.routes import router as documents_router
+from modules.monitoring.models import Alert
+from modules.objects.routes import router as object_router
+from modules.profile.routes import router as profile_router
 
 # ===================================
 # JSON Logging for Production
@@ -161,8 +159,8 @@ async def lifespan(app: FastAPI):
     if settings.MONITORING_ENABLED:
         try:
             # Initialize login attempt tracker
-            from core.redis import get_redis
             from core.monitoring.detector import init_login_tracker
+            from core.redis import get_redis
 
             redis_client = await get_redis()
             await init_login_tracker(redis_client)
@@ -210,16 +208,16 @@ app = FastAPI(
     title="🏢 Employee Cabinet API",
     description="""
     ## Корпоративная система управления сотрудниками
-    
+
     ### 🎯 Возможности:
     * 👤 **Аутентификация** — JWT токены, OTP, сессии
     * 👥 **Управление пользователями** — RBAC (Role-Based Access Control)
     * 🏢 **Объекты** — управление корпоративными объектами
     * 📄 **Документы** — загрузка и управление файлами
     * 👑 **Админ-панель** — полное управление системой
-    
+
     ### 🔐 Как использовать аутентификацию:
-    
+
     1. **Получите токен:**
        ```bash
        POST /api/v1/auth/login
@@ -228,24 +226,24 @@ app = FastAPI(
          "password": "password"
        }
        ```
-    
+
     2. **Скопируйте access_token из ответа**
-    
+
     3. **Нажмите кнопку 🔒 Authorize вверху страницы**
-    
+
     4. **Вставьте токен в формате:**
        ```
        Bearer YOUR_ACCESS_TOKEN_HERE
        ```
-    
+
     5. **Нажмите Authorize и Close**
-    
+
     6. **Теперь можете тестировать защищённые endpoints!**
-    
+
     ---
-    
+
     ### 👥 Роли пользователей:
-    
+
     | Роль | Описание | Доступ |
     |------|----------|--------|
     | 👑 `admin` | Администратор | Полный доступ ко всем функциям |
@@ -254,14 +252,14 @@ app = FastAPI(
     | 🔧 `engineer` | Инженер | Технические объекты |
     | ⚖️ `lawyer` | Юрист | Юридические документы |
     | 👤 `employee` | Сотрудник | Базовый доступ к своему профилю |
-    
+
     ---
-    
+
     ### 📊 Статусы объектов:
     * ✅ `active` — активный
     * 📦 `inactive` — неактивный
     * 🗄️ `archived` — архивный
-    
+
     ### 📄 Статусы пользователей:
     * ✅ `active` — активный
     * ⏳ `pending` — ожидает активации
@@ -382,6 +380,21 @@ app.add_middleware(
         re.compile(r"^/documents/batch-download$"),
         # ✅ Профиль
         re.compile(r"^/profile/update$"),
+        re.compile(r"^/profile/change-password$"),
+        re.compile(r"^/profile/upload-avatar$"),
+        # ✅ Департаменты и безопасность
+        re.compile(r"^/departments/safety/profiles/create-form$"),
+        re.compile(r"^/departments/safety/profiles/\d+/update-form$"),
+        re.compile(r"^/departments/safety/profiles/\d+/delete$"),
+        re.compile(r"^/departments/safety/profiles/\d+/archive$"),
+        re.compile(r"^/departments/safety/profiles/\d+/restore$"),
+        re.compile(r"^/departments/safety/profiles/batch-delete$"),
+        re.compile(r"^/departments/safety/profiles/\d+/documents/upload$"),
+        re.compile(r"^/departments/safety/profiles/\d+/documents/upload-multiple$"),
+        re.compile(r"^/departments/safety/profiles/\d+/documents/\d+/delete$"),
+        re.compile(r"^/departments/safety/documents/upload-common$"),
+        re.compile(r"^/departments/safety/documents/common/\d+/update$"),
+        re.compile(r"^/departments/safety/documents/common/\d+/delete$"),
     ],
 )
 
@@ -411,6 +424,7 @@ app.include_router(auth_router, prefix="/api/v1")
 app.include_router(profile_router, prefix="/profile")
 app.include_router(object_router, prefix="/objects")
 app.include_router(documents_router, prefix="/documents")
+app.include_router(departments_router)
 app.include_router(admin_router)
 
 # Monitoring routes (admin only)
@@ -547,7 +561,7 @@ async def docs_access_denied(request: Request):
             .icon { font-size: 64px; margin-bottom: 20px; }
             h1 { color: #333; }
             .info { background: #f0f0f0; padding: 20px; border-radius: 10px; margin: 20px 0; }
-            .button { 
+            .button {
                 display: inline-block;
                 padding: 12px 24px;
                 background: #4F46E5;
@@ -580,8 +594,8 @@ async def docs_access_denied(request: Request):
 # HEALTH CHECKS
 @app.on_event("startup")
 async def init_monitoring():
-    from core.monitoring.metrics import init_metrics
     from core.monitoring.alerts import alert_manager
+    from core.monitoring.metrics import init_metrics
 
     await alert_manager.initialize()
     init_metrics()
@@ -595,6 +609,7 @@ async def periodic_session_cleanup():
 
 
 background_tasks: set[asyncio.Task] = set()
+
 
 @app.on_event("startup")
 async def startup_event():

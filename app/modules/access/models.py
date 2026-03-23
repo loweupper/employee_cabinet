@@ -140,7 +140,7 @@ class UserRead(BaseModel):
 
 
 # ===================================
-# UserReadPublic — публичные да��ные пользователя (без sensitive)
+# UserReadPublic — публичные даные пользователя (без sensitive)
 # ===================================
 class UserReadPublic(BaseModel):
     """Ограниченные данные для публичного доступа"""

@@ -1,39 +1,40 @@
-from sqlalchemy import func
-from sqlalchemy.exc import SQLAlchemyError
-from core.template_helpers import get_sidebar_context
-from core.config import settings
-from core.constants import UserRole  # ✅ импорт из constants
-from core.validators import (
-    validate_file_extension,
-    ALLOWED_DOCUMENT_EXTENSIONS,
-)
-from modules.objects.models import Object, ObjectAccess
-from fastapi import APIRouter, Depends, Request, Form, HTTPException
-from fastapi.templating import Jinja2Templates
-from fastapi.responses import (
-    HTMLResponse,
-    RedirectResponse,
-    FileResponse,
-    JSONResponse,
-    StreamingResponse,
-)
-from pathlib import Path
-from sqlalchemy.orm import Session
+import asyncio
 import io
 import logging
 import os
 import zipfile
-import asyncio
-from typing import Annotated, Optional
 from datetime import datetime, timezone
-from slowapi import Limiter
-import slowapi.util as slowapi_util
+from pathlib import Path
+from typing import Annotated, Optional
 
+import slowapi.util as slowapi_util
+from fastapi import APIRouter, Depends, Form, HTTPException, Request
+from fastapi.responses import (
+    FileResponse,
+    HTMLResponse,
+    JSONResponse,
+    RedirectResponse,
+    StreamingResponse,
+)
+from fastapi.templating import Jinja2Templates
+from slowapi import Limiter
+from sqlalchemy import func
+from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.orm import Session
+
+from core.config import settings
+from core.constants import UserRole  # ✅ импорт из constants
 from core.database import get_db
+from core.template_helpers import get_sidebar_context
+from core.validators import (
+    ALLOWED_DOCUMENT_EXTENSIONS,
+    validate_file_extension,
+)
 from modules.auth.dependencies import get_current_user_from_cookie
 from modules.auth.models import User
-from modules.documents.service import DocumentService
 from modules.documents.models import Document, DocumentCategory
+from modules.documents.service import DocumentService
+from modules.objects.models import Object, ObjectAccess
 
 logger = logging.getLogger("app")
 
@@ -672,6 +673,54 @@ async def delete_document(
 # ===================================
 # Скачивание документа
 # ===================================
+@router.get(
+    "/{document_id}/open",
+    responses={
+        400: {"description": "Недопустимый путь к файлу"},
+        403: {"description": "Нет доступа к этому документу"},
+        404: {"description": "Документ или файл не найден"},
+    },
+)
+async def open_document(
+    document_id: int,
+    user: User = Depends(get_current_user_from_cookie),
+    db: Session = Depends(get_db),
+):
+    """Открыть документ в браузере (inline preview where possible)."""
+    document = db.query(Document).filter(Document.id == document_id).first()
+
+    if not document:
+        raise HTTPException(status_code=404, detail=DOCUMENT_NOT_FOUND)
+
+    if not document.can_access(user, db):
+        raise HTTPException(
+            status_code=403,
+            detail="Нет доступа к этому документу",
+        )
+
+    try:
+        file_path = _resolve_document_file_path(document.file_path)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="Файл не найден на диске")
+
+    logger.info(
+        {
+            "event": "document_opened",
+            "document_id": document_id,
+            "user_id": user.id,
+        }
+    )
+
+    # Do not set filename to avoid forcing download disposition.
+    return FileResponse(
+        path=file_path,
+        media_type=document.file_type,
+    )
+
+
 @router.get(
     "/{document_id}/download",
     responses={

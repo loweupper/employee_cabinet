@@ -1,25 +1,27 @@
 import asyncio
-from core.template_helpers import get_sidebar_context
-from fastapi import APIRouter, Depends, Request, Form, UploadFile, File, HTTPException
-from fastapi.responses import HTMLResponse, RedirectResponse
-from sqlalchemy.orm import Session
-from sqlalchemy import update
-from sqlalchemy.exc import IntegrityError
-from pydantic import ValidationError
 import logging
-import os
 import uuid
+from io import BytesIO
 from pathlib import Path
+from typing import Annotated
+
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
+from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.templating import Jinja2Templates
+from PIL import Image, ImageOps, UnidentifiedImageError
+from pydantic import ValidationError
 from slowapi import Limiter
 from slowapi.util import get_remote_address
+from sqlalchemy import update
+from sqlalchemy.orm import Session
 
 from core.database import get_db
-from core.config import settings
+from core.template_helpers import get_sidebar_context
 from modules.auth.dependencies import get_current_user_from_cookie
 from modules.auth.models import User
-from modules.auth.schemas import UserUpdate, ChangePasswordRequest
+from modules.auth.schemas import ChangePasswordRequest, UserUpdate
 from modules.auth.service import AuthService
-from modules.auth.utils import verify_password, hash_password
+from modules.departments.safety.models import SafetyProfile
 
 logger = logging.getLogger("app")
 
@@ -27,20 +29,43 @@ logger = logging.getLogger("app")
 limiter = Limiter(key_func=get_remote_address)
 
 router = APIRouter(tags=["profile"])
-
-from fastapi.templating import Jinja2Templates
-
 templates = Jinja2Templates(directory="templates")
 
 
-def _safe_avatar_extension(content_type: str) -> str:
-    ext_by_type = {
-        "image/jpeg": ".jpg",
-        "image/png": ".png",
-        "image/gif": ".gif",
-        "image/webp": ".webp",
-    }
-    return ext_by_type.get(content_type, "")
+def _avatar_path_from_url(avatar_url: str | None) -> Path | None:
+    if not avatar_url or not avatar_url.startswith("/static/"):
+        return None
+
+    candidate = Path(".") / avatar_url.lstrip("/")
+    try:
+        static_root = Path("static").resolve()
+        resolved = candidate.resolve()
+    except OSError:
+        return None
+
+    if static_root in resolved.parents or resolved == static_root:
+        return resolved
+    return None
+
+
+def _optimize_avatar_to_webp(contents: bytes) -> bytes:
+    with Image.open(BytesIO(contents)) as src:
+        optimized = ImageOps.fit(
+            src.convert("RGB"),
+            (400, 400),
+            method=Image.Resampling.LANCZOS,
+            centering=(0.5, 0.5),
+        )
+
+        output = BytesIO()
+        optimized.save(
+            output,
+            format="WEBP",
+            quality=85,
+            optimize=True,
+            method=6,
+        )
+        return output.getvalue()
 
 
 # ===================================
@@ -49,10 +74,10 @@ def _safe_avatar_extension(content_type: str) -> str:
 @router.get("", response_class=HTMLResponse)
 async def profile_page(
     request: Request,
-    user: User = Depends(get_current_user_from_cookie),
+    user: Annotated[User, Depends(get_current_user_from_cookie)],
     success: str = None,
     error: str = None,
-    db: Session = Depends(get_db),
+    db: Annotated[Session, Depends(get_db)] = None,
 ):
     """
     Страница профиля пользователя
@@ -101,12 +126,12 @@ async def profile_page(
 @limiter.limit("30/minute")
 async def update_profile(
     request: Request,
-    first_name: str = Form(None),
-    last_name: str = Form(None),
-    middle_name: str = Form(None),
-    phone_number: str = Form(None),
-    user: User = Depends(get_current_user_from_cookie),
-    db: Session = Depends(get_db),
+    first_name: Annotated[str | None, Form()] = None,
+    last_name: Annotated[str | None, Form()] = None,
+    middle_name: Annotated[str | None, Form()] = None,
+    phone_number: Annotated[str | None, Form()] = None,
+    user: Annotated[User, Depends(get_current_user_from_cookie)] = None,
+    db: Annotated[Session, Depends(get_db)] = None,
 ):
     """
     Обновление данных профиля
@@ -125,7 +150,7 @@ async def update_profile(
         )
 
         # Обновляем пользователя
-        updated_user = AuthService.update_user(user, data, db)
+        AuthService.update_user(user, data, db)
 
         logger.info(
             {"event": "profile_updated", "user_id": user.id, "email": user.email}
@@ -169,9 +194,9 @@ async def update_profile(
 @router.post("/upload-avatar")
 async def upload_avatar(
     request: Request,
-    avatar: UploadFile = File(...),
-    user: User = Depends(get_current_user_from_cookie),
-    db: Session = Depends(get_db),
+    avatar: Annotated[UploadFile, File(...)],
+    user: Annotated[User, Depends(get_current_user_from_cookie)] = None,
+    db: Annotated[Session, Depends(get_db)] = None,
 ):
     """
     Загрузка аватара пользователя
@@ -180,38 +205,69 @@ async def upload_avatar(
 
     try:
         # Проверка типа файла
-        allowed_types = ["image/jpeg", "image/png", "image/gif", "image/webp"]
-        if avatar.content_type not in allowed_types:
+        allowed_types = {"image/jpeg", "image/png", "image/webp"}
+        allowed_ext = {".jpg", ".jpeg", ".png", ".webp"}
+        file_ext = Path(avatar.filename or "").suffix.lower()
+
+        if avatar.content_type not in allowed_types or file_ext not in allowed_ext:
             raise HTTPException(
                 status_code=400,
-                detail="Неподдерживаемый формат. Разрешены: JPG, PNG, GIF, WEBP",
+                detail="Неподдерживаемый формат. Разрешены: JPG, JPEG, PNG, WEBP",
             )
 
-        # Проверка размера (макс 5MB)
-        max_size = 5 * 1024 * 1024  # 5MB
+        # Проверка размера (макс 2MB)
+        max_size = 2 * 1024 * 1024
         contents = await avatar.read()
         if len(contents) > max_size:
             raise HTTPException(
-                status_code=400, detail="Файл слишком большой. Максимум 5MB"
+                status_code=400, detail="Файл слишком большой. Максимум 2MB"
             )
 
-        # Создаем папку для аватаров
-        avatars_dir = Path("static/avatars")
+        try:
+            optimized_bytes = await asyncio.to_thread(
+                _optimize_avatar_to_webp, contents
+            )
+        except UnidentifiedImageError as exc:
+            raise HTTPException(
+                status_code=400,
+                detail="Файл не является корректным изображением",
+            ) from exc
+
+        # Создаем папку для аватаров пользователя
+        avatars_dir = Path("static/avatars") / str(user.id)
         avatars_dir.mkdir(parents=True, exist_ok=True)
 
-        # Генерируем уникальное имя файла
-        file_ext = _safe_avatar_extension(avatar.content_type)
-        filename = f"{user.id}_{uuid.uuid4().hex[:8]}{file_ext}"
+        # Генерируем имя оптимизированного файла
+        filename = f"{user.id}_{uuid.uuid4().hex[:10]}_optimized.webp"
         file_path = avatars_dir / filename
 
-        # Сохраняем файл
-        await asyncio.to_thread(file_path.write_bytes, contents)
+        old_avatar_url = user.avatar_url
+
+        # Сохраняем оптимизированный WebP
+        await asyncio.to_thread(file_path.write_bytes, optimized_bytes)
 
         # Обновляем URL аватара в БД
-        avatar_url = f"/static/avatars/{filename}"
+        avatar_url = f"/static/avatars/{user.id}/{filename}"
         db.execute(update(User).where(User.id == user.id).values(avatar_url=avatar_url))
+        db.execute(
+            update(SafetyProfile)
+            .where(SafetyProfile.user_id == user.id)
+            .values(avatar_url=avatar_url)
+        )
         db.commit()
         user.avatar_url = avatar_url
+
+        # Удаляем старый файл только после успешного сохранения и обновления БД
+        old_avatar_path = _avatar_path_from_url(old_avatar_url)
+        if (
+            old_avatar_path
+            and old_avatar_path != file_path
+            and old_avatar_path.exists()
+        ):
+            try:
+                await asyncio.to_thread(old_avatar_path.unlink)
+            except OSError:
+                logger.warning("event=old_avatar_delete_failed")
 
         logger.info("event=avatar_uploaded")
 
@@ -243,11 +299,11 @@ async def upload_avatar(
 @router.post("/change-password")
 async def change_password(
     request: Request,
-    current_password: str = Form(...),
-    new_password: str = Form(...),
-    confirm_password: str = Form(...),
-    user: User = Depends(get_current_user_from_cookie),
-    db: Session = Depends(get_db),
+    current_password: Annotated[str, Form(...)],
+    new_password: Annotated[str, Form(...)],
+    confirm_password: Annotated[str, Form(...)],
+    user: Annotated[User, Depends(get_current_user_from_cookie)] = None,
+    db: Annotated[Session, Depends(get_db)] = None,
 ):
     """
     Изменение пароля

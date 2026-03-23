@@ -1,181 +1,271 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="ru">
-
-<head>
-    <meta charset="UTF-8">
+  <head>
+    <meta charset="UTF-8" />
     <title>Админ: Все объекты</title>
-    <link rel="stylesheet" href="{{ url_for('static', path='/css/output.css') }}">
-</head>
+    <link
+      rel="stylesheet"
+      href="{{ url_for('static', path='/css/output.css') }}" />
+  </head>
 
-<body class="bg-gray-50">
-
+  <body class="bg-gray-50">
     <div class="flex h-screen">
+      <!-- SIDEBAR -->
+      {% include "components/sidebar.html" %}
 
-        <!-- SIDEBAR -->
-        {% include "components/sidebar.html" %}
-
-        <!-- MAIN CONTENT -->
-        <main class="flex-1 overflow-y-auto">
-
-            <header class="bg-red-900 text-white shadow-md px-8 py-4 flex justify-between items-center">
-                <h2 class="text-2xl font-semibold">🛡️ Администрирование: Все объекты</h2>
-                <div class="flex items-center gap-4">
-                    <span class="text-sm">{{ user.email }}</span>
-                    <div
-                        class="w-10 h-10 bg-white text-red-900 rounded-full flex items-center justify-center font-bold">
-                        {{ user.first_name[0] if user.first_name else user.email[0]|upper }}
-                    </div>
-                </div>
-            </header>
-
-            <div class="p-8">
-
-                <!-- Success/Error -->
-                {% if request.query_params.get('success') %}
-                <div class="bg-green-50 border-l-4 border-green-500 text-green-700 p-4 mb-6 rounded-lg">
-                    <p class="font-semibold">✓ {{ request.query_params.get('success') }}</p>
-                </div>
-                {% endif %}
-
-                {% if request.query_params.get('error') %}
-                <div class="bg-red-50 border-l-4 border-red-500 text-red-700 p-4 mb-6 rounded-lg">
-                    <p class="font-semibold">✗ {{ request.query_params.get('error') }}</p>
-                </div>
-                {% endif %}
-
-                <!-- Фильтры -->
-                <div class="bg-white rounded-xl shadow-md p-6 mb-6">
-                    <form method="get" action="/objects/admin/all" class="flex gap-4 items-end">
-                        <div class="flex-1">
-                            <label class="block text-sm text-gray-600 mb-1">Поиск</label>
-                            <input type="text" name="search" value="{{ search or '' }}" placeholder="Название, адрес..."
-                                class="w-full px-4 py-2 rounded-lg border border-gray-300 focus:border-red-500">
-                        </div>
-
-                        <div class="flex items-center gap-2">
-                            <input type="checkbox" name="include_deleted" value="true" id="include_deleted" {% if
-                                include_deleted %}checked{% endif %} class="w-5 h-5 text-red-600">
-                            <label for="include_deleted" class="text-sm text-gray-600">Показать удаленные</label>
-                        </div>
-
-                        <button type="submit"
-                            class="px-6 py-2 bg-red-900 text-white rounded-lg hover:bg-red-800 transition">
-                            Поиск
-                        </button>
-                    </form>
-                </div>
-
-                <!-- Статистика -->
-                <div class="mb-6">
-                    <p class="text-gray-600">Всего объектов: <span class="font-semibold">{{ total }}</span></p>
-                </div>
-
-                <!-- Таблица объектов -->
-                <div class="bg-white rounded-xl shadow-md overflow-hidden">
-                    <table class="w-full">
-                        <thead class="bg-gray-50 border-b">
-                            <tr>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">ID</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Название
-                                </th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Владелец
-                                </th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Отдел</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Статус</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Создан</th>
-                                <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Действия
-                                </th>
-                            </tr>
-                        </thead>
-                        <tbody class="divide-y divide-gray-200">
-                            {% for obj in objects %}
-                            <tr class="hover:bg-gray-50 {% if obj.deleted_at %}bg-red-50{% endif %}">
-                                <td class="px-6 py-4 text-sm text-gray-900">{{ obj.id }}</td>
-                                <td class="px-6 py-4">
-                                    <div class="flex items-center gap-3">
-                                        <div
-                                            class="w-10 h-10 bg-indigo-600 rounded-lg flex items-center justify-center text-white overflow-hidden">
-                                            {% if obj.icon_url %}
-                                            <img src="{{ obj.icon_url }}" alt="{{ obj.title }}"
-                                                class="w-full h-full object-cover">
-                                            {% else %}
-                                            🏗️
-                                            {% endif %}
-                                        </div>
-                                        <div>
-                                            <p class="font-medium text-gray-900">{{ obj.title }}</p>
-                                            <p class="text-xs text-gray-500">{{ obj.address or 'Адрес не указан' }}</p>
-                                        </div>
-                                    </div>
-                                </td>
-                                <td class="px-6 py-4 text-sm text-gray-600">{{ obj.owner.email }}</td>
-                                <td class="px-6 py-4 text-sm text-gray-600">{{ obj.department or '-' }}</td>
-                                <td class="px-6 py-4">
-                                    {% if obj.deleted_at %}
-                                    <span class="px-2 py-1 bg-red-100 text-red-700 text-xs rounded-full">🗑️
-                                        Удален</span>
-                                    {% elif obj.is_archived %}
-                                    <span class="px-3 py-1 bg-gray-100 text-gray-700 text-sm rounded-full">📦 В
-                                        архиве</span>
-                                    {% elif obj.is_active %}
-                                    <span class="px-2 py-1 bg-green-100 text-green-700 text-xs rounded-full">✓
-                                        Активен</span>
-                                    {% else %}
-                                    <span
-                                        class="px-2 py-1 bg-gray-100 text-gray-700 text-xs rounded-full">Неактивен</span>
-                                    {% endif %}
-                                </td>
-                                <td class="px-6 py-4 text-sm text-gray-600">{{ obj.created_at.strftime('%d.%m.%Y') }}
-                                </td>
-                                <td class="px-6 py-4 text-right text-sm">
-                                    <div class="flex justify-end gap-2">
-                                        <a href="/objects/{{ obj.id }}"
-                                            class="text-indigo-600 hover:text-indigo-800">Открыть</a>
-
-                                        {% if obj.deleted_at %}
-                                        <form method="post" action="/objects/{{ obj.id }}/restore"
-                                            style="display:inline;">
-                                            <button type="submit"
-                                                class="text-green-600 hover:text-green-800">Восстановить</button>
-                                        </form>
-                                        {% else %}
-                                        <form method="post" action="/objects/{{ obj.id }}/delete"
-                                            onsubmit="return confirm('Удалить объект?');" style="display:inline;">
-                                            <button type="submit"
-                                                class="text-red-600 hover:text-red-800">Удалить</button>
-                                        </form>
-                                        {% endif %}
-                                    </div>
-                                </td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-
-                <!-- Пагинация -->
-                {% if pages > 1 %}
-                <div class="mt-6 flex justify-center gap-2">
-                    {% if page > 1 %}
-                    <a href="/objects/admin/all?page={{ page - 1 }}{% if search %}&search={{ search }}{% endif %}{% if include_deleted %}&include_deleted=true{% endif %}"
-                        class="px-4 py-2 bg-white border rounded-lg hover:bg-gray-50">← Назад</a>
-                    {% endif %}
-
-                    <span class="px-4 py-2 bg-red-900 text-white rounded-lg">{{ page }} / {{ pages }}</span>
-
-                    {% if page < pages %} <a
-                        href="/objects/admin/all?page={{ page + 1 }}{% if search %}&search={{ search }}{% endif %}{% if include_deleted %}&include_deleted=true{% endif %}"
-                        class="px-4 py-2 bg-white border rounded-lg hover:bg-gray-50">Вперед →</a>
-                        {% endif %}
-                </div>
-                {% endif %}
-
+      <!-- MAIN CONTENT -->
+      <main class="flex-1 overflow-y-auto">
+        <header
+          class="bg-red-900 text-white shadow-md px-8 py-4 flex justify-between items-center">
+          <h2 class="text-2xl font-semibold">
+            🛡️ Администрирование: Все объекты
+          </h2>
+          <div class="flex items-center gap-4">
+            <span class="text-sm">{{ user.email }}</span>
+            <div
+              class="w-10 h-10 bg-white text-red-900 rounded-full flex items-center justify-center font-bold">
+              {{ user.first_name[0] if user.first_name else user.email[0]|upper }}
             </div>
+          </div>
+        </header>
 
-        </main>
+        <div class="p-8">
+          <!-- Success/Error -->
+          {% if request.query_params.get('success') %}
+            <div
+              class="bg-green-50 border-l-4 border-green-500 text-green-700 p-4 mb-6 rounded-lg">
+              <p class="font-semibold">
+                ✓ {{ request.query_params.get('success') }}
+              </p>
+            </div>
+          {% endif %}
 
+          {% if request.query_params.get('error') %}
+            <div
+              class="bg-red-50 border-l-4 border-red-500 text-red-700 p-4 mb-6 rounded-lg">
+              <p class="font-semibold">
+                ✗ {{ request.query_params.get('error') }}
+              </p>
+            </div>
+          {% endif %}
+
+          <!-- Фильтры -->
+          <div class="bg-white rounded-xl shadow-md p-6 mb-6">
+            <form
+              method="get"
+              action="/objects/admin/all"
+              class="flex gap-4 items-end">
+              <div class="flex-1">
+                <label class="block text-sm text-gray-600 mb-1">Поиск</label>
+                <input
+                  type="text"
+                  name="search"
+                  value="{{ search or '' }}"
+                  placeholder="Название, адрес..."
+                  class="w-full px-4 py-2 rounded-lg border border-gray-300 focus:border-red-500" />
+              </div>
+
+              <div class="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  name="include_deleted"
+                  value="true"
+                  id="include_deleted"
+                  {%
+                    if
+                    include_deleted
+                  %}
+                    checked
+                  {% endif %}
+                  class="w-5 h-5 text-red-600" />
+                <label for="include_deleted" class="text-sm text-gray-600"
+                  >Показать удаленные</label
+                >
+              </div>
+
+              <button
+                type="submit"
+                class="px-6 py-2 bg-red-900 text-white rounded-lg hover:bg-red-800 transition">
+                Поиск
+              </button>
+            </form>
+          </div>
+
+          <!-- Статистика -->
+          <div class="mb-6">
+            <p class="text-gray-600">
+              Всего объектов: <span class="font-semibold">{{ total }}</span>
+            </p>
+          </div>
+
+          <!-- Таблица объектов -->
+          <div class="bg-white rounded-xl shadow-md overflow-hidden">
+            <table class="w-full">
+              <thead class="bg-gray-50 border-b">
+                <tr>
+                  <th
+                    class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                    ID
+                  </th>
+                  <th
+                    class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                    Название
+                  </th>
+                  <th
+                    class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                    Владелец
+                  </th>
+                  <th
+                    class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                    Отдел
+                  </th>
+                  <th
+                    class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                    Статус
+                  </th>
+                  <th
+                    class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                    Создан
+                  </th>
+                  <th
+                    class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">
+                    Действия
+                  </th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-gray-200">
+                {% for obj in objects %}
+                  <tr
+                    class="hover:bg-gray-50 {% if obj.deleted_at %}bg-red-50{% endif %}">
+                    <td class="px-6 py-4 text-sm text-gray-900">
+                      {{ obj.id }}
+                    </td>
+                    <td class="px-6 py-4">
+                      <div class="flex items-center gap-3">
+                        <div
+                          class="w-10 h-10 bg-indigo-600 rounded-lg flex items-center justify-center text-white overflow-hidden">
+                          {% if obj.icon_url %}
+                            <img
+                              src="{{ obj.icon_url }}"
+                              alt="{{ obj.title }}"
+                              width="40"
+                              height="40"
+                              loading="lazy"
+                              decoding="async"
+                              data-smart-image
+                              class="smart-image w-full h-full object-contain" />
+                          {% else %}
+                            🏗️
+                          {% endif %}
+                        </div>
+                        <div>
+                          <p class="font-medium text-gray-900">
+                            {{ obj.title }}
+                          </p>
+                          <p class="text-xs text-gray-500">
+                            {{ obj.address or 'Адрес не указан' }}
+                          </p>
+                        </div>
+                      </div>
+                    </td>
+                    <td class="px-6 py-4 text-sm text-gray-600">
+                      {{ obj.owner.email }}
+                    </td>
+                    <td class="px-6 py-4 text-sm text-gray-600">
+                      {{ obj.department or '-' }}
+                    </td>
+                    <td class="px-6 py-4">
+                      {% if obj.deleted_at %}
+                        <span
+                          class="px-2 py-1 bg-red-100 text-red-700 text-xs rounded-full"
+                          >🗑️ Удален</span
+                        >
+                      {% elif obj.is_archived %}
+                        <span
+                          class="px-3 py-1 bg-gray-100 text-gray-700 text-sm rounded-full"
+                          >📦 В архиве</span
+                        >
+                      {% elif obj.is_active %}
+                        <span
+                          class="px-2 py-1 bg-green-100 text-green-700 text-xs rounded-full"
+                          >✓ Активен</span
+                        >
+                      {% else %}
+                        <span
+                          class="px-2 py-1 bg-gray-100 text-gray-700 text-xs rounded-full"
+                          >Неактивен</span
+                        >
+                      {% endif %}
+                    </td>
+                    <td class="px-6 py-4 text-sm text-gray-600">
+                      {{ obj.created_at.strftime('%d.%m.%Y') }}
+                    </td>
+                    <td class="px-6 py-4 text-right text-sm">
+                      <div class="flex justify-end gap-2">
+                        <a
+                          href="/objects/{{ obj.id }}"
+                          class="text-indigo-600 hover:text-indigo-800"
+                          >Открыть</a
+                        >
+
+                        {% if obj.deleted_at %}
+                          <form
+                            method="post"
+                            action="/objects/{{ obj.id }}/restore"
+                            style="display:inline;">
+                            <button
+                              type="submit"
+                              class="text-green-600 hover:text-green-800">
+                              Восстановить
+                            </button>
+                          </form>
+                        {% else %}
+                          <form
+                            method="post"
+                            action="/objects/{{ obj.id }}/delete"
+                            onsubmit="return confirm('Удалить объект?');"
+                            style="display:inline;">
+                            <button
+                              type="submit"
+                              class="text-red-600 hover:text-red-800">
+                              Удалить
+                            </button>
+                          </form>
+                        {% endif %}
+                      </div>
+                    </td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Пагинация -->
+          {% if pages > 1 %}
+            <div class="mt-6 flex justify-center gap-2">
+              {% if page > 1 %}
+                <a
+                  href="/objects/admin/all?page={{ page - 1 }}{% if search %}&search={{ search }}{% endif %}{% if include_deleted %}&include_deleted=true{% endif %}"
+                  class="px-4 py-2 bg-white border rounded-lg hover:bg-gray-50"
+                  >← Назад</a
+                >
+              {% endif %}
+
+              <span class="px-4 py-2 bg-red-900 text-white rounded-lg"
+                >{{ page }} / {{ pages }}</span
+              >
+
+              {% if page < pages %}
+                <a
+                  href="/objects/admin/all?page={{ page + 1 }}{% if search %}&search={{ search }}{% endif %}{% if include_deleted %}&include_deleted=true{% endif %}"
+                  class="px-4 py-2 bg-white border rounded-lg hover:bg-gray-50"
+                  >Вперед →</a
+                >
+              {% endif %}
+            </div>
+          {% endif %}
+        </div>
+      </main>
     </div>
-
-</body>
-
+  </body>
 </html>

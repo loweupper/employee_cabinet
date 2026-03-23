@@ -1,0 +1,200 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <title>ОТ - Общие документы</title>
+    <link
+      rel="stylesheet"
+      href="{{ url_for('static', path='/css/output.css') }}" />
+  </head>
+
+  <body class="bg-gray-50">
+    <div class="flex h-screen">
+      {% include "components/sidebar.html" %}
+
+      <main class="flex-1 overflow-y-auto">
+        <header
+          class="bg-white shadow-sm px-8 py-5 flex items-center justify-between">
+          <div>
+            <h1 class="text-2xl font-semibold text-gray-800">Охрана труда</h1>
+            <p class="text-sm text-gray-500 mt-1">
+              Подраздел: общие нормативные документы
+            </p>
+          </div>
+          <a
+            href="/departments/safety/common-docs/create"
+            class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition"
+            >Создать документ</a
+          >
+        </header>
+
+        <div class="p-8 space-y-5">
+          <div class="bg-white rounded-xl shadow-sm p-4">
+            <div class="flex flex-wrap gap-3 text-sm">
+              <a
+                href="/departments/safety/cards"
+                class="px-3 py-2 rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200"
+                >Список карточек</a
+              >
+              <a
+                href="/departments/safety/common-docs"
+                class="px-3 py-2 rounded-lg bg-indigo-100 text-indigo-700 font-medium"
+                >Общие нормативные документы</a
+              >
+            </div>
+          </div>
+
+          {% if success %}
+            <div class="rounded-lg bg-green-100 text-green-800 px-4 py-3">
+              {{ success }}
+            </div>
+          {% endif %}
+          {% if error %}
+            <div class="rounded-lg bg-red-100 text-red-800 px-4 py-3">
+              {{ error }}
+            </div>
+          {% endif %}
+
+          <section class="bg-white rounded-xl shadow-sm p-6 space-y-4">
+            <form
+              method="get"
+              action="/departments/safety/common-docs"
+              class="grid grid-cols-1 md:grid-cols-6 gap-3">
+              <input
+                type="text"
+                name="search"
+                value="{{ search }}"
+                placeholder="Поиск по названию"
+                class="md:col-span-2 px-4 py-2 rounded-lg border border-gray-300" />
+              <select
+                name="sort"
+                class="px-4 py-2 rounded-lg border border-gray-300">
+                <option
+                  value="created_desc"
+                  {% if sort == 'created_desc' %}selected{% endif %}>
+                  Сначала новые
+                </option>
+                <option
+                  value="created_asc"
+                  {% if sort == 'created_asc' %}selected{% endif %}>
+                  Сначала старые
+                </option>
+                <option
+                  value="name_asc"
+                  {% if sort == 'name_asc' %}selected{% endif %}>
+                  Название А-Я
+                </option>
+                <option
+                  value="name_desc"
+                  {% if sort == 'name_desc' %}selected{% endif %}>
+                  Название Я-А
+                </option>
+              </select>
+              <input
+                type="date"
+                name="date_from"
+                value="{{ date_from }}"
+                class="px-4 py-2 rounded-lg border border-gray-300" />
+              <input
+                type="date"
+                name="date_to"
+                value="{{ date_to }}"
+                class="px-4 py-2 rounded-lg border border-gray-300" />
+              <div class="md:col-span-6 flex items-center gap-2">
+                <button
+                  type="submit"
+                  class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition">
+                  Применить
+                </button>
+                <a
+                  href="/departments/safety/common-docs"
+                  class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition"
+                  >Сбросить</a
+                >
+              </div>
+            </form>
+          </section>
+
+          <section class="bg-white rounded-xl shadow-sm p-6">
+            <div class="flex items-center justify-between mb-4">
+              <h2 class="text-lg font-semibold text-gray-800">
+                Наборы документов
+              </h2>
+              <span class="text-sm text-gray-500">Всего: {{ total }}</span>
+            </div>
+
+            {% if groups %}
+              <div class="overflow-x-auto">
+                <table class="min-w-full text-sm">
+                  <thead>
+                    <tr class="border-b">
+                      <th class="text-left py-2 pr-3">Название</th>
+                      <th class="text-left py-2 pr-3">Файлов</th>
+                      <th class="text-left py-2 pr-3">Срок действия</th>
+                      <th class="text-left py-2 pr-3">Дата</th>
+                      <th class="text-left py-2 pr-3">Действия</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {% for g in groups %}
+                      <tr class="border-b hover:bg-gray-50">
+                        <td class="py-2 pr-3">{{ g.title }}</td>
+                        <td class="py-2 pr-3">{{ g.count_files }}</td>
+                        <td class="py-2 pr-3">
+                          {{ g.expiry_date.strftime('%d.%m.%Y') if g.expiry_date else '-' }}
+                        </td>
+                        <td class="py-2 pr-3">
+                          {{ g.latest_created_at.strftime('%d.%m.%Y') if g.latest_created_at else '-' }}
+                        </td>
+                        <td class="py-2 pr-3">
+                          <div class="flex items-center gap-3">
+                            <a
+                              href="/departments/safety/common-docs/{{ g.id }}"
+                              class="text-indigo-600 hover:underline"
+                              >Открыть</a
+                            >
+                            <form
+                              method="post"
+                              action="/departments/safety/documents/common/{{ g.id }}/delete"
+                              onsubmit="return confirm('Удалить весь набор документов?');">
+                              <button
+                                type="submit"
+                                class="text-red-600 hover:underline">
+                                Удалить
+                              </button>
+                            </form>
+                          </div>
+                        </td>
+                      </tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+              </div>
+
+              <div class="mt-4 flex items-center gap-2 text-sm">
+                {% set prev_page = page - 1 %}
+                {% set next_page = page + 1 %}
+                {% if page > 1 %}
+                  <a
+                    href="?search={{ search }}&sort={{ sort }}&date_from={{ date_from }}&date_to={{ date_to }}&page={{ prev_page }}"
+                    class="px-3 py-2 rounded bg-gray-100 hover:bg-gray-200"
+                    >Назад</a
+                  >
+                {% endif %}
+                {% if page < total_pages %}
+                  <a
+                    href="?search={{ search }}&sort={{ sort }}&date_from={{ date_from }}&date_to={{ date_to }}&page={{ next_page }}"
+                    class="px-3 py-2 rounded bg-gray-100 hover:bg-gray-200"
+                    >Вперед</a
+                  >
+                {% endif %}
+              </div>
+            {% else %}
+              <p class="text-gray-500">Наборы документов не найдены.</p>
+            {% endif %}
+          </section>
+        </div>
+      </main>
+    </div>
+  </body>
+</html>

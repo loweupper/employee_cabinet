@@ -1,0 +1,351 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Документы сотрудника ОТ</title>
+    <link
+      rel="stylesheet"
+      href="{{ url_for('static', path='/css/output.css') }}" />
+  </head>
+
+  <body class="bg-gray-50">
+    <div class="flex h-screen">
+      {% include "components/sidebar.html" %}
+
+      <main class="flex-1 overflow-y-auto p-8 space-y-6">
+        <div class="flex items-center justify-between gap-3 flex-wrap">
+          <div>
+            <h1 class="text-2xl font-semibold text-gray-800">
+              Документы сотрудника
+            </h1>
+            <p class="text-sm text-gray-500 mt-1">{{ profile.full_name }}</p>
+          </div>
+          <div class="flex gap-2 flex-wrap text-sm">
+            <a
+              href="/departments/safety/cards"
+              class="px-3 py-2 rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200"
+              >Список карточек</a
+            >
+            <a
+              href="/departments/safety/profiles/{{ profile.id }}"
+              class="px-3 py-2 rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200"
+              >Профиль</a
+            >
+            <a
+              href="/departments/safety/profiles/{{ profile.id }}/edit"
+              class="px-3 py-2 rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200"
+              >Редактировать карточку</a
+            >
+          </div>
+        </div>
+
+        {% if request.query_params.get('success') %}
+          <div class="rounded-lg bg-green-100 text-green-800 px-4 py-3">
+            ✅ {{ request.query_params.get('success') }}
+          </div>
+        {% endif %}
+
+        {% if request.query_params.get('error') %}
+          <div class="rounded-lg bg-red-100 text-red-800 px-4 py-3">
+            ❌ {{ request.query_params.get('error') }}
+          </div>
+        {% endif %}
+
+        <section class="bg-white rounded-xl shadow-md p-6 space-y-4">
+          <h2 class="text-lg font-semibold text-gray-800">Добавить файлы</h2>
+          <form
+            method="post"
+            action="/departments/safety/profiles/{{ profile.id }}/documents/upload-multiple"
+            enctype="multipart/form-data"
+            class="space-y-4"
+            id="multi-upload-form">
+            <div class="flex items-center gap-3 flex-wrap">
+              <input
+                type="file"
+                id="multi-files-picker"
+                name="files"
+                class="hidden"
+                multiple
+                accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx,.txt,.zip,.rar" />
+              <button
+                type="button"
+                id="add-files-btn"
+                class="px-4 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700">
+                Выбрать файлы
+              </button>
+              <span class="text-sm text-gray-500"
+                >Для каждого файла можно задать срок действия и описание</span
+              >
+            </div>
+
+            <div class="overflow-x-auto border rounded-lg">
+              <table class="min-w-full text-sm">
+                <thead class="bg-gray-50 text-gray-700">
+                  <tr>
+                    <th class="px-3 py-2 text-left">Файл</th>
+                    <th class="px-3 py-2 text-left">Срок действия</th>
+                    <th class="px-3 py-2 text-left">Описание</th>
+                    <th class="px-3 py-2 text-left">Действие</th>
+                  </tr>
+                </thead>
+                <tbody id="new-files-table-body">
+                  <tr id="new-files-empty-row">
+                    <td class="px-3 py-5 text-gray-500" colspan="4">
+                      Файлы не добавлены
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div id="new-files-inputs" class="hidden"></div>
+
+            <div class="flex justify-end">
+              <button
+                type="submit"
+                id="submit-multi-upload"
+                disabled
+                class="px-4 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed">
+                Добавить
+              </button>
+            </div>
+          </form>
+        </section>
+
+        <section class="bg-white rounded-xl shadow-md p-6 space-y-4">
+          <h2 class="text-lg font-semibold text-gray-800">Документы</h2>
+
+          <form method="get" class="grid grid-cols-1 md:grid-cols-4 gap-3">
+            <input
+              type="text"
+              name="search"
+              value="{{ search }}"
+              placeholder="Поиск по названию и описанию"
+              class="px-3 py-2 rounded-lg border border-gray-300 md:col-span-2" />
+            <input
+              type="date"
+              name="date_from"
+              value="{{ date_from }}"
+              class="px-3 py-2 rounded-lg border border-gray-300" />
+            <input
+              type="date"
+              name="date_to"
+              value="{{ date_to }}"
+              class="px-3 py-2 rounded-lg border border-gray-300" />
+            <div class="md:col-span-4 flex justify-end gap-2">
+              <a
+                href="/departments/safety/profiles/{{ profile.id }}/documents"
+                class="px-3 py-2 rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200"
+                >Сбросить</a
+              >
+              <button
+                type="submit"
+                class="px-3 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700">
+                Применить
+              </button>
+            </div>
+          </form>
+
+          <div class="overflow-x-auto border rounded-lg">
+            <table class="min-w-full text-sm">
+              <thead class="bg-gray-50 text-gray-700">
+                <tr>
+                  <th class="px-3 py-2 text-left">Название</th>
+                  <th class="px-3 py-2 text-left">Описание</th>
+                  <th class="px-3 py-2 text-left">Срок действия</th>
+                  <th class="px-3 py-2 text-left">Добавлен</th>
+                  <th class="px-3 py-2 text-left">Действия</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for doc in documents %}
+                  <tr class="border-t">
+                    <td class="px-3 py-2 font-medium text-gray-800">
+                      {{ doc.title }}
+                    </td>
+                    <td class="px-3 py-2 text-gray-600">
+                      {{ doc.description or '-' }}
+                    </td>
+                    <td class="px-3 py-2 text-gray-700">
+                      {% set exp = expiry_map.get(doc.id) %}
+                      {% if exp %}
+                        {{ exp.strftime('%d.%m.%Y') }}
+                      {% else %}
+                        -
+                      {% endif %}
+                    </td>
+                    <td class="px-3 py-2 text-gray-700">
+                      {{ doc.created_at.strftime('%d.%m.%Y %H:%M') if doc.created_at else '-' }}
+                    </td>
+                    <td class="px-3 py-2">
+                      <div class="flex flex-wrap gap-2">
+                        <a
+                          href="/documents/{{ doc.id }}/open"
+                          target="_blank"
+                          class="px-2 py-1 rounded bg-blue-100 text-blue-700 hover:bg-blue-200"
+                          >Открыть</a
+                        >
+                        <a
+                          href="/documents/{{ doc.id }}/download"
+                          class="px-2 py-1 rounded bg-emerald-100 text-emerald-700 hover:bg-emerald-200"
+                          >Скачать</a
+                        >
+                        <form
+                          method="post"
+                          action="/departments/safety/profiles/{{ profile.id }}/documents/{{ doc.id }}/delete"
+                          onsubmit="return confirm('Удалить документ?');">
+                          <button
+                            type="submit"
+                            class="px-2 py-1 rounded bg-red-100 text-red-700 hover:bg-red-200">
+                            Удалить
+                          </button>
+                        </form>
+                      </div>
+                    </td>
+                  </tr>
+                {% else %}
+                  <tr>
+                    <td class="px-3 py-5 text-gray-500" colspan="5">
+                      Документы не найдены
+                    </td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+
+          {% if total_pages > 1 %}
+            <div class="flex items-center justify-between text-sm">
+              <span class="text-gray-500"
+                >Страница {{ page }} из {{ total_pages }}</span
+              >
+              <div class="flex gap-2">
+                {% if page > 1 %}
+                  <a
+                    href="?page={{ page - 1 }}&search={{ search }}&date_from={{ date_from }}&date_to={{ date_to }}"
+                    class="px-3 py-2 rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200"
+                    >Назад</a
+                  >
+                {% endif %}
+                {% if page < total_pages %}
+                  <a
+                    href="?page={{ page + 1 }}&search={{ search }}&date_from={{ date_from }}&date_to={{ date_to }}"
+                    class="px-3 py-2 rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200"
+                    >Вперед</a
+                  >
+                {% endif %}
+              </div>
+            </div>
+          {% endif %}
+        </section>
+      </main>
+    </div>
+
+    <script>
+      const pickBtn = document.getElementById("add-files-btn");
+      const picker = document.getElementById("multi-files-picker");
+      const tableBody = document.getElementById("new-files-table-body");
+      const emptyRow = document.getElementById("new-files-empty-row");
+      const hiddenInputs = document.getElementById("new-files-inputs");
+      const form = document.getElementById("multi-upload-form");
+      const submitBtn = document.getElementById("submit-multi-upload");
+
+      const filesState = [];
+
+      function reindexFiles() {
+        tableBody
+          .querySelectorAll("tr.file-row")
+          .forEach((row) => row.remove());
+
+        if (!filesState.length) {
+          emptyRow.classList.remove("hidden");
+          submitBtn.disabled = true;
+          return;
+        }
+
+        emptyRow.classList.add("hidden");
+        submitBtn.disabled = false;
+
+        filesState.forEach((entry, index) => {
+          const tr = document.createElement("tr");
+          tr.className = "border-t file-row";
+          tr.innerHTML = `
+            <td class="px-3 py-2 text-gray-800">${entry.file.name}</td>
+            <td class="px-3 py-2">
+              <input type="date" class="w-full px-2 py-1 rounded border border-gray-300" data-expiry-index="${index}" value="${entry.expiry || ""}" />
+            </td>
+            <td class="px-3 py-2">
+              <input type="text" class="w-full px-2 py-1 rounded border border-gray-300" placeholder="Описание" data-desc-index="${index}" value="${(entry.description || "").replace(/"/g, "&quot;")}" />
+            </td>
+            <td class="px-3 py-2">
+              <button type="button" class="px-2 py-1 rounded bg-red-100 text-red-700 hover:bg-red-200" data-remove-index="${index}">Удалить</button>
+            </td>
+          `;
+          tableBody.appendChild(tr);
+        });
+
+        tableBody.querySelectorAll("[data-remove-index]").forEach((btn) => {
+          btn.addEventListener("click", () => {
+            const idx = Number(btn.getAttribute("data-remove-index"));
+            filesState.splice(idx, 1);
+            reindexFiles();
+          });
+        });
+
+        tableBody.querySelectorAll("[data-expiry-index]").forEach((input) => {
+          input.addEventListener("change", () => {
+            const idx = Number(input.getAttribute("data-expiry-index"));
+            filesState[idx].expiry = input.value || "";
+            reindexFiles();
+          });
+        });
+
+        tableBody.querySelectorAll("[data-desc-index]").forEach((input) => {
+          input.addEventListener("input", () => {
+            const idx = Number(input.getAttribute("data-desc-index"));
+            filesState[idx].description = input.value || "";
+          });
+        });
+      }
+
+      function buildSubmissionPayload() {
+        hiddenInputs.innerHTML = "";
+        const dt = new DataTransfer();
+        filesState.forEach((entry) => {
+          dt.items.add(entry.file);
+
+          const expInput = document.createElement("input");
+          expInput.type = "hidden";
+          expInput.name = "expiry_dates";
+          expInput.value = entry.expiry || "";
+          hiddenInputs.appendChild(expInput);
+
+          const descInput = document.createElement("input");
+          descInput.type = "hidden";
+          descInput.name = "descriptions";
+          descInput.value = entry.description || "";
+          hiddenInputs.appendChild(descInput);
+        });
+        picker.files = dt.files;
+      }
+
+      pickBtn.addEventListener("click", () => picker.click());
+      picker.addEventListener("change", () => {
+        const selected = Array.from(picker.files || []);
+        selected.forEach((f) => {
+          filesState.push({ file: f, expiry: "", description: "" });
+        });
+        picker.value = "";
+        reindexFiles();
+      });
+
+      form.addEventListener("submit", (e) => {
+        if (!filesState.length) {
+          e.preventDefault();
+          return;
+        }
+        buildSubmissionPayload();
+      });
+    </script>
+  </body>
+</html>

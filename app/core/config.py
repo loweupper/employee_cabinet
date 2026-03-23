@@ -1,3 +1,11 @@
+# core/config.py
+"""Централизованный модуль конфигурации для всего проекта. Здесь определяются
+все настройки, используемые в различных частях приложения, включая базу данных,
+JWT, OTP, email и другие. Используется Pydantic для валидации и управления
+настройками, а также для обеспечения безопасности и удобства использования.
+Этот модуль позволяет легко настраивать приложение через переменные окружения
+и обеспечивает единый источник правды для всех конфигурационных параметров.
+"""
 from pydantic_settings import BaseSettings
 from datetime import timezone, timedelta, datetime
 from pydantic import Field, field_validator, ValidationInfo
@@ -7,7 +15,7 @@ import logging
 from urllib.parse import quote_plus
 
 import os
-from zoneinfo import ZoneInfo  
+from zoneinfo import ZoneInfo
 
 from typing import List
 
@@ -51,17 +59,17 @@ def now() -> datetime:
 def format_timestamp(dt: Optional[datetime] = None, format: str = "iso") -> str:
     """
     Форматирует время в нужном формате
-    
+
     Args:
         dt: время (если None - текущее)
         format: "iso" (ISO формат), "msk" (для отображения), "utc" (для сортировки)
-    
+
     Returns:
         str: отформатированное время
     """
     if dt is None:
         dt = now()
-    
+
     if format == "iso":
         return dt.isoformat()
     elif format == "msk":
@@ -127,7 +135,7 @@ class Settings(BaseSettings):
 
 
 
-    
+
     # ===== Monitoring =====
     MONITORING_ENABLED: bool = True
     METRICS_ENABLED: bool = True
@@ -153,20 +161,20 @@ class Settings(BaseSettings):
     ENABLE_DOCS: bool = True  # ✅ Включить/выключить документацию
     DOCS_REQUIRE_AUTH: bool = True  # ✅ Требовать авторизацию для доступа к /docs
     DOCS_ALLOWED_IPS: List[str] = Field(default_factory=lambda: ["127.0.0.1"])  # ✅ Белый список IP
-    
+
     # Swagger Basic Auth credentials (for staging/dev environments)
     SWAGGER_USERNAME: str = Field(description="Username for Swagger basic auth")
     SWAGGER_PASSWORD: str = Field(description="Password for Swagger basic auth")
-    
+
      # Environment
     ENVIRONMENT: str = "development"  # development, staging, production
-     
+
     class Config:
         env_file = ".env"
         case_sensitive = True
         # Allow JSON parsing errors to be caught by validators
         env_parse_none_str = 'empty'
-    
+
     @field_validator('SECRET_KEY')
     @classmethod
     def validate_secret_key(cls, v: str, info: ValidationInfo) -> str:
@@ -176,7 +184,7 @@ class Settings(BaseSettings):
                 f"SECRET_KEY must be at least 32 characters long (current: {len(v)}). "
                 "Generate a strong key with: python generate_secrets.py --type secret_key"
             )
-        
+
         # Warn if using default/weak patterns
         weak_patterns = ['change', 'secret', 'password', 'default', 'test', '123']
         if any(pattern in v.lower() for pattern in weak_patterns):
@@ -187,31 +195,31 @@ class Settings(BaseSettings):
                 ),
                 UserWarning
             )
-        
+
         return v
-    
+
     @field_validator('DEBUG')
     @classmethod
     def validate_debug_mode(cls, v: bool, info: ValidationInfo) -> bool:
         """Warn if DEBUG is enabled in production"""
         # We need to check ENVIRONMENT from info.data if available
         environment = info.data.get('ENVIRONMENT', 'development')
-        
+
         if v is True and environment == 'production':
             warnings.warn(
                 "DEBUG=True in production environment! This should be disabled in production.",
                 UserWarning
             )
-        
+
         return v
-    
+
     @field_validator('DATABASE_URL')
     @classmethod
     def build_database_url(cls, v: Optional[str], info: ValidationInfo) -> str:
         """Build DATABASE_URL from components if not provided"""
         if v:
             return v
-        
+
         # Build from components
         data = info.data
         host = data.get('POSTGRES_HOST')
@@ -219,33 +227,33 @@ class Settings(BaseSettings):
         db = data.get('POSTGRES_DB')
         user = data.get('POSTGRES_USER')
         password = data.get('POSTGRES_PASSWORD')
-        
+
         if not all([host, port, db, user, password]):
             raise ValueError(
                 "Either DATABASE_URL must be provided, or all of "
                 "POSTGRES_HOST, POSTGRES_PORT, POSTGRES_DB, POSTGRES_USER, POSTGRES_PASSWORD"
             )
-        
+
         # URL-encode username and password to handle special characters
         encoded_user = quote_plus(str(user))
         encoded_password = quote_plus(str(password))
-        
+
         return f"postgresql://{encoded_user}:{encoded_password}@{host}:{port}/{db}"
-    
+
     @field_validator('REDIS_URL')
     @classmethod
     def build_redis_url(cls, v: Optional[str], info: ValidationInfo) -> str:
         """Build REDIS_URL from components if not provided"""
         if v:
             return v
-        
+
         # Build from components
         data = info.data
         host = data.get('redis_host', 'redis')
         port = data.get('redis_port', 6379)
-        
+
         return f"redis://{host}:{port}/0"
-    
+
     @field_validator('DOCS_ALLOWED_IPS', mode='before')
     @classmethod
     def parse_docs_ips(cls, v):
@@ -258,7 +266,7 @@ class Settings(BaseSettings):
                 logger.warning(f"Failed to parse DOCS_ALLOWED_IPS as JSON: {v}, using default")
                 return ["127.0.0.1"]
         return v if v else ["127.0.0.1"]
-    
+
     @field_validator('ALERT_EMAIL_RECIPIENTS', mode='before')
     @classmethod
     def parse_alert_recipients(cls, v):

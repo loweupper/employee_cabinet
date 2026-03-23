@@ -14,19 +14,21 @@ services:
     restart: always
     env_file: .env
     environment:
-    - TZ=Europe/Moscow
-    - DATABASE_URL=${DATABASE_URL}
+      - TZ=Europe/Moscow
+      - DATABASE_URL=${DATABASE_URL}
+      - FILES_PATH=/app/files
     command: >
-      gunicorn main:app
-      --workers 4
-      --worker-class uvicorn.workers.UvicornWorker
-      --bind 0.0.0.0:8000
-      --preload
+      sh -c "
+        alembic upgrade head &&
+        exec gunicorn main:app --workers 4 --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000 --preload
+      "
     ports:
       - "8001:8000"
     depends_on:
       - redis
     volumes:
+      - ./app/alembic.ini:/app/alembic.ini
+      - ./app/migrations:/app/migrations
       - ./app/main.py:/app/main.py
       - ./app/core:/app/core
       - ./app/modules:/app/modules
@@ -36,4 +38,3 @@ services:
       - ./app/workers:/app/workers
       - ./logs:/app/logs
       - /volume11/projects/employe_cabinet/files:/app/files
-

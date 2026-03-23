@@ -163,6 +163,7 @@ class DatabaseLogHandler(logging.Handler):
                     usage_count=UserAgentCache.usage_count + 1,
                     last_seen=datetime.utcnow(),
                 )
+                .execution_options(synchronize_session=False)
             )
             db.commit()
             return ua.id

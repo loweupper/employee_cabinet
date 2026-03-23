@@ -212,6 +212,7 @@
                 setTimeout(() => location.reload(), 1000);
 
             } catch (e) {
+                console.error("Ошибка запроса:", e);
                 showToast("Ошибка запроса", true);
             }
         }

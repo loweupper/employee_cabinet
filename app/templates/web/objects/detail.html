@@ -121,7 +121,7 @@
                                 class="h-64 bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center">
                                 {% if object.icon_url %}
                                 <img src="{{ object.icon_url }}" alt="{{ object.title }}"
-                                    class="w-full h-full object-cover">
+                                    width="512" height="512" loading="eager" decoding="async" data-smart-image class="smart-image w-full h-full object-contain">
                                 {% else %}
                                 <span class="text-8xl text-white">🏗️</span>
                                 {% endif %}
@@ -288,7 +288,7 @@
                             <div class="flex items-center gap-3">
                                 {% if object.owner.avatar_url %}
                                 <img src="{{ object.owner.avatar_url }}" alt="{{ object.owner.email }}"
-                                    class="w-12 h-12 rounded-full">
+                                    width="48" height="48" loading="lazy" decoding="async" data-smart-image class="smart-image w-12 h-12 rounded-full object-cover">
                                 {% else %}
                                 <div
                                     class="w-12 h-12 bg-indigo-600 text-white rounded-full flex items-center justify-center font-bold">
@@ -330,7 +330,7 @@
                                         <!-- Аватар -->
                                         {% if access.user.avatar_url %}
                                         <img src="{{ access.user.avatar_url }}" alt="{{ access.user.email }}"
-                                            class="w-12 h-12 rounded-full">
+                                            width="48" height="48" loading="lazy" decoding="async" data-smart-image class="smart-image w-12 h-12 rounded-full object-cover">
                                         {% else %}
                                         <div
                                             class="w-12 h-12 bg-indigo-100 rounded-full flex items-center justify-center text-sm font-bold text-indigo-600">
