@@ -15,6 +15,7 @@ class SafetyProfileCreate(BaseModel):
     email: Optional[str] = Field(default=None, max_length=255)
     position: Optional[str] = Field(default=None, max_length=255)
     department_name: Optional[str] = Field(default=None, max_length=255)
+    object_name: Optional[str] = Field(default=None, max_length=255)
     phone: Optional[str] = Field(default=None, max_length=20)
     avatar_url: Optional[str] = Field(default=None, max_length=512)
     note: Optional[str] = None
@@ -29,6 +30,14 @@ class SafetyProfileCreate(BaseModel):
         normalized = value.strip()
         return normalized or None
 
+    @field_validator("object_name")
+    @classmethod
+    def strip_object_name_create(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        normalized = value.strip()
+        return normalized or None
+
 
 class SafetyProfileUpdate(BaseModel):
     user_id: Optional[int] = None
@@ -36,6 +45,7 @@ class SafetyProfileUpdate(BaseModel):
     email: Optional[str] = Field(default=None, max_length=255)
     position: Optional[str] = Field(default=None, max_length=255)
     department_name: Optional[str] = Field(default=None, max_length=255)
+    object_name: Optional[str] = Field(default=None, max_length=255)
     phone: Optional[str] = Field(default=None, max_length=20)
     avatar_url: Optional[str] = Field(default=None, max_length=512)
     note: Optional[str] = None
@@ -43,6 +53,14 @@ class SafetyProfileUpdate(BaseModel):
     @field_validator("full_name")
     @classmethod
     def strip_full_name_update(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        normalized = value.strip()
+        return normalized or None
+
+    @field_validator("object_name")
+    @classmethod
+    def strip_object_name_update(cls, value: Optional[str]) -> Optional[str]:
         if value is None:
             return None
         normalized = value.strip()
@@ -61,6 +79,7 @@ class SafetyProfileRead(BaseModel):
     email: Optional[str] = None
     position: Optional[str] = None
     department_name: Optional[str] = None
+    object_name: Optional[str] = None
     phone: Optional[str] = None
     avatar_url: Optional[str] = None
     note: Optional[str] = None

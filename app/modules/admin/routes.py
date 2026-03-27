@@ -271,11 +271,19 @@ def _apply_audit_search_filter(query, search: str):
 def _serialize_log_detail(log: AuditLog):
     user_agent_str = log.user_agent.user_agent if log.user_agent else None
     extra_data = None
+
     if log.extra_data:
         try:
-            extra_data = json.loads(log.extra_data)
-        except json.JSONDecodeError:
-            extra_data = {"raw": log.extra_data}
+            # Проверяем тип: если уже dict, то используем как есть
+            if isinstance(log.extra_data, dict):
+                extra_data = log.extra_data
+            else:
+                # Если строка - парсим JSON
+                extra_data = json.loads(log.extra_data)
+        except (json.JSONDecodeError, TypeError) as e:
+            # Логируем ошибку для отладки (опционально)
+            # logger.warning(f"Failed to parse extra_data: {e}, value: {log.extra_data}")
+            extra_data = {"raw": str(log.extra_data)}
 
     return {
         "id": log.id,

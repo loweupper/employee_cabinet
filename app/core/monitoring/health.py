@@ -1,14 +1,16 @@
 """
 Comprehensive system health check module (fixed for sync SQLAlchemy)
 """
-from enum import Enum
-from typing import Dict, Any
-from datetime import datetime
-import logging
+
 import asyncio
-import time
-import psutil
+import logging
 import shutil
+import time
+from datetime import datetime
+from enum import Enum
+from typing import Any, Dict
+
+import psutil
 
 logger = logging.getLogger("app")
 
@@ -23,11 +25,13 @@ class HealthStatus(str, Enum):
 # DATABASE CHECK (SYNC ENGINE → RUN IN THREAD)
 # ============================================================
 
+
 def _check_database_sync() -> Dict[str, Any]:
     """Sync DB check executed inside a thread"""
     try:
-        from core.database import engine
         from sqlalchemy import text
+
+        from core.database import engine
 
         start = time.time()
 
@@ -48,7 +52,7 @@ def _check_database_sync() -> Dict[str, Any]:
         return {
             "status": status.value,
             "latency_ms": latency_ms,
-            "message": "Database connection successful"
+            "message": "Database connection successful",
         }
 
     except Exception as e:
@@ -56,7 +60,7 @@ def _check_database_sync() -> Dict[str, Any]:
         return {
             "status": HealthStatus.UNHEALTHY.value,
             "error": str(e),
-            "message": "Database connection failed"
+            "message": "Database connection failed",
         }
 
 
@@ -69,43 +73,53 @@ async def check_database() -> Dict[str, Any]:
 # REDIS CHECK (WITH TIMEOUT)
 # ============================================================
 
+
 async def check_redis() -> Dict[str, Any]:
-    try:
-        from core.redis import get_redis
-        redis_client = await get_redis()
+    last_error = None
 
-        start = time.time()
+    for attempt in range(2):
+        try:
+            from core.redis import get_redis
 
-        # Add timeout to avoid hanging
-        await asyncio.wait_for(redis_client.ping(), timeout=1.0)
+            redis_client = await get_redis()
+            start = time.time()
 
-        latency_ms = round((time.time() - start) * 1000, 2)
+            # Add timeout to avoid hanging
+            await asyncio.wait_for(redis_client.ping(), timeout=1.0)
 
-        if latency_ms < 50:
-            status = HealthStatus.HEALTHY
-        elif latency_ms < 200:
-            status = HealthStatus.DEGRADED
-        else:
-            status = HealthStatus.UNHEALTHY
+            latency_ms = round((time.time() - start) * 1000, 2)
 
-        return {
-            "status": status.value,
-            "latency_ms": latency_ms,
-            "message": "Redis connection successful"
-        }
+            if latency_ms < 50:
+                status = HealthStatus.HEALTHY
+            elif latency_ms < 200:
+                status = HealthStatus.DEGRADED
+            else:
+                status = HealthStatus.UNHEALTHY
 
-    except Exception as e:
-        logger.error(f"Redis health check failed: {e}")
-        return {
-            "status": HealthStatus.UNHEALTHY.value,
-            "error": str(e),
-            "message": "Redis connection failed"
-        }
+            return {
+                "status": status.value,
+                "latency_ms": latency_ms,
+                "message": "Redis connection successful",
+            }
+
+        except Exception as e:
+            last_error = e
+            if attempt == 0:
+                # Give async reconnect a brief chance and retry once.
+                await asyncio.sleep(0.15)
+
+    logger.error(f"Redis health check failed: {last_error}")
+    return {
+        "status": HealthStatus.UNHEALTHY.value,
+        "error": str(last_error),
+        "message": "Redis connection failed",
+    }
 
 
 # ============================================================
 # DISK CHECK
 # ============================================================
+
 
 async def check_disk_space(threshold_percent: int = 10) -> Dict[str, Any]:
     try:
@@ -129,7 +143,7 @@ async def check_disk_space(threshold_percent: int = 10) -> Dict[str, Any]:
             "used_gb": round(used_gb, 2),
             "free_gb": round(free_gb, 2),
             "percent_free": round(percent_free, 2),
-            "message": f"{round(percent_free, 1)}% disk space available"
+            "message": f"{round(percent_free, 1)}% disk space available",
         }
 
     except Exception as e:
@@ -137,13 +151,14 @@ async def check_disk_space(threshold_percent: int = 10) -> Dict[str, Any]:
         return {
             "status": HealthStatus.DEGRADED.value,
             "error": str(e),
-            "message": "Could not check disk space"
+            "message": "Could not check disk space",
         }
 
 
 # ============================================================
 # MEMORY CHECK
 # ============================================================
+
 
 async def check_memory(threshold_percent: int = 20) -> Dict[str, Any]:
     try:
@@ -167,7 +182,7 @@ async def check_memory(threshold_percent: int = 20) -> Dict[str, Any]:
             "used_mb": round(used_mb, 2),
             "available_mb": round(available_mb, 2),
             "percent_available": round(percent_available, 2),
-            "message": f"{round(percent_available, 1)}% memory available"
+            "message": f"{round(percent_available, 1)}% memory available",
         }
 
     except Exception as e:
@@ -175,13 +190,14 @@ async def check_memory(threshold_percent: int = 20) -> Dict[str, Any]:
         return {
             "status": HealthStatus.DEGRADED.value,
             "error": str(e),
-            "message": "Could not check memory"
+            "message": "Could not check memory",
         }
 
 
 # ============================================================
 # SYSTEM INFO
 # ============================================================
+
 
 async def get_system_info() -> Dict[str, Any]:
     try:
@@ -199,10 +215,10 @@ async def get_system_info() -> Dict[str, Any]:
             "load_average": {
                 "1min": round(load_avg[0], 2),
                 "5min": round(load_avg[1], 2),
-                "15min": round(load_avg[2], 2)
+                "15min": round(load_avg[2], 2),
             },
             "uptime_seconds": int(uptime.total_seconds()),
-            "boot_time": boot_time.isoformat()
+            "boot_time": boot_time.isoformat(),
         }
 
     except Exception as e:
@@ -214,6 +230,7 @@ async def get_system_info() -> Dict[str, Any]:
 # MAIN HEALTH CHECK
 # ============================================================
 
+
 async def check_health(detailed: bool = False) -> Dict[str, Any]:
     checks = {}
 
@@ -223,7 +240,7 @@ async def check_health(detailed: bool = False) -> Dict[str, Any]:
             check_redis(),
             check_disk_space(),
             check_memory(),
-            return_exceptions=True
+            return_exceptions=True,
         )
 
         def normalize(result):
@@ -241,7 +258,7 @@ async def check_health(detailed: bool = False) -> Dict[str, Any]:
         return {
             "status": HealthStatus.UNHEALTHY.value,
             "error": str(e),
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.utcnow().isoformat(),
         }
 
     statuses = [c["status"] for c in checks.values()]
@@ -253,10 +270,7 @@ async def check_health(detailed: bool = False) -> Dict[str, Any]:
     else:
         overall = HealthStatus.HEALTHY
 
-    result = {
-        "status": overall.value,
-        "timestamp": datetime.utcnow().isoformat()
-    }
+    result = {"status": overall.value, "timestamp": datetime.utcnow().isoformat()}
 
     if detailed:
         result["checks"] = checks

@@ -1,4 +1,5 @@
 <!doctype html>
+{% from "components/action_icon.html" import action_icon_link %}
 <html lang="ru">
   <head>
     <meta charset="UTF-8" />
@@ -21,21 +22,54 @@
             <p class="text-sm text-gray-500 mt-1">{{ profile.full_name }}</p>
           </div>
           <div class="flex gap-2 flex-wrap text-sm">
-            <a
-              href="/departments/safety/cards"
-              class="px-3 py-2 rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200"
-              >Список карточек</a
-            >
-            <a
-              href="/departments/safety/profiles/{{ profile.id }}"
-              class="px-3 py-2 rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200"
-              >Профиль</a
-            >
-            <a
-              href="/departments/safety/profiles/{{ profile.id }}/edit"
-              class="px-3 py-2 rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200"
-              >Редактировать карточку</a
-            >
+            {% call action_icon_link('/departments/safety/cards', 'Список карточек', 'gray') %}
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke-width="1.5"
+                stroke="currentColor"
+                class="h-4 w-4">
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  d="M3.75 6.75h16.5m-16.5 5.25h16.5m-16.5 5.25h16.5" />
+              </svg>
+            {% endcall %}
+            {% call action_icon_link('/departments/safety/profiles/' ~ profile.id, 'Профиль', 'indigo') %}
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke-width="1.5"
+                stroke="currentColor"
+                class="h-4 w-4">
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  d="M2.036 12.322a1.012 1.012 0 0 1 0-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.964-7.178Z" />
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
+              </svg>
+            {% endcall %}
+            {% if safety_permissions.can_edit_profiles %}
+              {% call action_icon_link('/departments/safety/profiles/' ~ profile.id ~ '/edit', 'Редактировать карточку', 'amber') %}
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke-width="1.5"
+                  stroke="currentColor"
+                  class="h-4 w-4">
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931ZM19.5 7.125 16.875 4.5" />
+                </svg>
+              {% endcall %}
+            {% endif %}
           </div>
         </div>
 
@@ -51,66 +85,68 @@
           </div>
         {% endif %}
 
-        <section class="bg-white rounded-xl shadow-md p-6 space-y-4">
-          <h2 class="text-lg font-semibold text-gray-800">Добавить файлы</h2>
-          <form
-            method="post"
-            action="/departments/safety/profiles/{{ profile.id }}/documents/upload-multiple"
-            enctype="multipart/form-data"
-            class="space-y-4"
-            id="multi-upload-form">
-            <div class="flex items-center gap-3 flex-wrap">
-              <input
-                type="file"
-                id="multi-files-picker"
-                name="files"
-                class="hidden"
-                multiple
-                accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx,.txt,.zip,.rar" />
-              <button
-                type="button"
-                id="add-files-btn"
-                class="px-4 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700">
-                Выбрать файлы
-              </button>
-              <span class="text-sm text-gray-500"
-                >Для каждого файла можно задать срок действия и описание</span
-              >
-            </div>
+        {% if safety_permissions.can_manage_documents %}
+          <section class="bg-white rounded-xl shadow-md p-6 space-y-4">
+            <h2 class="text-lg font-semibold text-gray-800">Добавить файлы</h2>
+            <form
+              method="post"
+              action="/departments/safety/profiles/{{ profile.id }}/documents/upload-multiple"
+              enctype="multipart/form-data"
+              class="space-y-4"
+              id="multi-upload-form">
+              <div class="flex items-center gap-3 flex-wrap">
+                <input
+                  type="file"
+                  id="multi-files-picker"
+                  name="files"
+                  class="hidden"
+                  multiple
+                  accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx,.txt,.zip,.rar" />
+                <button
+                  type="button"
+                  id="add-files-btn"
+                  class="px-4 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700">
+                  Выбрать файлы
+                </button>
+                <span class="text-sm text-gray-500"
+                  >Для каждого файла можно задать срок действия и описание</span
+                >
+              </div>
 
-            <div class="overflow-x-auto border rounded-lg">
-              <table class="min-w-full text-sm">
-                <thead class="bg-gray-50 text-gray-700">
-                  <tr>
-                    <th class="px-3 py-2 text-left">Файл</th>
-                    <th class="px-3 py-2 text-left">Срок действия</th>
-                    <th class="px-3 py-2 text-left">Описание</th>
-                    <th class="px-3 py-2 text-left">Действие</th>
-                  </tr>
-                </thead>
-                <tbody id="new-files-table-body">
-                  <tr id="new-files-empty-row">
-                    <td class="px-3 py-5 text-gray-500" colspan="4">
-                      Файлы не добавлены
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
+              <div class="overflow-x-auto border rounded-lg">
+                <table class="min-w-full text-sm">
+                  <thead class="bg-gray-50 text-gray-700">
+                    <tr>
+                      <th class="px-3 py-2 text-left">Файл</th>
+                      <th class="px-3 py-2 text-left">Срок действия</th>
+                      <th class="px-3 py-2 text-left">Описание</th>
+                      <th class="px-3 py-2 text-left">Действие</th>
+                    </tr>
+                  </thead>
+                  <tbody id="new-files-table-body">
+                    <tr id="new-files-empty-row">
+                      <td class="px-3 py-5 text-gray-500" colspan="4">
+                        Файлы не добавлены
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
 
-            <div id="new-files-inputs" class="hidden"></div>
+              <div id="new-files-inputs" class="hidden"></div>
 
-            <div class="flex justify-end">
-              <button
-                type="submit"
-                id="submit-multi-upload"
-                disabled
-                class="px-4 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed">
-                Добавить
-              </button>
-            </div>
-          </form>
-        </section>
+              <div class="flex justify-end">
+                <button
+                  type="submit"
+                  id="submit-multi-upload"
+                  disabled
+                  class="px-4 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed">
+                  Добавить
+                </button>
+              </div>
+            </form>
+          </section>
+        {% endif %}
 
         <section class="bg-white rounded-xl shadow-md p-6 space-y-4">
           <h2 class="text-lg font-semibold text-gray-800">Документы</h2>
@@ -179,27 +215,31 @@
                     </td>
                     <td class="px-3 py-2">
                       <div class="flex flex-wrap gap-2">
-                        <a
-                          href="/documents/{{ doc.id }}/open"
-                          target="_blank"
-                          class="px-2 py-1 rounded bg-blue-100 text-blue-700 hover:bg-blue-200"
-                          >Открыть</a
-                        >
-                        <a
-                          href="/documents/{{ doc.id }}/download"
-                          class="px-2 py-1 rounded bg-emerald-100 text-emerald-700 hover:bg-emerald-200"
-                          >Скачать</a
-                        >
-                        <form
-                          method="post"
-                          action="/departments/safety/profiles/{{ profile.id }}/documents/{{ doc.id }}/delete"
-                          onsubmit="return confirm('Удалить документ?');">
-                          <button
-                            type="submit"
-                            class="px-2 py-1 rounded bg-red-100 text-red-700 hover:bg-red-200">
-                            Удалить
-                          </button>
-                        </form>
+                        {% if safety_permissions.can_manage_documents %}
+                          <a
+                            href="/documents/{{ doc.id }}/open"
+                            target="_blank"
+                            class="px-2 py-1 rounded bg-blue-100 text-blue-700 hover:bg-blue-200"
+                            >Открыть</a
+                          >
+                          <a
+                            href="/documents/{{ doc.id }}/download"
+                            class="px-2 py-1 rounded bg-emerald-100 text-emerald-700 hover:bg-emerald-200"
+                            >Скачать</a
+                          >
+                        {% endif %}
+                        {% if safety_permissions.can_manage_documents %}
+                          <form
+                            method="post"
+                            action="/departments/safety/profiles/{{ profile.id }}/documents/{{ doc.id }}/delete"
+                            onsubmit="return confirm('Удалить документ?');">
+                            <button
+                              type="submit"
+                              class="px-2 py-1 rounded bg-red-100 text-red-700 hover:bg-red-200">
+                              Удалить
+                            </button>
+                          </form>
+                        {% endif %}
                       </div>
                     </td>
                   </tr>
@@ -275,7 +315,7 @@
               <input type="date" class="w-full px-2 py-1 rounded border border-gray-300" data-expiry-index="${index}" value="${entry.expiry || ""}" />
             </td>
             <td class="px-3 py-2">
-              <input type="text" class="w-full px-2 py-1 rounded border border-gray-300" placeholder="Описание" data-desc-index="${index}" value="${(entry.description || "").replace(/"/g, "&quot;")}" />
+              <input type="text" class="w-full px-2 py-1 rounded border border-gray-300" placeholder="Описание" data-desc-index="${index}" value="${(entry.description || "").replaceAll('"', "&quot;")}" />
             </td>
             <td class="px-3 py-2">
               <button type="button" class="px-2 py-1 rounded bg-red-100 text-red-700 hover:bg-red-200" data-remove-index="${index}">Удалить</button>
@@ -286,7 +326,7 @@
 
         tableBody.querySelectorAll("[data-remove-index]").forEach((btn) => {
           btn.addEventListener("click", () => {
-            const idx = Number(btn.getAttribute("data-remove-index"));
+            const idx = Number(btn.dataset.removeIndex);
             filesState.splice(idx, 1);
             reindexFiles();
           });
@@ -294,7 +334,7 @@
 
         tableBody.querySelectorAll("[data-expiry-index]").forEach((input) => {
           input.addEventListener("change", () => {
-            const idx = Number(input.getAttribute("data-expiry-index"));
+            const idx = Number(input.dataset.expiryIndex);
             filesState[idx].expiry = input.value || "";
             reindexFiles();
           });
@@ -302,7 +342,7 @@
 
         tableBody.querySelectorAll("[data-desc-index]").forEach((input) => {
           input.addEventListener("input", () => {
-            const idx = Number(input.getAttribute("data-desc-index"));
+            const idx = Number(input.dataset.descIndex);
             filesState[idx].description = input.value || "";
           });
         });
@@ -329,23 +369,25 @@
         picker.files = dt.files;
       }
 
-      pickBtn.addEventListener("click", () => picker.click());
-      picker.addEventListener("change", () => {
-        const selected = Array.from(picker.files || []);
-        selected.forEach((f) => {
-          filesState.push({ file: f, expiry: "", description: "" });
+      if (pickBtn && picker && form && tableBody && emptyRow && submitBtn) {
+        pickBtn.addEventListener("click", () => picker.click());
+        picker.addEventListener("change", () => {
+          const selected = Array.from(picker.files || []);
+          selected.forEach((f) => {
+            filesState.push({ file: f, expiry: "", description: "" });
+          });
+          picker.value = "";
+          reindexFiles();
         });
-        picker.value = "";
-        reindexFiles();
-      });
 
-      form.addEventListener("submit", (e) => {
-        if (!filesState.length) {
-          e.preventDefault();
-          return;
-        }
-        buildSubmissionPayload();
-      });
+        form.addEventListener("submit", (e) => {
+          if (!filesState.length) {
+            e.preventDefault();
+            return;
+          }
+          buildSubmissionPayload();
+        });
+      }
     </script>
   </body>
 </html>

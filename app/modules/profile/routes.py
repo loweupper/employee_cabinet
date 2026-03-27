@@ -18,7 +18,7 @@ from sqlalchemy.orm import Session
 from core.database import get_db
 from core.template_helpers import get_sidebar_context
 from modules.auth.dependencies import get_current_user_from_cookie
-from modules.auth.models import User
+from modules.auth.models import Department, User
 from modules.auth.schemas import ChangePasswordRequest, UserUpdate
 from modules.auth.service import AuthService
 from modules.departments.safety.models import SafetyProfile
@@ -82,7 +82,6 @@ async def profile_page(
     """
     Страница профиля пользователя
     """
-    logger.info("event=profile_view")
 
     sidebar_context = get_sidebar_context(user, db)
 
@@ -104,11 +103,41 @@ async def profile_page(
         .all()
     )
 
+    department_name = None
+    if user.department_id:
+        department_name = (
+            db.query(Department.name)
+            .filter(Department.id == user.department_id)
+            .scalar()
+        )
+
+    role_labels = {
+        "employee": "👤 Сотрудник",
+        "admin": "👑 Администратор",
+        "accountant": "💰 Бухгалтер",
+        "hr": "👔 Отдел кадров",
+        "safety": "👷 Специалист по охране труда",
+        "engineer": "🔧 Инженер",
+        "lawyer": "⚖️ Юрист",
+    }
+
+    role_value = None
+    if user.role:
+        role_value = (
+            user.role.value
+            if hasattr(user.role, "value")
+            else str(user.role).split(".")[-1].lower()
+        )
+
+    user_role = role_labels.get(role_value, role_value)
+
     return templates.TemplateResponse(
         "web/profile/index.html",
         {
             "request": request,
             "user": user,
+            "department_name": department_name,
+            "user_role": user_role,
             "current_user": user,
             "success": success,
             "error": error,

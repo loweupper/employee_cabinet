@@ -1,12 +1,15 @@
-from typing import Optional, List
-from functools import lru_cache
-from sqlalchemy import and_, or_
-from sqlalchemy.orm import Session
-from modules.access.models_sql import ACL, ACLEffect, PermissionType  
-from modules.auth.models import User, UserRole
-import redis
 import json
 from datetime import datetime, timezone
+from functools import lru_cache
+from typing import List, Optional
+
+import redis
+from sqlalchemy import and_, or_
+from sqlalchemy.orm import Session
+
+from core.redis import get_redis_sync
+from modules.access.models_sql import ACL, ACLEffect, PermissionType
+from modules.auth.models import User, UserRole
 
 
 def can_access(
@@ -45,31 +48,37 @@ class AccessService:
     Сервис проверки доступа с поддержкой RBAC + ABAC + ACL.
     Использует иерархию ролей, кэширование и оптимизированные запросы.
     """
-    
+
     # Role hierarchy: более высокие роли наследуют права нижних
     ROLE_HIERARCHY = {
         UserRole.EMPLOYEE: [UserRole.EMPLOYEE],
         UserRole.ADMIN: [UserRole.ADMIN, UserRole.EMPLOYEE],
     }
-    
+
     # Кэш (Redis или in-memory)
     def __init__(self, redis_client: Optional[redis.Redis] = None):
-        self.redis = redis_client
-    
-    def _get_cache_key(self, user_id: int, resource_type: str, resource_id: int, permission: str) -> str:
+        self.redis = redis_client or get_redis_sync()
+
+    def _get_cache_key(
+        self, user_id: int, resource_type: str, resource_id: int, permission: str
+    ) -> str:
         """Генерирует ключ для кэша"""
         return f"acl:{user_id}:{resource_type}:{resource_id}:{permission}"
-    
+
     def _check_from_cache(self, cache_key: str) -> Optional[bool]:
         """Проверяет результат в кэше"""
         if not self.redis:
             return None
         try:
             result = self.redis.get(cache_key)
-            return result == b"true" if result else None
+            if result is None:
+                return None
+            if isinstance(result, bytes):
+                result = result.decode()
+            return str(result).lower() == "true"
         except Exception:
             return None  # Если Redis недоступен, пропускаем кэш
-    
+
     def _set_cache(self, cache_key: str, result: bool, ttl: int = 3600):
         """Сохраняет результат в кэш (TTL 1 час по умолчанию)"""
         if not self.redis:
@@ -78,8 +87,10 @@ class AccessService:
             self.redis.setex(cache_key, ttl, "true" if result else "false")
         except Exception:
             pass  # Логировать в production
-    
-    def _invalidate_cache(self, user_id: int, resource_type: str = "*", resource_id: Optional[int] = None):
+
+    def _invalidate_cache(
+        self, user_id: int, resource_type: str = "*", resource_id: Optional[int] = None
+    ):
         """Инвалидирует кэш для пользователя"""
         if not self.redis:
             return
@@ -93,7 +104,7 @@ class AccessService:
                 self.redis.delete(*keys)
         except Exception:
             pass
-    
+
     @staticmethod
     def has_access(
         user: User,
@@ -101,7 +112,7 @@ class AccessService:
         resource_id: int,
         permission: PermissionType,
         db: Session,
-        redis_client: Optional[redis.Redis] = None
+        redis_client: Optional[redis.Redis] = None,
     ) -> bool:
         """
         Проверка доступа с оптимизацией и кэшированием.
@@ -110,62 +121,74 @@ class AccessService:
         2. ALLOW правила по иерархии (User → Role → Attributes)
         Expired ACL entries (expires_at < now) are ignored.
         """
-        
+
         service = AccessService(redis_client)
-        cache_key = service._get_cache_key(user.id, resource_type, resource_id, permission.value)
-        
+        cache_key = service._get_cache_key(
+            user.id, resource_type, resource_id, permission.value
+        )
+
         # Проверяем кэш
         cached_result = service._check_from_cache(cache_key)
         if cached_result is not None:
             return cached_result
-        
+
         now = datetime.now(timezone.utc)
-        
+
         # Base subject filter (shared for DENY and ALLOW queries)
         subject_filter = or_(
             ACL.user_id == user.id,
-            ACL.role.in_([r.value for r in service.ROLE_HIERARCHY.get(user.role, [user.role])]),
-            ACL.department == getattr(user, 'department', None),
-            ACL.position == getattr(user, 'position', None),
-            ACL.location == getattr(user, 'location', None),
-            ACL.object_id == getattr(user, 'object_id', None),
+            ACL.role.in_(
+                [r.value for r in service.ROLE_HIERARCHY.get(user.role, [user.role])]
+            ),
+            ACL.department == getattr(user, "department", None),
+            ACL.position == getattr(user, "position", None),
+            ACL.location == getattr(user, "location", None),
+            ACL.object_id == getattr(user, "object_id", None),
         )
-        
+
         # Expires_at filter: entry is valid when expires_at is NULL or in the future
         not_expired = or_(ACL.expires_at.is_(None), ACL.expires_at > now)
-        
+
         # Проверяем DENY правила в первую очередь
-        deny_rule = db.query(ACL).filter(
-            and_(
-                ACL.resource_type == resource_type,
-                ACL.resource_id == resource_id,
-                ACL.permission == permission,
-                ACL.effect == ACLEffect.DENY,
-                not_expired,
-                subject_filter,
+        deny_rule = (
+            db.query(ACL)
+            .filter(
+                and_(
+                    ACL.resource_type == resource_type,
+                    ACL.resource_id == resource_id,
+                    ACL.permission == permission,
+                    ACL.effect == ACLEffect.DENY,
+                    not_expired,
+                    subject_filter,
+                )
             )
-        ).first()
-        
+            .first()
+        )
+
         if deny_rule:
             service._set_cache(cache_key, False)
             return False
-        
+
         # Проверяем ALLOW правила (оптимизированный запрос)
-        allow_rule = db.query(ACL).filter(
-            and_(
-                ACL.resource_type == resource_type,
-                ACL.resource_id == resource_id,
-                ACL.permission == permission,
-                ACL.effect == ACLEffect.ALLOW,
-                not_expired,
-                subject_filter,
+        allow_rule = (
+            db.query(ACL)
+            .filter(
+                and_(
+                    ACL.resource_type == resource_type,
+                    ACL.resource_id == resource_id,
+                    ACL.permission == permission,
+                    ACL.effect == ACLEffect.ALLOW,
+                    not_expired,
+                    subject_filter,
+                )
             )
-        ).first()
-        
+            .first()
+        )
+
         result = allow_rule is not None
         service._set_cache(cache_key, result)
         return result
-    
+
     @staticmethod
     def grant_access(
         resource_type: str,
@@ -183,7 +206,7 @@ class AccessService:
         redis_client: Optional[redis.Redis] = None,
     ) -> ACL:
         """Создать ALLOW правило"""
-        
+
         acl_rule = ACL(
             resource_type=resource_type,
             resource_id=resource_id,
@@ -200,13 +223,15 @@ class AccessService:
         )
         db.add(acl_rule)
         db.commit()
-        
+
         # Инвалидируем кэш для затронутых пользователей
         if user_id:
-            AccessService(redis_client)._invalidate_cache(user_id, resource_type, resource_id)
-        
+            AccessService(redis_client)._invalidate_cache(
+                user_id, resource_type, resource_id
+            )
+
         return acl_rule
-    
+
     @staticmethod
     def revoke_access(
         resource_type: str,
@@ -218,30 +243,32 @@ class AccessService:
         redis_client: Optional[redis.Redis] = None,
     ) -> bool:
         """Удалить правило доступа"""
-        
+
         filters = [
             ACL.resource_type == resource_type,
             ACL.resource_id == resource_id,
             ACL.permission == permission,
         ]
-        
+
         if user_id is not None:
             filters.append(ACL.user_id == user_id)
         if role is not None:
             filters.append(ACL.role == role.value)
-        
+
         rule = db.query(ACL).filter(*filters).first()
         if rule:
             db.delete(rule)
             db.commit()
-            
+
             # Инвалидируем кэш
             if user_id is not None:
-                AccessService(redis_client)._invalidate_cache(user_id, resource_type, resource_id)
-            
+                AccessService(redis_client)._invalidate_cache(
+                    user_id, resource_type, resource_id
+                )
+
             return True
         return False
-    
+
     @staticmethod
     def get_user_permissions(
         user_id: int,
@@ -250,52 +277,74 @@ class AccessService:
         db: Session,
     ) -> List[str]:
         """Получить все разрешения пользователя для ресурса"""
-        
+
         # Получаем пользователя для проверки атрибутов
         user = db.query(User).filter_by(id=user_id).first()
         if not user:
             return []
-        
+
         # Получаем все ALLOW правила (без DENY)
         permissions = set()
-        
-        allow_rules = db.query(ACL.permission).filter(
-            and_(
-                ACL.resource_type == resource_type,
-                ACL.resource_id == resource_id,
-                ACL.effect == ACLEffect.ALLOW,
-                or_(
-                    ACL.user_id == user_id,
-                    ACL.role.in_([r.value for r in AccessService.ROLE_HIERARCHY.get(user.role, [user.role])]),
-                    ACL.department == getattr(user, 'department', None),
-                    ACL.position == getattr(user, 'position', None),
-                    ACL.location == getattr(user, 'location', None),
-                    ACL.object_id == getattr(user, 'object_id', None),
+
+        allow_rules = (
+            db.query(ACL.permission)
+            .filter(
+                and_(
+                    ACL.resource_type == resource_type,
+                    ACL.resource_id == resource_id,
+                    ACL.effect == ACLEffect.ALLOW,
+                    or_(
+                        ACL.user_id == user_id,
+                        ACL.role.in_(
+                            [
+                                r.value
+                                for r in AccessService.ROLE_HIERARCHY.get(
+                                    user.role, [user.role]
+                                )
+                            ]
+                        ),
+                        ACL.department == getattr(user, "department", None),
+                        ACL.position == getattr(user, "position", None),
+                        ACL.location == getattr(user, "location", None),
+                        ACL.object_id == getattr(user, "object_id", None),
+                    ),
                 )
             )
-        ).all()
-        
+            .all()
+        )
+
         for rule in allow_rules:
             permissions.add(rule.permission.value)
-        
+
         # Удаляем те, которые запрещены DENY правилами
-        deny_rules = db.query(ACL.permission).filter(
-            and_(
-                ACL.resource_type == resource_type,
-                ACL.resource_id == resource_id,
-                ACL.effect == ACLEffect.DENY,
-                or_(
-                    ACL.user_id == user_id,
-                    ACL.role.in_([r.value for r in AccessService.ROLE_HIERARCHY.get(user.role, [user.role])]),
-                    ACL.department == getattr(user, 'department', None),
-                    ACL.position == getattr(user, 'position', None),
-                    ACL.location == getattr(user, 'location', None),
-                    ACL.object_id == getattr(user, 'object_id', None),
+        deny_rules = (
+            db.query(ACL.permission)
+            .filter(
+                and_(
+                    ACL.resource_type == resource_type,
+                    ACL.resource_id == resource_id,
+                    ACL.effect == ACLEffect.DENY,
+                    or_(
+                        ACL.user_id == user_id,
+                        ACL.role.in_(
+                            [
+                                r.value
+                                for r in AccessService.ROLE_HIERARCHY.get(
+                                    user.role, [user.role]
+                                )
+                            ]
+                        ),
+                        ACL.department == getattr(user, "department", None),
+                        ACL.position == getattr(user, "position", None),
+                        ACL.location == getattr(user, "location", None),
+                        ACL.object_id == getattr(user, "object_id", None),
+                    ),
                 )
             )
-        ).all()
-        
+            .all()
+        )
+
         for rule in deny_rules:
             permissions.discard(rule.permission.value)
-        
+
         return list(permissions)

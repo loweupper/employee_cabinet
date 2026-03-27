@@ -9,13 +9,69 @@ from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
+from core.constants import UserRole
 from core.database import get_db
-from core.constants import UserRole  # ✅ импорт Enum
 from modules.auth.models import User
 from modules.auth.utils import decode_token
 
 logger = logging.getLogger("app")
 LOGIN_PAGE_URL = "/api/v1/auth/login-page"
+
+
+def _reset_session_state(
+    db: Session,
+    log_event: str,
+    extra: dict | None = None,
+) -> None:
+    """Best-effort session reset after transient DB/protocol failures."""
+    payload = {"event": log_event}
+    if extra:
+        payload.update(extra)
+
+    try:
+        db.rollback()
+    except (SQLAlchemyError, IndexError) as rollback_error:
+        logger.error(
+            {
+                **payload,
+                "stage": "rollback",
+                "error_type": type(rollback_error).__name__,
+            }
+        )
+
+    try:
+        db.invalidate()
+    except SQLAlchemyError as invalidate_error:
+        logger.error(
+            {
+                **payload,
+                "stage": "invalidate",
+                "error_type": type(invalidate_error).__name__,
+            }
+        )
+
+
+def _load_user_snapshot_resilient(
+    db: Session,
+    user_id: int,
+    log_event: str,
+    extra: dict | None = None,
+) -> User | None:
+    """Load user snapshot with one reconnect attempt on DB failures."""
+    try:
+        return _load_user_snapshot(db, user_id)
+    except (SQLAlchemyError, IndexError) as first_error:
+        logger.error(
+            {
+                "event": log_event,
+                "stage": "first_attempt",
+                "error_type": type(first_error).__name__,
+                **(extra or {}),
+            }
+        )
+        _reset_session_state(db, log_event, extra)
+
+    return _load_user_snapshot(db, user_id)
 
 
 def _load_user_snapshot(db: Session, user_id: int) -> User | None:
@@ -97,19 +153,11 @@ def get_current_user(
         ) from e
 
     # Получаем пользователя из БД
-    try:
-        user = _load_user_snapshot(db, int(user_id))
-    except SQLAlchemyError as e:
-        # На случай проблем с курсором/состоянием транзакции откатываем и
-        # пробуем один повторный запрос в рамках того же Session.
-        logger.error(
-            {
-                "event": "current_user_query_failed",
-                "error_type": type(e).__name__,
-            }
-        )
-        db.rollback()
-        user = _load_user_snapshot(db, int(user_id))
+    user = _load_user_snapshot_resilient(
+        db,
+        int(user_id),
+        "current_user_query_failed",
+    )
 
     if not user:
         raise HTTPException(
@@ -147,9 +195,7 @@ def get_current_user_from_cookie(
             {
                 "event": "unauthorized_access",
                 "path": str(request.url.path),
-                "client_ip": (
-                    request.client.host if request.client else "unknown"
-                ),
+                "client_ip": (request.client.host if request.client else "unknown"),
             }
         )
         # Редирект на страницу логина вместо 401
@@ -177,9 +223,7 @@ def get_current_user_from_cookie(
                 "event": "invalid_token",
                 "error": str(e),
                 "path": str(request.url.path),
-                "client_ip": (
-                    request.client.host if request.client else "unknown"
-                ),
+                "client_ip": (request.client.host if request.client else "unknown"),
             }
         )
         raise HTTPException(
@@ -189,18 +233,12 @@ def get_current_user_from_cookie(
         ) from e
 
     # Получаем пользователя из БД
-    try:
-        user = _load_user_snapshot(db, int(user_id))
-    except SQLAlchemyError as e:
-        logger.error(
-            {
-                "event": "current_user_cookie_query_failed",
-                "error_type": type(e).__name__,
-                "path": str(request.url.path),
-            }
-        )
-        db.rollback()
-        user = _load_user_snapshot(db, int(user_id))
+    user = _load_user_snapshot_resilient(
+        db,
+        int(user_id),
+        "current_user_cookie_query_failed",
+        extra={"path": str(request.url.path)},
+    )
 
     if not user:
         raise HTTPException(
@@ -248,7 +286,12 @@ def get_current_user_optional(
         if user_id is None:
             return None
 
-        user = _load_user_snapshot(db, int(user_id))
+        user = _load_user_snapshot_resilient(
+            db,
+            int(user_id),
+            "current_user_optional_query_failed",
+            extra={"path": str(request.url.path)},
+        )
 
         if user and user.is_active:
             return user
@@ -274,9 +317,7 @@ def require_role(*roles: str):
 
     def check_role(user: User = Depends(get_current_user)) -> User:
         # Получаем значение роли пользователя (если это Enum)
-        user_role = (
-            user.role.value if hasattr(user.role, "value") else user.role
-        )
+        user_role = user.role.value if hasattr(user.role, "value") else user.role
 
         if user_role not in roles:
             raise HTTPException(
@@ -298,9 +339,7 @@ def require_role_web(*roles: str):
 
     def check_role(user: User = Depends(get_current_user_from_cookie)) -> User:
         # Получаем значение роли пользователя (если это Enum)
-        user_role = (
-            user.role.value if hasattr(user.role, "value") else user.role
-        )
+        user_role = user.role.value if hasattr(user.role, "value") else user.role
 
         if user_role not in roles:
             raise HTTPException(

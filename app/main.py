@@ -198,6 +198,17 @@ async def lifespan(app: FastAPI):
             logger.error(f"Failed to initialize monitoring components: {e}")
 
     yield
+    try:
+        from core.redis import close_redis
+
+        await close_redis()
+    except Exception as redis_close_error:
+        logger.warning(
+            {
+                "event": "redis_close_failed",
+                "error_type": type(redis_close_error).__name__,
+            }
+        )
     logger.debug({"event": "app_shutdown"})
 
 
@@ -320,7 +331,26 @@ app.openapi = custom_openapi
 # ===================================
 # Rate Limiting Setup
 # ===================================
-limiter = Limiter(key_func=get_remote_address)
+try:
+    limiter = Limiter(
+        key_func=get_remote_address,
+        storage_uri=settings.REDIS_URL,
+    )
+    logger.info(
+        {
+            "event": "rate_limiter_initialized",
+            "storage": "redis",
+        }
+    )
+except Exception as limiter_error:
+    limiter = Limiter(key_func=get_remote_address)
+    logger.warning(
+        {
+            "event": "rate_limiter_fallback",
+            "storage": "memory",
+            "error_type": type(limiter_error).__name__,
+        }
+    )
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
@@ -388,13 +418,16 @@ app.add_middleware(
         re.compile(r"^/departments/safety/profiles/\d+/delete$"),
         re.compile(r"^/departments/safety/profiles/\d+/archive$"),
         re.compile(r"^/departments/safety/profiles/\d+/restore$"),
-        re.compile(r"^/departments/safety/profiles/batch-delete$"),
+        re.compile(r"^/departments/safety/profiles/\d+/link-user$"),
+        re.compile(r"^/departments/safety/profiles/\d+/unlink-user$"),
+        re.compile(r"^/departments/safety/profiles/batch-delete/execute$"),
         re.compile(r"^/departments/safety/profiles/\d+/documents/upload$"),
         re.compile(r"^/departments/safety/profiles/\d+/documents/upload-multiple$"),
         re.compile(r"^/departments/safety/profiles/\d+/documents/\d+/delete$"),
         re.compile(r"^/departments/safety/documents/upload-common$"),
         re.compile(r"^/departments/safety/documents/common/\d+/update$"),
         re.compile(r"^/departments/safety/documents/common/\d+/delete$"),
+        re.compile(r"^/departments/safety/documents/common/\d+/document/\d+/delete$"),
     ],
 )
 

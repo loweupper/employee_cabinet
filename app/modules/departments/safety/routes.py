@@ -21,12 +21,13 @@ from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from core.config import settings
-from core.constants import DocumentCategory
+from core.constants import DocumentCategory, UserRole
 from core.database import get_db
 from core.template_helpers import get_sidebar_context
 from core.validators import ALLOWED_DOCUMENT_EXTENSIONS, validate_file_extension
 from modules.auth.dependencies import get_current_user_from_cookie
 from modules.auth.models import User
+from modules.auth.service import AuthService
 from modules.departments.safety.models import (
     DocumentAccessRule,
     DocumentMetaExtension,
@@ -51,6 +52,32 @@ router = APIRouter(prefix="/safety", tags=["departments-safety"])
 templates = Jinja2Templates(directory="templates")
 
 PAGE_SIZE = 20
+
+
+def _safety_permissions(user: User, db: Session) -> dict[str, bool]:
+    is_safety_admin = user.role in (UserRole.ADMIN, UserRole.SAFETY)
+
+    can_access = is_safety_admin or AuthService.user_has_permission(
+        user,
+        "can_access_safety",
+        db,
+    )
+
+    def _has(permission_key: str) -> bool:
+        if is_safety_admin:
+            return True
+        if not can_access:
+            return False
+        return AuthService.user_has_permission(user, permission_key, db)
+
+    return {
+        "can_access": can_access,
+        "can_create_profiles": _has("can_create_safety_profiles"),
+        "can_edit_profiles": _has("can_edit_safety_profiles"),
+        "can_archive_profiles": _has("can_archive_safety_profiles"),
+        "can_manage_documents": _has("can_manage_safety_documents"),
+        "can_manage_common_docs": _has("can_manage_safety_common_docs"),
+    }
 
 
 def _safe_url_text(value: Optional[str]) -> str:
@@ -243,6 +270,19 @@ def _set_details(db: Session, set_id: int) -> dict:
     documents = (
         _set_documents_query(db, set_id).order_by(Document.created_at.asc()).all()
     )
+    document_ids = [doc.id for doc in documents]
+    expiry_map: dict[int, Optional[date]] = {}
+    if document_ids:
+        expiry_rows = (
+            db.query(
+                DocumentMetaExtension.document_id,
+                DocumentMetaExtension.expiry_date,
+            )
+            .filter(DocumentMetaExtension.document_id.in_(document_ids))
+            .all()
+        )
+        expiry_map = {int(doc_id): expiry for doc_id, expiry in expiry_rows}
+
     selected_users = (
         db.query(SafetyDocumentSetUser.user_id)
         .filter(SafetyDocumentSetUser.set_id == set_id)
@@ -252,6 +292,7 @@ def _set_details(db: Session, set_id: int) -> dict:
     return {
         "document_set": document_set,
         "documents": documents,
+        "document_expiry_map": expiry_map,
         "selected_user_ids": [u[0] for u in selected_users],
     }
 
@@ -259,8 +300,9 @@ def _set_details(db: Session, set_id: int) -> dict:
 @router.get("", response_class=HTMLResponse)
 async def safety_index(
     user: Annotated[User, Depends(get_current_user_from_cookie)],
+    db: Annotated[Session, Depends(get_db)] = None,
 ):
-    SafetyService.ensure_safety_role(user)
+    SafetyService.ensure_safety_role(user, db)
     return RedirectResponse(url="/departments/safety/cards", status_code=303)
 
 
@@ -279,7 +321,7 @@ async def safety_cards_list(
     user: Annotated[User, Depends(get_current_user_from_cookie)] = None,
     db: Annotated[Session, Depends(get_db)] = None,
 ):
-    SafetyService.ensure_safety_role(user)
+    SafetyService.ensure_safety_role(user, db)
 
     query = db.query(SafetyProfile)
     if view == "archived":
@@ -327,11 +369,13 @@ async def safety_cards_list(
     )
 
     sidebar_context = get_sidebar_context(user, db)
+    safety_permissions = _safety_permissions(user, db)
     return templates.TemplateResponse(
         "web/departments/safety/cards_list.html",
         {
             "request": request,
             "current_user": user,
+            "safety_permissions": safety_permissions,
             "profiles": profiles,
             "search": search or "",
             "employee_type": employee_type,
@@ -356,14 +400,21 @@ async def safety_card_create_page(
     user: Annotated[User, Depends(get_current_user_from_cookie)] = None,
     db: Annotated[Session, Depends(get_db)] = None,
 ):
-    SafetyService.ensure_safety_role(user)
+    SafetyService.ensure_safety_permission(
+        user,
+        db,
+        "can_create_safety_profiles",
+        "Недостаточно прав для создания карточек ОТ",
+    )
 
     sidebar_context = get_sidebar_context(user, db)
+    safety_permissions = _safety_permissions(user, db)
     return templates.TemplateResponse(
         "web/departments/safety/cards_create.html",
         {
             "request": request,
             "current_user": user,
+            "safety_permissions": safety_permissions,
             "users": _active_safety_users(db),
             "objects": _active_objects(db),
             "error": _safe_url_text(error),
@@ -396,11 +447,13 @@ async def safety_profile_detail(
     )
 
     sidebar_context = get_sidebar_context(user, db)
+    safety_permissions = _safety_permissions(user, db)
     return templates.TemplateResponse(
         "web/departments/safety/profile_detail.html",
         {
             "request": request,
             "current_user": user,
+            "safety_permissions": safety_permissions,
             "profile": profile,
             "documents": documents,
             **sidebar_context,
@@ -416,14 +469,22 @@ async def safety_profile_edit_page(
     user: Annotated[User, Depends(get_current_user_from_cookie)] = None,
     db: Annotated[Session, Depends(get_db)] = None,
 ):
+    SafetyService.ensure_safety_permission(
+        user,
+        db,
+        "can_edit_safety_profiles",
+        "Недостаточно прав для редактирования карточек ОТ",
+    )
     profile = SafetyService.get_profile(db=db, actor=user, profile_id=profile_id)
 
     sidebar_context = get_sidebar_context(user, db)
+    safety_permissions = _safety_permissions(user, db)
     return templates.TemplateResponse(
         "web/departments/safety/profile_edit.html",
         {
             "request": request,
             "current_user": user,
+            "safety_permissions": safety_permissions,
             "profile": profile,
             "users": _active_safety_users(db),
             **sidebar_context,
@@ -497,11 +558,13 @@ async def safety_profile_documents_page(
         expiry_map = dict(meta_rows)
 
     sidebar_context = get_sidebar_context(user, db)
+    safety_permissions = _safety_permissions(user, db)
     return templates.TemplateResponse(
         "web/departments/safety/profile_documents.html",
         {
             "request": request,
             "current_user": user,
+            "safety_permissions": safety_permissions,
             "profile": profile,
             "documents": documents,
             "expiry_map": expiry_map,
@@ -536,6 +599,7 @@ async def create_safety_profile_form(
     email: Annotated[Optional[str], Form()] = None,
     position: Annotated[Optional[str], Form()] = None,
     department_name: Annotated[Optional[str], Form()] = None,
+    object_name: Annotated[Optional[str], Form()] = None,
     phone: Annotated[Optional[str], Form()] = None,
     note: Annotated[Optional[str], Form()] = None,
     object_id: Annotated[Optional[int], Form()] = None,
@@ -550,6 +614,7 @@ async def create_safety_profile_form(
             email=email,
             position=position,
             department_name=department_name,
+            object_name=object_name,
             phone=phone,
             note=note,
             object_id=object_id,
@@ -599,6 +664,7 @@ async def update_safety_profile_form(
     email: Annotated[Optional[str], Form()] = None,
     position: Annotated[Optional[str], Form()] = None,
     department_name: Annotated[Optional[str], Form()] = None,
+    object_name: Annotated[Optional[str], Form()] = None,
     phone: Annotated[Optional[str], Form()] = None,
     note: Annotated[Optional[str], Form()] = None,
     user: Annotated[User, Depends(get_current_user_from_cookie)] = None,
@@ -612,6 +678,7 @@ async def update_safety_profile_form(
             email=email,
             position=position,
             department_name=department_name,
+            object_name=object_name,
             phone=phone,
             note=note,
         )
@@ -659,6 +726,36 @@ async def delete_safety_profile(
     )
 
 
+@router.post("/profiles/{profile_id}/unlink-user", response_model=None)
+async def unlink_safety_profile_user(
+    profile_id: int,
+    user: Annotated[User, Depends(get_current_user_from_cookie)] = None,
+    db: Annotated[Session, Depends(get_db)] = None,
+):
+    try:
+        profile = SafetyService.get_profile(db=db, actor=user, profile_id=profile_id)
+        SafetyService.unlink_profile_user(
+            db=db,
+            actor=user,
+            profile=profile,
+        )
+        return RedirectResponse(
+            url=(
+                f"/departments/safety/cards/{profile_id}/edit"
+                "?success=Связь с пользователем снята"
+            ),
+            status_code=303,
+        )
+    except HTTPException as exc:
+        return RedirectResponse(
+            url=(
+                f"/departments/safety/cards/{profile_id}/edit"
+                f"?error={_safe_url_text(str(exc.detail))}"
+            ),
+            status_code=303,
+        )
+
+
 @router.post("/profiles/{profile_id}/archive", response_model=None)
 async def archive_safety_profile(
     profile_id: int,
@@ -685,7 +782,7 @@ async def restore_safety_profile(
     )
 
 
-@router.post("/profiles/batch-delete", response_model=None)
+@router.post("/profiles/batch-delete/execute", response_model=None)
 async def batch_delete_safety_profiles(
     profile_ids: Annotated[Optional[list[int]], Form()] = None,
     user: Annotated[User, Depends(get_current_user_from_cookie)] = None,
@@ -736,6 +833,12 @@ async def upload_profile_document(
     user: Annotated[User, Depends(get_current_user_from_cookie)] = None,
     db: Annotated[Session, Depends(get_db)] = None,
 ):
+    SafetyService.ensure_safety_permission(
+        user,
+        db,
+        "can_manage_safety_documents",
+        "Недостаточно прав для загрузки документов ОТ",
+    )
     profile = SafetyService.get_profile(db=db, actor=user, profile_id=profile_id)
 
     if not file.filename or not validate_file_extension(
@@ -823,6 +926,12 @@ async def upload_profile_documents_multiple(
     user: Annotated[User, Depends(get_current_user_from_cookie)] = None,
     db: Annotated[Session, Depends(get_db)] = None,
 ):
+    SafetyService.ensure_safety_permission(
+        user,
+        db,
+        "can_manage_safety_documents",
+        "Недостаточно прав для загрузки документов ОТ",
+    )
     profile = SafetyService.get_profile(db=db, actor=user, profile_id=profile_id)
 
     valid_files = [f for f in files if f and f.filename]
@@ -932,6 +1041,12 @@ async def delete_profile_document(
     user: Annotated[User, Depends(get_current_user_from_cookie)] = None,
     db: Annotated[Session, Depends(get_db)] = None,
 ):
+    SafetyService.ensure_safety_permission(
+        user,
+        db,
+        "can_manage_safety_documents",
+        "Недостаточно прав для удаления документов ОТ",
+    )
     profile = SafetyService.get_profile(db=db, actor=user, profile_id=profile_id)
 
     binding = (
@@ -999,7 +1114,7 @@ async def common_docs_list(
     user: Annotated[User, Depends(get_current_user_from_cookie)] = None,
     db: Annotated[Session, Depends(get_db)] = None,
 ):
-    SafetyService.ensure_safety_role(user)
+    SafetyService.ensure_safety_role(user, db)
 
     query = db.query(SafetyDocumentSet).filter(SafetyDocumentSet.archived_at.is_(None))
 
@@ -1068,11 +1183,13 @@ async def common_docs_list(
         )
 
     sidebar_context = get_sidebar_context(user, db)
+    safety_permissions = _safety_permissions(user, db)
     return templates.TemplateResponse(
         "web/departments/safety/common_docs_list.html",
         {
             "request": request,
             "current_user": user,
+            "safety_permissions": safety_permissions,
             "groups": groups,
             "search": search or "",
             "sort": sort,
@@ -1099,20 +1216,28 @@ async def common_docs_create_page(
     user: Annotated[User, Depends(get_current_user_from_cookie)] = None,
     db: Annotated[Session, Depends(get_db)] = None,
 ):
-    SafetyService.ensure_safety_role(user)
+    SafetyService.ensure_safety_permission(
+        user,
+        db,
+        "can_manage_safety_common_docs",
+        "Недостаточно прав для создания общих документов ОТ",
+    )
 
     selected_users = selected_user_ids or []
     users = _active_safety_users(db)
     selected_user_map = {u.id: u for u in users}
 
     sidebar_context = get_sidebar_context(user, db)
+    safety_permissions = _safety_permissions(user, db)
     return templates.TemplateResponse(
         "web/departments/safety/common_docs_form.html",
         {
             "request": request,
             "current_user": user,
+            "safety_permissions": safety_permissions,
             "mode": "create",
             "users": users,
+            "success": None,
             "error": _safe_url_text(error),
             "selected_user_ids": selected_users,
             "selected_users": [
@@ -1122,6 +1247,7 @@ async def common_docs_create_page(
             "selected_title": title or "",
             "selected_expiry_date": expiry_date or "",
             "existing_documents": [],
+            "document_expiry_map": {},
             "document_set_id": None,
             **sidebar_context,
         },
@@ -1132,24 +1258,28 @@ async def common_docs_create_page(
 async def common_docs_open_page(
     set_id: int,
     request: Request,
+    success: Annotated[Optional[str], Query()] = None,
     error: Annotated[Optional[str], Query()] = None,
     user: Annotated[User, Depends(get_current_user_from_cookie)] = None,
     db: Annotated[Session, Depends(get_db)] = None,
 ):
-    SafetyService.ensure_safety_role(user)
+    SafetyService.ensure_safety_role(user, db)
 
     details = _set_details(db=db, set_id=set_id)
     users = _active_safety_users(db)
     selected_user_map = {u.id: u for u in users}
 
     sidebar_context = get_sidebar_context(user, db)
+    safety_permissions = _safety_permissions(user, db)
     return templates.TemplateResponse(
         "web/departments/safety/common_docs_form.html",
         {
             "request": request,
             "current_user": user,
+            "safety_permissions": safety_permissions,
             "mode": "edit",
             "users": users,
+            "success": _safe_url_text(success),
             "error": _safe_url_text(error),
             "selected_user_ids": details["selected_user_ids"],
             "selected_users": [
@@ -1165,6 +1295,7 @@ async def common_docs_open_page(
                 else ""
             ),
             "existing_documents": details["documents"],
+            "document_expiry_map": details["document_expiry_map"],
             "document_set_id": details["document_set"].id,
             **sidebar_context,
         },
@@ -1175,13 +1306,19 @@ async def common_docs_open_page(
 async def upload_common_document(
     title: Annotated[str, Form(...)],
     files: Annotated[list[UploadFile], File(...)],
+    file_expiry_dates: Annotated[Optional[list[str]], Form()] = None,
     expiry_date: Annotated[Optional[str], Form()] = None,
     all_company: Annotated[bool, Form()] = False,
     grant_user_ids: Annotated[Optional[list[int]], Form()] = None,
     user: Annotated[User, Depends(get_current_user_from_cookie)] = None,
     db: Annotated[Session, Depends(get_db)] = None,
 ):
-    SafetyService.ensure_safety_role(user)
+    SafetyService.ensure_safety_permission(
+        user,
+        db,
+        "can_manage_safety_common_docs",
+        "Недостаточно прав для создания общих документов ОТ",
+    )
 
     valid_files = [f for f in files if f and f.filename]
     if not valid_files:
@@ -1227,10 +1364,15 @@ async def upload_common_document(
     default_object_id = _resolve_default_object_id(db=db, actor=user)
     created_document_ids: list[int] = []
 
-    for file in valid_files:
+    for idx, file in enumerate(valid_files):
         file_bytes = await file.read()
         await file.seek(0)
         stored_path = await DocumentService.save_file(file, default_object_id)
+
+        file_specific_expiry = None
+        if file_expiry_dates and idx < len(file_expiry_dates):
+            file_specific_expiry = _parse_expiry_date(file_expiry_dates[idx])
+        effective_expiry = file_specific_expiry or parsed_expiry
 
         document = Document(
             title=title,
@@ -1252,7 +1394,7 @@ async def upload_common_document(
                 document_id=document.id,
                 owner_profile_id=None,
                 set_id=document_set.id,
-                expiry_date=parsed_expiry,
+                expiry_date=effective_expiry,
                 is_department_common=True,
                 department_code=DocumentCategory.SAFETY.value,
             )
@@ -1278,13 +1420,21 @@ async def update_common_documents_set(
     set_id: int,
     title: Annotated[str, Form(...)],
     files: Annotated[Optional[list[UploadFile]], File()] = None,
+    file_expiry_dates: Annotated[Optional[list[str]], Form()] = None,
+    existing_document_ids: Annotated[Optional[list[int]], Form()] = None,
+    existing_expiry_dates: Annotated[Optional[list[str]], Form()] = None,
     expiry_date: Annotated[Optional[str], Form()] = None,
     all_company: Annotated[bool, Form()] = False,
     grant_user_ids: Annotated[Optional[list[int]], Form()] = None,
     user: Annotated[User, Depends(get_current_user_from_cookie)] = None,
     db: Annotated[Session, Depends(get_db)] = None,
 ):
-    SafetyService.ensure_safety_role(user)
+    SafetyService.ensure_safety_permission(
+        user,
+        db,
+        "can_manage_safety_common_docs",
+        "Недостаточно прав для изменения общих документов ОТ",
+    )
 
     document_set = _get_set_or_404(db=db, set_id=set_id)
     parsed_expiry = _parse_expiry_date(expiry_date)
@@ -1302,11 +1452,12 @@ async def update_common_documents_set(
     )
 
     active_docs = _set_documents_query(db, set_id).all()
-    active_doc_ids = [doc.id for doc in active_docs]
+    active_doc_ids = [int(doc.id) for doc in active_docs]
+    new_document_ids: list[int] = []
 
-    replacement_files = [f for f in (files or []) if f and f.filename]
-    if replacement_files:
-        for file in replacement_files:
+    additional_files = [f for f in (files or []) if f and f.filename]
+    if additional_files:
+        for file in additional_files:
             if not validate_file_extension(file.filename, ALLOWED_DOCUMENT_EXTENSIONS):
                 return RedirectResponse(
                     url=f"/departments/safety/common-docs/{set_id}?error=Недопустимый тип файла",
@@ -1321,19 +1472,18 @@ async def update_common_documents_set(
                 )
             await file.seek(0)
 
-        now_utc = datetime.now(timezone.utc)
-        for doc in active_docs:
-            doc.deleted_at = now_utc
-            doc.is_active = False
-            doc.updated_by = user.id
-
         default_object_id = _resolve_default_object_id(db=db, actor=user)
-        active_doc_ids = []
 
-        for file in replacement_files:
+        for idx, file in enumerate(additional_files):
             file_bytes = await file.read()
             await file.seek(0)
             stored_path = await DocumentService.save_file(file, default_object_id)
+
+            file_specific_expiry = None
+            if file_expiry_dates and idx < len(file_expiry_dates):
+                file_specific_expiry = _parse_expiry_date(file_expiry_dates[idx])
+            effective_expiry = file_specific_expiry or parsed_expiry
+
             document = Document(
                 title=title,
                 description=None,
@@ -1347,50 +1497,121 @@ async def update_common_documents_set(
             )
             db.add(document)
             db.flush()
-            active_doc_ids.append(document.id)
+            new_document_ids.append(int(document.id))
 
             db.add(
                 DocumentMetaExtension(
                     document_id=document.id,
                     owner_profile_id=None,
                     set_id=document_set.id,
-                    expiry_date=parsed_expiry,
+                    expiry_date=effective_expiry,
                     is_department_common=True,
                     department_code=DocumentCategory.SAFETY.value,
                 )
             )
-    else:
-        if active_doc_ids:
-            db.query(Document).filter(Document.id.in_(active_doc_ids)).update(
-                {
-                    Document.title: title,
-                    Document.updated_by: user.id,
-                },
-                synchronize_session=False,
-            )
+
+    if active_doc_ids:
+        db.query(Document).filter(Document.id.in_(active_doc_ids)).update(
+            {
+                Document.title: title,
+                Document.updated_by: user.id,
+            },
+            synchronize_session=False,
+        )
+
+    updated_existing_ids = []
+    for raw_doc_id in existing_document_ids or []:
+        doc_id = int(raw_doc_id)
+        if doc_id in active_doc_ids:
+            updated_existing_ids.append(doc_id)
+    if updated_existing_ids:
+        expiry_values = existing_expiry_dates or []
+        for idx, doc_id in enumerate(updated_existing_ids):
+            raw_expiry = expiry_values[idx] if idx < len(expiry_values) else ""
+            doc_expiry = _parse_expiry_date(raw_expiry) or parsed_expiry
             db.query(DocumentMetaExtension).filter(
-                DocumentMetaExtension.document_id.in_(active_doc_ids)
+                DocumentMetaExtension.document_id == doc_id
             ).update(
                 {
-                    DocumentMetaExtension.expiry_date: parsed_expiry,
+                    DocumentMetaExtension.expiry_date: doc_expiry,
                     DocumentMetaExtension.set_id: document_set.id,
                     DocumentMetaExtension.is_department_common: True,
                     DocumentMetaExtension.department_code: DocumentCategory.SAFETY.value,
                 },
                 synchronize_session=False,
             )
+    elif active_doc_ids:
+        db.query(DocumentMetaExtension).filter(
+            DocumentMetaExtension.document_id.in_(active_doc_ids)
+        ).update(
+            {
+                DocumentMetaExtension.expiry_date: parsed_expiry,
+                DocumentMetaExtension.set_id: document_set.id,
+                DocumentMetaExtension.is_department_common: True,
+                DocumentMetaExtension.department_code: DocumentCategory.SAFETY.value,
+            },
+            synchronize_session=False,
+        )
+
+    all_doc_ids = active_doc_ids + new_document_ids
 
     _replace_access_rules_for_documents(
         db=db,
         actor=user,
-        document_ids=active_doc_ids,
+        document_ids=all_doc_ids,
         all_company=all_company,
         grant_user_ids=selected_users,
     )
 
     db.commit()
     return RedirectResponse(
-        url="/departments/safety/common-docs?success=Набор документов обновлен",
+        url=(
+            f"/departments/safety/common-docs/{set_id}"
+            "?success=Набор документов обновлен"
+        ),
+        status_code=303,
+    )
+
+
+@router.post(
+    "/documents/common/{set_id}/document/{document_id}/delete", response_model=None
+)
+async def delete_common_document(
+    set_id: int,
+    document_id: int,
+    user: Annotated[User, Depends(get_current_user_from_cookie)] = None,
+    db: Annotated[Session, Depends(get_db)] = None,
+):
+    SafetyService.ensure_safety_permission(
+        user,
+        db,
+        "can_manage_safety_common_docs",
+        "Недостаточно прав для удаления общих документов ОТ",
+    )
+    _get_set_or_404(db=db, set_id=set_id)
+
+    document = (
+        _set_documents_query(db, set_id).filter(Document.id == document_id).first()
+    )
+    if not document:
+        return RedirectResponse(
+            url=(
+                f"/departments/safety/common-docs/{set_id}" "?error=Документ не найден"
+            ),
+            status_code=303,
+        )
+
+    document.deleted_at = datetime.now(timezone.utc)
+    document.is_active = False
+    document.updated_by = user.id
+
+    db.query(DocumentAccessRule).filter(
+        DocumentAccessRule.document_id == document.id
+    ).delete(synchronize_session=False)
+
+    db.commit()
+    return RedirectResponse(
+        url=(f"/departments/safety/common-docs/{set_id}" "?success=Документ удален"),
         status_code=303,
     )
 
@@ -1401,7 +1622,12 @@ async def delete_common_documents_set(
     user: Annotated[User, Depends(get_current_user_from_cookie)] = None,
     db: Annotated[Session, Depends(get_db)] = None,
 ):
-    SafetyService.ensure_safety_role(user)
+    SafetyService.ensure_safety_permission(
+        user,
+        db,
+        "can_manage_safety_common_docs",
+        "Недостаточно прав для удаления наборов общих документов ОТ",
+    )
 
     document_set = _get_set_or_404(db=db, set_id=set_id)
     active_docs = _set_documents_query(db, set_id).all()

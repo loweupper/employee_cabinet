@@ -134,7 +134,13 @@
                   <div>
                     <span class="text-gray-500">Отдел:</span>
                     <p class="font-medium text-gray-800">
-                      {{ user.department_rel.name if user.department_rel else "Не указан" }}
+                      {{ department_name or (user.department_rel.name if user.department_rel else None) or "Не указан" }}
+                    </p>
+                  </div>
+                  <div>
+                    <span class="text-gray-500">Роль:</span>
+                    <p class="font-medium text-gray-800">
+                      {{ user_role or "Нет роли" }}
                     </p>
                   </div>
                   <div>

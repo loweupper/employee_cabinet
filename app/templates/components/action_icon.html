@@ -1,0 +1,58 @@
+{% macro action_icon_link(href, label, variant='indigo', extra_classes='') -%}
+  {%
+    set palettes = {
+      'indigo': 'bg-indigo-50 text-indigo-600 hover:bg-indigo-100 focus-visible:ring-indigo-500',
+      'amber': 'bg-amber-50 text-amber-600 hover:bg-amber-100 focus-visible:ring-amber-500',
+      'blue': 'bg-blue-50 text-blue-600 hover:bg-blue-100 focus-visible:ring-blue-500',
+      'red': 'bg-red-50 text-red-600 hover:bg-red-100 focus-visible:ring-red-500',
+      'emerald': 'bg-emerald-50 text-emerald-600 hover:bg-emerald-100 focus-visible:ring-emerald-500',
+      'gray': 'bg-gray-100 text-gray-700 hover:bg-gray-200 focus-visible:ring-gray-500'
+    }
+  %}
+  <a
+    href="{{ href }}"
+    class="group relative inline-flex h-9 w-9 items-center justify-center rounded-lg transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 {{ palettes.get(variant, palettes.gray) }} {{ extra_classes }}">
+    {{ caller() }}
+    <span
+      class="pointer-events-none absolute -top-8 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-md bg-gray-900 px-2 py-1 text-xs text-dark opacity-0 transition-opacity group-hover:opacity-100"
+      >{{ label }}</span
+    >
+  </a>
+{%- endmacro %}
+
+{%
+  macro action_icon_button(
+    label,
+    variant='indigo',
+    type='button',
+    extra_classes='',
+    form=None,
+    formaction=None,
+    formmethod=None,
+    onclick=None
+  )
+-%}
+  {%
+    set palettes = {
+      'indigo': 'bg-indigo-50 text-indigo-600 hover:bg-indigo-100 focus-visible:ring-indigo-500',
+      'amber': 'bg-amber-50 text-amber-600 hover:bg-amber-100 focus-visible:ring-amber-500',
+      'blue': 'bg-blue-50 text-blue-600 hover:bg-blue-100 focus-visible:ring-blue-500',
+      'red': 'bg-red-50 text-red-600 hover:bg-red-100 focus-visible:ring-red-500',
+      'emerald': 'bg-emerald-50 text-emerald-600 hover:bg-emerald-100 focus-visible:ring-emerald-500',
+      'gray': 'bg-gray-100 text-gray-700 hover:bg-gray-200 focus-visible:ring-gray-500'
+    }
+  %}
+  <button
+    type="{{ type }}"
+    {% if form %}form="{{ form }}"{% endif %}
+    {% if formaction %}formaction="{{ formaction }}"{% endif %}
+    {% if formmethod %}formmethod="{{ formmethod }}"{% endif %}
+    {% if onclick %}onclick="{{ onclick }}"{% endif %}
+    class="group relative inline-flex h-9 w-9 items-center justify-center rounded-lg transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 {{ palettes.get(variant, palettes.gray) }} {{ extra_classes }}">
+    {{ caller() }}
+    <span
+      class="pointer-events-none absolute -top-8 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-md bg-gray-900 px-2 py-1 text-xs text-dark opacity-0 transition-opacity group-hover:opacity-100"
+      >{{ label }}</span
+    >
+  </button>
+{%- endmacro %}

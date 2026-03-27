@@ -41,16 +41,27 @@ class SafetyProfile(Base):
 
     is_external = Column(Boolean, default=False, nullable=False)
 
-    first_name = Column(String(255), nullable=True) # Имя
-    last_name = Column(String(255), nullable=True) # Фамилия
-    middle_name = Column(String(255), nullable=True) # Отчество
-    full_name = Column(String(255), nullable=False) # Полное имя (для внешних профилей или в случае отсутствия данных для разбиения на части)
-    email = Column(String(255), nullable=True)  # Электронная почта (может быть связана с пользователем или указана для внешнего профиля)
-    position = Column(String(255), nullable=True) # Должность
-    department_name = Column(String(255), nullable=True) # Название отдела (может быть указано для внешнего профиля или для внутреннего, если пользователь не связан)
-    phone = Column(String(20), nullable=True) # Телефонный номер
-    avatar_url = Column(String(512), nullable=True) # URL аватара (может быть связан с пользователем или указан для внешнего профиля)
-    note = Column(Text, nullable=True) # Дополнительная информация или примечания по профилю
+    first_name = Column(String(255), nullable=True)  # Имя
+    last_name = Column(String(255), nullable=True)  # Фамилия
+    middle_name = Column(String(255), nullable=True)  # Отчество
+    full_name = Column(
+        String(255), nullable=False
+    )  # Полное имя (для внешних профилей или в случае отсутствия данных для разбиения на части)
+    email = Column(
+        String(255), nullable=True
+    )  # Электронная почта (может быть связана с пользователем или указана для внешнего профиля)
+    position = Column(String(255), nullable=True)  # Должность
+    department_name = Column(
+        String(255), nullable=True
+    )  # Название отдела (может быть указано для внешнего профиля или для внутреннего, если пользователь не связан)
+    object_name = Column(String(255), nullable=True)  # Информационное название объекта
+    phone = Column(String(20), nullable=True)  # Телефонный номер
+    avatar_url = Column(
+        String(512), nullable=True
+    )  # URL аватара (может быть связан с пользователем или указан для внешнего профиля)
+    note = Column(
+        Text, nullable=True
+    )  # Дополнительная информация или примечания по профилю
 
     created_by = Column(
         BigInteger,
@@ -74,7 +85,9 @@ class SafetyProfile(Base):
         onupdate=func.now(),
         nullable=False,
     )
-    archived_at = Column(DateTime(timezone=True), nullable=True) # Дата архивации профиля (для мягкого удаления)
+    archived_at = Column(
+        DateTime(timezone=True), nullable=True
+    )  # Дата архивации профиля (для мягкого удаления)
 
     linked_user = relationship("User", foreign_keys=[user_id], lazy="joined")
     creator = relationship("User", foreign_keys=[created_by], lazy="joined")

@@ -5,8 +5,18 @@ services:
     image: redis:7-alpine
     container_name: employees_redis
     restart: always
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
     ports:
       - "6379:6379"
+    networks:
+      redis_shared:
+        aliases:
+          - shared-redis
+          - redis
 
   backend:
     build: .
@@ -25,7 +35,10 @@ services:
     ports:
       - "8001:8000"
     depends_on:
-      - redis
+      redis:
+        condition: service_healthy
+    networks:
+      - redis_shared
     volumes:
       - ./app/alembic.ini:/app/alembic.ini
       - ./app/migrations:/app/migrations
@@ -38,3 +51,8 @@ services:
       - ./app/workers:/app/workers
       - ./logs:/app/logs
       - /volume11/projects/employe_cabinet/files:/app/files
+
+networks:
+  redis_shared:
+    external: true
+    name: redis_network

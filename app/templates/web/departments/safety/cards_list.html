@@ -9,6 +9,7 @@
   </head>
 
   <body class="bg-gray-50">
+    {% from "components/action_icon.html" import action_icon_link, action_icon_button %}
     <div class="flex h-screen">
       {% include "components/sidebar.html" %}
 
@@ -21,11 +22,22 @@
               Подраздел: список карточек сотрудников
             </p>
           </div>
-          <a
-            href="/departments/safety/cards/create"
-            class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition">
-            Создать карточку
-          </a>
+          {% if safety_permissions.can_create_profiles %}
+            {% call action_icon_link('/departments/safety/cards/create', 'Создать карточку', 'indigo') %}
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke-width="1.5"
+                stroke="currentColor"
+                class="h-4 w-4">
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  d="M12 4.5v15m7.5-7.5h-15" />
+              </svg>
+            {% endcall %}
+          {% endif %}
         </header>
 
         <div class="p-8 space-y-5">
@@ -162,8 +174,10 @@
             {% if profiles %}
               <form
                 method="post"
-                action="/departments/safety/profiles/batch-delete"
-                {% if view == 'active' %}
+                {% if safety_permissions.can_archive_profiles %}
+                  action="/departments/safety/profiles/batch-delete/execute"
+                {% endif %}
+                {% if view == 'active' and safety_permissions.can_archive_profiles %}
                   onsubmit="return confirm('Архивировать выбранные карточки?');"
                 {% endif %}>
                 <div class="overflow-x-auto">
@@ -171,29 +185,34 @@
                     <thead>
                       <tr class="border-b">
                         <th class="text-left py-2 pr-3">
-                          <input
-                            id="select-all-profiles"
-                            type="checkbox"
-                            class="h-4 w-4" />
+                          {% if safety_permissions.can_archive_profiles %}
+                            <input
+                              id="select-all-profiles"
+                              type="checkbox"
+                              class="h-4 w-4" />
+                          {% endif %}
                         </th>
                         <th class="text-left py-2 pr-3">ID</th>
                         <th class="text-left py-2 pr-3">ФИО</th>
                         <th class="text-left py-2 pr-3">Тип</th>
                         <th class="text-left py-2 pr-3">Отдел</th>
+                        <th class="text-left py-2 pr-3">Объект</th>
                         <th class="text-left py-2 pr-3">Должность</th>
                         <th class="text-left py-2 pr-3">Создана</th>
-                        <th class="text-left py-2 pr-3">Действия</th>
+                        <th class="text-center:"" py-2 pr-3">Действия</th>
                       </tr>
                     </thead>
                     <tbody>
                       {% for p in profiles %}
                         <tr class="border-b hover:bg-gray-50">
                           <td class="py-2 pr-3">
-                            <input
-                              type="checkbox"
-                              name="profile_ids"
-                              value="{{ p.id }}"
-                              class="profile-checkbox h-4 w-4" />
+                            {% if safety_permissions.can_archive_profiles %}
+                              <input
+                                type="checkbox"
+                                name="profile_ids"
+                                value="{{ p.id }}"
+                                class="profile-checkbox h-4 w-4" />
+                            {% endif %}
                           </td>
                           <td class="py-2 pr-3">{{ p.id }}</td>
                           <td class="py-2 pr-3">{{ p.full_name }}</td>
@@ -213,43 +232,110 @@
                           <td class="py-2 pr-3">
                             {{ p.department_name or '-' }}
                           </td>
+                          <td class="py-2 pr-3">
+                            {{ p.object_name or (p.objects[0].object.title if p.objects and p.objects[0].object else '-') }}
+                          </td>
                           <td class="py-2 pr-3">{{ p.position or '-' }}</td>
                           <td class="py-2 pr-3">
                             {{ p.created_at.strftime('%d.%m.%Y') if p.created_at else '-' }}
                           </td>
                           <td class="py-2 pr-3">
                             <div class="flex items-center gap-3">
-                              <a
-                                href="/departments/safety/profiles/{{ p.id }}"
-                                class="text-indigo-600 hover:underline"
-                                >Открыть</a
-                              >
-                              <a
-                                href="/departments/safety/cards/{{ p.id }}/edit"
-                                class="text-amber-700 hover:underline"
-                                >Редактировать</a
-                              >
-                              <a
-                                href="/departments/safety/profiles/{{ p.id }}/documents"
-                                class="text-blue-700 hover:underline"
-                                >Загрузить файлы</a
-                              >
-                              <button
-                                type="submit"
-                                {% if view == 'archived' %}
-                                  formaction="/departments/safety/profiles/{{ p.id }}/restore"
-                                {% else %}
-                                  formaction="/departments/safety/profiles/{{ p.id }}/archive"
+                              {% if view != 'archived' %}
+                                {% call action_icon_link('/departments/safety/profiles/' ~ p.id, 'Открыть', 'indigo') %}
+                                  <svg
+                                    xmlns="http://www.w3.org/2000/svg"
+                                    fill="none"
+                                    viewBox="0 0 24 24"
+                                    stroke-width="1.5"
+                                    stroke="currentColor"
+                                    class="h-4 w-4">
+                                    <path
+                                      stroke-linecap="round"
+                                      stroke-linejoin="round"
+                                      d="M2.036 12.322a1.012 1.012 0 0 1 0-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.964-7.178Z" />
+                                    <path
+                                      stroke-linecap="round"
+                                      stroke-linejoin="round"
+                                      d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
+                                  </svg>
+                                {% endcall %}
+                                {% if safety_permissions.can_edit_profiles %}
+                                  {% call action_icon_link('/departments/safety/cards/' ~ p.id ~ '/edit', 'Редактировать', 'amber') %}
+                                    <svg
+                                      xmlns="http://www.w3.org/2000/svg"
+                                      fill="none"
+                                      viewBox="0 0 24 24"
+                                      stroke-width="1.5"
+                                      stroke="currentColor"
+                                      class="h-4 w-4">
+                                      <path
+                                        stroke-linecap="round"
+                                        stroke-linejoin="round"
+                                        d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931ZM19.5 7.125 16.875 4.5" />
+                                    </svg>
+                                  {% endcall %}
                                 {% endif %}
-                                formmethod="post"
-                                onclick="return confirm('{% if view == 'archived' %}
-                                  Восстановить карточку?
-                                {% else %}
-                                  Архивировать карточку?
-                                {% endif %}');"
-                                class="{% if view == 'archived' %}text-emerald-700{% else %}text-red-600{% endif %} hover:underline">
-                                {% if view == 'archived' %}Восстановить{% else %}Архивировать{% endif %}
-                              </button>
+                                {% if safety_permissions.can_manage_documents %}
+                                  {% call action_icon_link('/departments/safety/profiles/' ~ p.id ~ '/documents', 'Документы', 'blue') %}
+                                    <svg
+                                      xmlns="http://www.w3.org/2000/svg"
+                                      fill="none"
+                                      viewBox="0 0 24 24"
+                                      stroke-width="1.5"
+                                      stroke="currentColor"
+                                      class="h-4 w-4">
+                                      <path
+                                        stroke-linecap="round"
+                                        stroke-linejoin="round"
+                                        d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5A3.375 3.375 0 0 0 10.125 2.25H8.25m0 12.75h7.5m-7.5 3h7.5M3.75 6.75h4.5A2.25 2.25 0 0 1 10.5 9v9a2.25 2.25 0 0 1-2.25 2.25h-4.5A2.25 2.25 0 0 1 1.5 18V9a2.25 2.25 0 0 1 2.25-2.25Zm8.25-4.5v4.875c0 .621.504 1.125 1.125 1.125H18" />
+                                    </svg>
+                                  {% endcall %}
+                                {% endif %}
+                              {% endif %}
+                              {% if safety_permissions.can_archive_profiles %}
+                                {% set archive_action = '/departments/safety/profiles/' ~ p.id ~ ('/restore' if view == 'archived' else '/archive') %}
+                                {% set archive_label = 'Восстановить' if view == 'archived' else 'Архивировать' %}
+                                {%
+                                  call action_icon_button(
+                                    archive_label,
+                                    'emerald' if view == 'archived' else 'red',
+                                    'submit',
+                                    '',
+                                    archive_action,
+                                    'post',
+                                    "return confirm('Восстановить карточку?');" if view == 'archived' else "return confirm('Архивировать карточку?');"
+                                  )
+                                %}
+                                  {% if view == 'archived' %}
+                                    <svg
+                                      xmlns="http://www.w3.org/2000/svg"
+                                      fill="none"
+                                      viewBox="0 0 24 24"
+                                      stroke-width="1.5"
+                                      stroke="currentColor"
+                                      class="h-4 w-4">
+                                      <path
+                                        stroke-linecap="round"
+                                        stroke-linejoin="round"
+                                        d="M9 15 3 9m0 0 6-6M3 9h13.5A4.5 4.5 0 0 1 21 13.5V19" />
+                                    </svg>
+                                  {% else %}
+                                    <svg
+                                      xmlns="http://www.w3.org/2000/svg"
+                                      fill="none"
+                                      viewBox="0 0 24 24"
+                                      stroke-width="1.5"
+                                      stroke="currentColor"
+                                      class="h-4 w-4">
+                                      <path
+                                        stroke-linecap="round"
+                                        stroke-linejoin="round"
+                                        d="m20.25 7.5-.866 12.142A2.25 2.25 0 0 1 17.14 21.75H6.86a2.25 2.25 0 0 1-2.244-2.108L3.75 7.5m3 0V6a2.25 2.25 0 0 1 2.25-2.25h6A2.25 2.25 0 0 1 17.25 6v1.5m-10.5 0h10.5" />
+                                    </svg>
+                                  {% endif %}
+                                {% endcall %}
+                              {% endif %}
                             </div>
                           </td>
                         </tr>
@@ -262,7 +348,7 @@
                   <div class="text-sm text-gray-500">
                     Страница {{ page }} из {{ total_pages }}
                   </div>
-                  {% if view == 'active' %}
+                  {% if view == 'active' and safety_permissions.can_archive_profiles %}
                     <button
                       type="submit"
                       class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition">
